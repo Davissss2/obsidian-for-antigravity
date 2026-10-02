@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.1] - 2026-10-02
+
+### Added
+- **Strict High-Value Filter for Autonomous Recording**: Eliminated over-documentation and routine clutter. The autonomous memory engine now strictly prohibits saving trivial bugs, typos, standard syntax fixes, routine CSS adjustments, or solutions where the procedure was already known.
+- **Selective Learning & Skill Expansion**: The agent now exclusively registers records when overcoming difficult technical blockers after investigation or trial-and-error, discovering tricky environment/tool gotchas, or crafting reusable workflows that improve Skills for future chats.
+- **Global Directive Synchronization**: Updated rule generation templates in `src/skill-installer.js` so `GEMINI.md`, `AGENTS.md`, and `SKILL.md` enforce this high-density filter across all workspaces.
+
+---
+
 ## [1.2.0] - 2026-10-02
 
 ### Added
