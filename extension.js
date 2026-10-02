@@ -742,7 +742,11 @@ function activate(context) {
 
   // 2. Automatically install skill, global rules, and run full sync
   try {
-    installSkillAndRules(vault ? vault.path : null);
+    const pConfig = vscode.workspace.getConfiguration('antigravityObsidian');
+    const pConfigured = pConfig.get('personalityConfigured');
+    installSkillAndRules(vault ? vault.path : null, {
+      personalityConfigured: pConfigured ? true : undefined,
+    });
     if (vault && vault.exists) {
       syncEngine.syncAll(vault.path, workspaceRoot);
     }

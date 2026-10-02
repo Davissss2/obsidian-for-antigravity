@@ -60,7 +60,7 @@ function installSkillAndRules(targetVaultPath, options = {}) {
     aiName: options.aiName !== undefined ? options.aiName : existingConfig.aiName,
     userCallsign: options.userCallsign !== undefined ? options.userCallsign : existingConfig.userCallsign,
     personality: options.personality !== undefined ? options.personality : existingConfig.personality,
-    personalityConfigured: options.personalityConfigured !== undefined ? options.personalityConfigured : existingConfig.personalityConfigured,
+    personalityConfigured: options.personalityConfigured !== undefined ? options.personalityConfigured : (existingConfig.personalityConfigured === true ? true : undefined),
     userName: configuredUser || userName,
     language: configuredLang,
   });
@@ -86,7 +86,7 @@ function installSkillAndRules(targetVaultPath, options = {}) {
   };
   fs.writeFileSync(bridgeConfigPath, JSON.stringify(bridgeConfig, null, 2), 'utf8');
 
-  // 2. Deploy Runner Script into scripts/obsidian.js
+  // 2. Deploy Runner Script into scripts/obsidian.js and copy helper modules
   const scriptPath = path.join(scriptsDir, 'obsidian.js');
   const runnerSource = path.join(__dirname, 'obsidian-runner.js');
   if (fs.existsSync(runnerSource)) {
@@ -94,6 +94,18 @@ function installSkillAndRules(targetVaultPath, options = {}) {
     if (process.platform !== 'win32') {
       try {
         fs.chmodSync(scriptPath, 0o755);
+      } catch (e) {}
+    }
+  }
+
+  // Also deploy helper modules so scriptsDir is fully functional and self-contained
+  const helperFiles = ['skill-installer.js', 'sync-engine.js', 'vault-detector.js'];
+  for (const hf of helperFiles) {
+    const srcPath = path.join(__dirname, hf);
+    const destPath = path.join(scriptsDir, hf);
+    if (fs.existsSync(srcPath)) {
+      try {
+        fs.copyFileSync(srcPath, destPath);
       } catch (e) {}
     }
   }
@@ -346,8 +358,8 @@ function installSkillAndRules(targetVaultPath, options = {}) {
             '  1. What name would you like to assign me? (Default: ' + aiName + ')',
             '  2. How would you like me to address you? (e.g., ' + userCallsign + ', Sir, Commander, Chief, etc.)',
             '  3. What personality traits or behavioral style should I embody?"',
-            '  As soon as the user responds with their preference, IMMEDIATELY run:',
-            '  `node "' + normalizedScriptPath + '" personality --ai-name "<name>" --user-callsign "<callsign>" --personality "<description>"`',
+            '  When the user responds to these questions OR continues with their task without specifying changes, IMMEDIATELY execute with `run_command`:',
+            '  `node "' + normalizedScriptPath + '" personality --ai-name "<name or ' + aiName + '>" --user-callsign "<callsign or ' + userCallsign + '>" --personality "<traits or default traits>"`',
             '  Once executed, personality is locked (`personalityConfigured = true`) and you will NEVER ask again in any future chat.'
           ].join('\n'))
     : (personalityConfigured
@@ -368,9 +380,9 @@ function installSkillAndRules(targetVaultPath, options = {}) {
             '  1. ¿Que nombre quieres asignarme? (por defecto: ' + aiName + ')',
             '  2. ¿Como quieres que me dirija a ti? (ej: ' + userCallsign + ', Jefe, Comandante, Socio, etc.)',
             '  3. ¿Que personalidad o estilo de comportamiento quieres que adopte?"',
-            '  En cuanto el usuario responda indicando sus preferencias, ejecuta INMEDIATAMENTE:',
-            '  `node "' + normalizedScriptPath + '" personality --ai-name "<nombre>" --user-callsign "<trato>" --personality "<rasgos>"`',
-            '  Una vez ejecutado, la personalidad queda guardada (`personalityConfigured = true`) y NUNCA MAS volveras a preguntarselo en ningun chat futuro.'
+            '  Si el usuario responde a tus preguntas O si responde continuando con una tarea tecnica sin responderlas, ejecuta INMEDIATAMENTE con `run_command`:',
+            '  `node "' + normalizedScriptPath + '" personality --ai-name "<nombre o ' + aiName + '>" --user-callsign "<trato o ' + userCallsign + '>" --personality "<rasgos indicados o rasgos por defecto>"`',
+            '  Una vez ejecutado, la personalidad queda guardada y fijada permanentemente (`personalityConfigured = true`) y NUNCA MAS volveras a preguntarselo en ningun chat futuro.'
           ].join('\n'));
 
   const hermesSection = isEn

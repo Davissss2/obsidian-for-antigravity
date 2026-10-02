@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.1] - 2026-10-02
+
+### Fixed
+- **Persistent AI Personality Calibration (One-Time Setup)**:
+  - Fixed an issue where the AI agent asked for personality calibration multiple times (asking in the first chat and then asking again in subsequent chats instead of retaining the configuration).
+  - Deployed all required helper modules (`skill-installer.js`, `sync-engine.js`, `vault-detector.js`) alongside `obsidian.js` in `~/.gemini/config/skills/antigravity-obsidian/scripts/` so script executions are fully self-contained and never fail with missing module errors.
+  - Built direct, immediate rule rewriting in `obsidian-runner.js`: `rules/obsidian-brain.md`, `GEMINI.md`, and `AGENTS.md` are now immediately rewritten upon personality calibration, completely replacing onboarding prompts with the active Hermes persona and locked state.
+  - Hardened state persistence in `syncEngine.resolvePersonality` and `syncEngine.ensurePersonality`: prevents periodic or startup sync operations from reverting `personalityConfigured` to false once calibrated.
+  - Added robust vault path detection and default vault auto-provisioning in `obsidian-runner.js`.
+  - Fixed syntax error in `cli.js` (`case 'skills'`).
+
+---
+
 ## [1.5.0] - 2026-10-02
 
 ### Added

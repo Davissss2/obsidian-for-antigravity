@@ -237,6 +237,8 @@ async function main() {
       const result = syncEngine.catalogContext(vaultPath);
       console.log(JSON.stringify(result.skills, null, 2));
       break;
+    }
+
     case 'project': {
       const sub = (args[0] || 'list').toLowerCase();
       const targetDir = args[1] ? path.resolve(args[1]) : process.cwd();

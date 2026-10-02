@@ -72,9 +72,9 @@ Instead of burning thousands of tokens re-reading old logs, your AI assistant au
 - Customize your AI agent's name (e.g. Hermes, Jarvis) and how it addresses you (e.g. Davissss2, Chief, Commander), alongside custom tone and demeanor traits.
 - Calibrate interactively from Command Palette with `Obsidian: Configure AI Agent Personality` or `/obsidian personality`.
 
-### 12. First-Chat Onboarding Protocol
+### 12. First-Chat Onboarding Protocol & Permanent Persistence
 - The AI autonomously checks if personality is configured. If unconfigured on chat #1, it introduces itself and asks for your preferred name and callsign.
-- Once saved, choices are permanently locked (`personalityConfigured = true`) and the assistant will never ask again.
+- Once calibrated or responded to, settings are immediately locked (`personalityConfigured = true`) and written directly to global rules (`rules/obsidian-brain.md`, `GEMINI.md`, `AGENTS.md`) and the vault note. The assistant will never ask again in any future chats.
 
 ### 13. Consolidated Projects Registry (Zero Token Waste)
 - Replaced 20 fragmented memory files with a single unified Knowledge Item (`proyectos-antigravity`) and master note (`00 Indice de Proyectos.md`).

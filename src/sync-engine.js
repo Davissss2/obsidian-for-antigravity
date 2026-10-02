@@ -150,12 +150,12 @@ function resolvePersonality(vaultPath, explicitOptions = {}) {
       if (!userCallsign && cfg.userCallsign) userCallsign = cfg.userCallsign.trim();
       if (!personality && cfg.personality) personality = cfg.personality.trim();
       if (explicitOptions.personalityConfigured === undefined && cfg.personalityConfigured !== undefined) {
-        configured = !!cfg.personalityConfigured;
+        if (cfg.personalityConfigured) configured = true;
       }
     } catch (e) {}
   }
 
-  // Check vault note if still missing fields
+  // Check vault note if still missing fields or if configured status is recorded there
   if (vaultPath) {
     const almaDir = path.join(vaultPath, 'Antigravity', 'Alma');
     const pFile = path.join(almaDir, '00 Personalidad de la IA.md');
@@ -176,7 +176,7 @@ function resolvePersonality(vaultPath, explicitOptions = {}) {
           const m = content.match(/##\s*1\.\s*(?:Arquetipo y Rasgos de Personalidad|Archetype & Personality Traits)[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
           if (m && m[1].trim()) personality = m[1].trim();
         }
-        if (explicitOptions.personalityConfigured === undefined && !configured) {
+        if (!configured && explicitOptions.personalityConfigured !== false) {
           const mStatus = content.match(/^status:\s*["']?([^"'\r\n]+)["']?/m);
           const mConfigured = content.match(/^configured:\s*(true|false)/m);
           if (mConfigured && mConfigured[1] === 'true') configured = true;
@@ -304,7 +304,11 @@ ${configured ? '- **Permanencia**: La personalidad está fijada de forma permane
       cfg.aiName = aiName;
       cfg.userCallsign = userCallsign;
       cfg.personality = personality;
-      cfg.personalityConfigured = configured;
+      if (options.personalityConfigured === false) {
+        cfg.personalityConfigured = false;
+      } else if (configured || cfg.personalityConfigured) {
+        cfg.personalityConfigured = true;
+      }
       cfg.lastUpdated = new Date().toISOString();
       fs.writeFileSync(bridgeConfigPath, JSON.stringify(cfg, null, 2), 'utf8');
     } catch (e) {}

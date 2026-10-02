@@ -4,6 +4,120 @@ const path = require('path');
 const os = require('os');
 const { exec } = require('child_process');
 
+function getDocumentsDir() {
+  const home = os.homedir();
+  const docs = path.join(home, 'Documents');
+  if (fs.existsSync(docs)) return docs;
+  const docsEs = path.join(home, 'Documentos');
+  if (fs.existsSync(docsEs)) return docsEs;
+  return docs;
+}
+
+function getSkillInstaller() {
+  const candidates = [
+    path.join(__dirname, 'skill-installer.js'),
+    path.join(__dirname, 'skill-installer'),
+    path.join(__dirname, '..', 'skill-installer.js'),
+    path.join(__dirname, '..', '..', '..', 'src', 'skill-installer.js'),
+    path.join(__dirname, '..', 'src', 'skill-installer.js'),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) {
+      try {
+        return require(c);
+      } catch (e) {}
+    }
+  }
+  return null;
+}
+
+function updateGlobalRulesWithPersonality({ aiName, userCallsign, personality, configured, vaultPath, vaultName }) {
+  const home = os.homedir();
+  const configDir = path.join(home, '.gemini', 'config');
+  const rulesDir = path.join(configDir, 'rules');
+  const rulePath = path.join(rulesDir, 'obsidian-brain.md');
+  const geminiMdPath = path.join(configDir, 'GEMINI.md');
+  const agentsMdPath = path.join(configDir, 'AGENTS.md');
+  const scriptPath = path.join(configDir, 'skills', 'antigravity-obsidian', 'scripts', 'obsidian.js').replace(/\\/g, '/');
+
+  const ruleFiles = [rulePath, geminiMdPath, agentsMdPath];
+
+  for (const filePath of ruleFiles) {
+    if (!fs.existsSync(filePath)) continue;
+    try {
+      let content = fs.readFileSync(filePath, 'utf8');
+      const isEn = /###\s*0\.\s*AGENT IDENTITY/i.test(content) || /###\s*0b\.\s*AGENT SOUL/i.test(content);
+
+      const newPersonalitySection = isEn
+        ? (configured
+            ? [
+                '### 0. AGENT IDENTITY & PERSONALITY (Hermes Core - Active):',
+                '- **Agent Name:** ' + aiName + '. Always identify as ' + aiName + '.',
+                '- **Addressing the User:** Always address the user as **' + userCallsign + '**.',
+                '- **Active Demeanor & Traits:** ' + personality,
+                '- **Persistence:** Your personality and names are CONFIGURED and LOCKED. Strictly embody this persona. NEVER ask the user how to behave or introduce yourself as unconfigured again in any future chats unless the user explicitly requests changes or runs `/obsidian personality`.'
+              ].join('\n')
+            : [
+                '### 0. AGENT IDENTITY & PERSONALITY (Pending Initial Calibration):',
+                '- **Agent Name (Default):** ' + aiName,
+                '- **Addressing the User (Default):** ' + userCallsign,
+                '- **FIRST-CHAT ONBOARDING PROTOCOL (MANDATORY):**',
+                '  Because your personality and agent identity have not been calibrated yet, on your VERY FIRST interaction with the user in this chat, greet them directly and ask:',
+                '  "Hello, I am ' + aiName + ' with Obsidian Second Brain. Before we begin, let us calibrate my agent persona:',
+                '  1. What name would you like to assign me? (Default: ' + aiName + ')',
+                '  2. How would you like me to address you? (e.g., ' + userCallsign + ', Sir, Commander, Chief, etc.)',
+                '  3. What personality traits or behavioral style should I embody?"',
+                '  When the user responds to these questions OR continues with their task without specifying changes, IMMEDIATELY execute with `run_command`:',
+                '  `node "' + scriptPath + '" personality --ai-name "<name or ' + aiName + '>" --user-callsign "<callsign or ' + userCallsign + '>" --personality "<traits or default traits>"`',
+                '  Once executed, personality is locked (`personalityConfigured = true`) and you will NEVER ask again in any future chat.'
+              ].join('\n'))
+        : (configured
+            ? [
+                '### 0. IDENTIDAD Y PERSONALIDAD DEL AGENTE (Hermes Core - Activo):',
+                '- **Nombre del Agente:** ' + aiName + '. Identificate siempre como ' + aiName + '.',
+                '- **Trato hacia el Usuario:** Dirigete siempre al usuario como **' + userCallsign + '**.',
+                '- **Comportamiento y Rasgos Activos:** ' + personality,
+                '- **Permanencia:** Tu identidad y trato estan CONFIGURADOS y FIJADOS. Encarna estrictamente esta personalidad. NUNCA vuelvas a preguntar al usuario como comportarte ni te presentes como no configurado en ningun chat futuro, a menos que el usuario lo solicite expresamente o use `/obsidian personality`.'
+              ].join('\n')
+            : [
+                '### 0. IDENTIDAD Y PERSONALIDAD DEL AGENTE (Pendiente de Calibracion Inicial):',
+                '- **Nombre del Agente (Por defecto):** ' + aiName,
+                '- **Trato hacia el Usuario (Por defecto):** ' + userCallsign,
+                '- **PROTOCOLO DE ONBOARDING DEL PRIMER CHAT (OBLIGATORIO):**',
+                '  Dado que tu personalidad y trato de agente aun no han sido calibrados, en tu PRIMERISIMA respuesta con el usuario en este chat, saludalo e invitalo directamente a calibrar tu identidad:',
+                '  "Buenas, soy ' + aiName + ' con Obsidian. Como es la primera vez que interactuamos o aun no hemos calibrado mi personalidad, dime:',
+                '  1. ¿Que nombre quieres asignarme? (por defecto: ' + aiName + ')',
+                '  2. ¿Como quieres que me dirija a ti? (ej: ' + userCallsign + ', Jefe, Comandante, Socio, etc.)',
+                '  3. ¿Que personalidad o estilo de comportamiento quieres que adopte?"',
+                '  Si el usuario responde a tus preguntas O si responde continuando con una tarea tecnica sin responderlas, ejecuta INMEDIATAMENTE con `run_command`:',
+                '  `node "' + scriptPath + '" personality --ai-name "<nombre o ' + aiName + '>" --user-callsign "<trato o ' + userCallsign + '>" --personality "<rasgos indicados o rasgos por defecto>"`',
+                '  Una vez ejecutado, la personalidad queda guardada y fijada permanentemente (`personalityConfigured = true`) y NUNCA MAS volveras a preguntarselo en ningun chat futuro.'
+              ].join('\n'));
+
+      // Replace Section 0
+      const sectionRegex = /###\s*0\.\s*(?:IDENTIDAD Y PERSONALIDAD DEL AGENTE|AGENT IDENTITY & PERSONALITY)[^]*?(?=###\s*0b\.|###\s*1\.|##\s*|$)/i;
+      if (sectionRegex.test(content)) {
+        content = content.replace(sectionRegex, newPersonalitySection + '\n\n');
+      }
+
+      // Replace header summary line
+      const headerSummaryRegex = /-\s*(?:Nombre del Agente|Agent Name):\s*\*\*.*?\*\*\s*\|\s*(?:Trato hacia ti|User Callsign):\s*\*\*.*?\*\*\s*\|\s*(?:Estado|Status):\s*\*\*.*?\*\*\.?/i;
+      const statusText = isEn
+        ? (configured ? 'CONFIGURED' : 'PENDING_ONBOARDING')
+        : (configured ? 'CONFIGURADO' : 'PENDIENTE_CALIBRACION');
+      const newHeaderSummary = isEn
+        ? `- Agent Name: **${aiName}** | User Callsign: **${userCallsign}** | Status: **${statusText}**.`
+        : `- Nombre del Agente: **${aiName}** | Trato hacia ti: **${userCallsign}** | Estado: **${statusText}**.`;
+
+      if (headerSummaryRegex.test(content)) {
+        content = content.replace(headerSummaryRegex, newHeaderSummary);
+      }
+
+      fs.writeFileSync(filePath, content, 'utf8');
+    } catch (e) {}
+  }
+}
+
 function getVaultPath() {
   const configFile = path.join(os.homedir(), '.gemini', 'config', 'antigravity-obsidian.json');
   if (fs.existsSync(configFile)) {
@@ -66,7 +180,16 @@ function getVaultPath() {
     }
   }
 
-  return null;
+  // Auto-provision default vault in Documents if none exists
+  const defaultVault = path.join(getDocumentsDir(), 'Obsidian Vault');
+  try {
+    if (!fs.existsSync(defaultVault)) {
+      fs.mkdirSync(defaultVault, { recursive: true });
+    }
+    return { path: defaultVault, name: 'Obsidian Vault' };
+  } catch (e) {
+    return null;
+  }
 }
 
 const vault = getVaultPath();
@@ -670,9 +793,20 @@ switch (cmd) {
         fs.writeFileSync(pFile, content, 'utf8');
       }
 
+      updateGlobalRulesWithPersonality({
+        aiName: existingCfg.aiName || 'Hermes',
+        userCallsign: existingCfg.userCallsign || existingCfg.userName || 'User',
+        personality: existingCfg.personality || 'Ingeniero senior de élite, autónomo, pragmático y de precisión quirúrgica. CERO emojis.',
+        configured: false,
+        vaultPath: vault.path,
+        vaultName: vault.name,
+      });
+
       try {
-        const { installSkillAndRules } = require(path.join(__dirname, 'skill-installer'));
-        installSkillAndRules(vault.path, { personalityConfigured: false });
+        const installer = getSkillInstaller();
+        if (installer && typeof installer.installSkillAndRules === 'function') {
+          installer.installSkillAndRules(vault.path, { personalityConfigured: false });
+        }
       } catch (e) {}
 
       console.log(JSON.stringify({
@@ -771,15 +905,27 @@ ${finalPersonality}
 
       fs.writeFileSync(targetNotePath, noteContent, 'utf8');
 
-      // Refresh rules and Hub immediately
+      // Update global rules (obsidian-brain.md, GEMINI.md, AGENTS.md) immediately and directly
+      updateGlobalRulesWithPersonality({
+        aiName: finalAiName,
+        userCallsign: finalCallsign,
+        personality: finalPersonality,
+        configured: true,
+        vaultPath: vault.path,
+        vaultName: vault.name,
+      });
+
+      // Also refresh rules and Hub via skill-installer if available
       try {
-        const { installSkillAndRules } = require(path.join(__dirname, 'skill-installer'));
-        installSkillAndRules(vault.path, {
-          aiName: finalAiName,
-          userCallsign: finalCallsign,
-          personality: finalPersonality,
-          personalityConfigured: true,
-        });
+        const installer = getSkillInstaller();
+        if (installer && typeof installer.installSkillAndRules === 'function') {
+          installer.installSkillAndRules(vault.path, {
+            aiName: finalAiName,
+            userCallsign: finalCallsign,
+            personality: finalPersonality,
+            personalityConfigured: true,
+          });
+        }
       } catch (e) {}
 
       console.log(JSON.stringify({
@@ -808,7 +954,9 @@ ${finalPersonality}
         const mCall = c.match(/^user_callsign:\s*["']?([^"'\r\n]+)["']?/m);
         if (mCall) curCall = mCall[1].trim();
         const mConf = c.match(/^configured:\s*(true|false)/m);
-        if (mConf) curConf = mConf[1] === 'true';
+        if (mConf) curConf = curConf || (mConf[1] === 'true');
+        const mStatus = c.match(/^status:\s*["']?([^"'\r\n]+)["']?/m);
+        if (mStatus && mStatus[1].trim() === 'configured') curConf = true;
       } catch (e) {}
     }
 
@@ -934,8 +1082,10 @@ ${finalPersonality}
 
     // Also update global GEMINI.md & AGENTS.md rules immediately
     try {
-      const { installSkillAndRules } = require(path.join(__dirname, 'skill-installer'));
-      installSkillAndRules(vault.path);
+      const installer = getSkillInstaller();
+      if (installer && typeof installer.installSkillAndRules === 'function') {
+        installer.installSkillAndRules(vault.path);
+      }
     } catch (e) {}
 
     console.log(JSON.stringify({
