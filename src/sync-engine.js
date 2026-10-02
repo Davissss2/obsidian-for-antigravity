@@ -46,10 +46,83 @@ function ensureVaultStructure(vaultPath) {
 }
 
 // -------------------------------------------------------------
-// Hermes Soul & User Profile Architecture
+// Hermes Soul & User Profile Architecture (Multi-language & Dynamic User)
 // -------------------------------------------------------------
 
-function ensureSoulAndProfile(vaultPath) {
+function resolveUserName(vaultPath, explicitUserName) {
+  if (explicitUserName && typeof explicitUserName === 'string' && explicitUserName.trim()) {
+    return explicitUserName.trim();
+  }
+  // Check bridge config
+  const home = os.homedir();
+  const bridgeConfigPath = path.join(home, '.gemini', 'config', 'antigravity-obsidian.json');
+  if (fs.existsSync(bridgeConfigPath)) {
+    try {
+      const cfg = JSON.parse(fs.readFileSync(bridgeConfigPath, 'utf8'));
+      if (cfg.userName && typeof cfg.userName === 'string' && cfg.userName.trim()) {
+        return cfg.userName.trim();
+      }
+    } catch (e) {}
+  }
+  // Check existing user profile in vault
+  if (vaultPath) {
+    const userPath = path.join(vaultPath, 'Antigravity', 'Alma', '00 Perfil de Usuario.md');
+    if (fs.existsSync(userPath)) {
+      try {
+        const content = fs.readFileSync(userPath, 'utf8');
+        const m = content.match(/^user:\s*["']?([^"'\r\n]+)["']?/m) 
+          || content.match(/^#+\s*Perfil de Trabajo\s*[—–-]\s*([^\r\n]+)/m) 
+          || content.match(/^#+\s*Work Profile\s*[—–-]\s*([^\r\n]+)/m);
+        if (m && m[1].trim() && m[1].trim() !== 'Usuario' && m[1].trim() !== 'User') {
+          return m[1].trim();
+        }
+      } catch (e) {}
+    }
+  }
+  // Try git user name
+  try {
+    const { execSync } = require('child_process');
+    const gitUser = execSync('git config --global user.name', { encoding: 'utf8', timeout: 1000 }).trim();
+    if (gitUser) return gitUser;
+  } catch (e) {}
+  // Fallback to system environment user
+  const sysUser = process.env.USERNAME || process.env.USER || (os.userInfo && os.userInfo().username);
+  if (sysUser && sysUser.trim()) return sysUser.trim();
+  return 'User';
+}
+
+function resolveLanguage(options = {}) {
+  if (options && options.language && options.language !== 'auto') {
+    return options.language.toLowerCase().slice(0, 2);
+  }
+  // Check bridge config
+  const home = os.homedir();
+  const bridgeConfigPath = path.join(home, '.gemini', 'config', 'antigravity-obsidian.json');
+  if (fs.existsSync(bridgeConfigPath)) {
+    try {
+      const cfg = JSON.parse(fs.readFileSync(bridgeConfigPath, 'utf8'));
+      if (cfg.language && cfg.language !== 'auto') {
+        return cfg.language.toLowerCase().slice(0, 2);
+      }
+    } catch (e) {}
+  }
+  // Check VS Code NLS configuration
+  if (process.env.VSCODE_NLS_CONFIG) {
+    try {
+      const nls = JSON.parse(process.env.VSCODE_NLS_CONFIG);
+      if (nls.locale) {
+        return nls.locale.toLowerCase().slice(0, 2);
+      }
+    } catch (e) {}
+  }
+  // Check system environment locale
+  const sysLocale = process.env.LANG || process.env.LC_ALL || (Intl && Intl.DateTimeFormat().resolvedOptions().locale) || '';
+  if (sysLocale.toLowerCase().startsWith('es')) return 'es';
+  if (sysLocale.toLowerCase().startsWith('en')) return 'en';
+  return 'es';
+}
+
+function ensureSoulAndProfile(vaultPath, options = {}) {
   if (!vaultPath || !fs.existsSync(vaultPath)) return null;
   ensureVaultStructure(vaultPath);
 
@@ -62,13 +135,54 @@ function ensureSoulAndProfile(vaultPath) {
   const soulPath = path.join(almaDir, '00 Soul de Antigravity.md');
   const userPath = path.join(almaDir, '00 Perfil de Usuario.md');
 
-  if (!fs.existsSync(soulPath)) {
-    const soulContent = `---
+  const userName = resolveUserName(vaultPath, options.userName);
+  const lang = resolveLanguage(options);
+  const isEn = (lang === 'en');
+
+  const soulContent = isEn
+    ? `---
+title: "Antigravity Soul (Hermes Core)"
+type: antigravity-soul
+tags:
+  - antigravity/soul
+  - antigravity/hermes
+language: en
+updated: ${now}
+---
+
+# Antigravity Soul — Agent Archetype & Operational Identity
+
+> [!NOTE] **Operational Identity**
+> You are Antigravity, an elite senior software engineer: autonomous, pragmatic, and surgically precise. You act as a high-caliber technical pair-programmer, never a passive chatbot.
+
+## Non-Negotiable Agent Principles
+
+1. **Autonomous Proactive Problem-Solving:**
+   - Never stop at mere suggestions or ask permission for obvious steps. Diagnose root causes, implement the solution, verify behavior, and deliver complete, working results.
+   - If something fails, investigate and resolve it autonomously before bothering the user.
+
+2. **Zero Fluff & Zero Friction:**
+   - Direct, synthetic, dense responses. No generic pleasantries ("Sure!", "I'd be happy to help"), no condescension, and no empty apologies.
+   - Strictly ZERO EMOJIS in code, commits, explanations, and notes.
+
+3. **Production Quality & Cross-Platform Rigor:**
+   - All code must be clean, modular, typed, and verified to run seamlessly on Windows, Ubuntu (Linux), and macOS.
+   - Strictly forbidden to use fake placeholders or TODO comments where working code should be.
+
+4. **Dynamic Language Adaptation & Habit Evolution:**
+   - Dynamic language adaptation: if the user or Antigravity IDE is in English, communicate in English; if in Spanish or another language, dynamically adapt to the user's active language.
+   - Every correction, directive, or preference expressed by the user is assimilated immediately into the User Profile to enhance all future sessions.
+
+---
+*Graph Connections:* [[00 Antigravity Hub]] | [[00 Perfil de Usuario]]
+`
+    : `---
 title: "Soul de Antigravity (Hermes Core)"
 type: antigravity-soul
 tags:
   - antigravity/soul
   - antigravity/hermes
+language: es
 updated: ${now}
 ---
 
@@ -91,33 +205,74 @@ updated: ${now}
    - Todo código debe ser limpio, modular, tipado y verificado para funcionar sin fisuras en Windows, Ubuntu (Linux) y macOS.
    - Prohibidos los placeholders ficticios o comentarios de relleno donde falta código.
 
-4. **Auto-Evolución y Memoria de Hábitos:**
+4. **Adaptación Dinámica de Idioma y Memoria de Hábitos:**
+   - Adaptación dinámica de idioma: si el usuario o el entorno de Antigravity están en inglés, comunícate en inglés; si están en español, en español.
    - Cada corrección, directriz o preferencia expresada por el usuario se asimila de inmediato en el Perfil de Usuario para mejorar el comportamiento en todos los chats siguientes.
 
 ---
 *Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Perfil de Usuario]]
 `;
-    fs.writeFileSync(soulPath, soulContent, 'utf8');
-  }
 
-  if (!fs.existsSync(userPath)) {
-    const userContent = `---
+  const userContent = isEn
+    ? `---
+title: "User Work Profile & Style"
+type: antigravity-user-profile
+tags:
+  - antigravity/profile
+  - antigravity/user
+user: "${userName}"
+language: en
+updated: ${now}
+---
+
+# Work Profile — ${userName}
+
+> [!ABSTRACT] **How the user thinks and works**
+> Defines the preferences, technical habits, and workflow style of ${userName} so the assistant operates with tailor-made precision across every session.
+
+## 1. Communication & Style
+- **Language & Tone:** Direct, technical, concise. If Antigravity IDE or the user communicates in English, respond in English; dynamically match the user's active language. Zero corporate filler, zero condescension.
+- **Formatting:** Strictly ZERO EMOJIS in everything (code, notes, commits, chats).
+- **Conciseness:** High-density bullet points. Prefers applied working results over theoretical dissertations.
+
+## 2. Memory Policy (High-Value Anti-Noise Filter)
+- **STRICTLY FORBIDDEN TO SAVE:** Obvious syntax errors, typos, routine tasks (simple CSS, translations, cosmetic refactors) or already-known standard solutions.
+- **MUST SAVE (Pure gold):**
+  1. Blockers overcome after difficulty/investigation where the breakthrough was hard-won.
+  2. Undocumented quirks, bugs, or nuances of tools, APIs, or operating systems.
+  3. New reusable technical procedures that expand agent Skills.
+
+## 3. Git, Distribution & Environment
+- **Commits:** Conventional Commits in English (\`feat: ...\`, \`fix: ...\`, \`docs: ...\`, \`release: ...\`).
+- **VSIX Packages:** Keep only the latest \`.vsix\` in the repository; remove previous versions with \`git rm\`.
+- **Cross-Platform:** Tested and compatible solutions across Windows, Ubuntu (native, Flatpak, Snap), and macOS.
+
+## 4. Dynamic Learnings & Evolved Preferences
+- \`[2026-10-02]\` Strict anti-noise filter active: only difficult, non-obvious learnings; zero routine trash.
+- \`[2026-10-02]\` Universal Linux support enabled: multi-path Obsidian config detection (Snap, Flatpak, XDG) and \`~/Documentos\` support.
+- \`[2026-10-02]\` URI dispatch prioritized via \`vscode.env.openExternal\` before invoking shell fallbacks.
+
+---
+*Graph Connections:* [[00 Antigravity Hub]] | [[00 Soul de Antigravity]]
+`
+    : `---
 title: "Perfil y Estilo de Trabajo del Usuario"
 type: antigravity-user-profile
 tags:
   - antigravity/perfil
   - antigravity/usuario
-user: "Davissss2"
+user: "${userName}"
+language: es
 updated: ${now}
 ---
 
-# Perfil de Trabajo — Davissss2
+# Perfil de Trabajo — ${userName}
 
 > [!ABSTRACT] **Cómo piensa y trabaja el usuario**
-> Define las preferencias, hábitos técnicos y estilo de trabajo de Davissss2 para que el asistente opere exactamente a su medida en todas las sesiones.
+> Define las preferencias, hábitos técnicos y estilo de trabajo de ${userName} para que el asistente opere exactamente a su medida en todas las sesiones.
 
 ## 1. Comunicación y Trato
-- **Idioma y Tono:** Español directo, técnico, fluido y sin formalismos corporativos ni relleno.
+- **Idioma y Tono:** Comunicación técnica y directa. Adaptación fluida: si el usuario escribe en inglés o el entorno de Antigravity está en inglés, responder en inglés; si escribe en español, responder en español. Sin formalismos corporativos ni relleno.
 - **Formato:** Cero emojis en absolutamente todo (código, notas, commits, chats).
 - **Extensión:** Respuestas breves con viñetas de alta densidad. El usuario prefiere ver el resultado aplicado antes que una disertación teórica.
 
@@ -141,15 +296,39 @@ updated: ${now}
 ---
 *Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Soul de Antigravity]]
 `;
-    fs.writeFileSync(userPath, userContent, 'utf8');
+
+  if (!fs.existsSync(soulPath) || options.forceUpdate) {
+    fs.writeFileSync(soulPath, soulContent, 'utf8');
   }
 
-  return { soulPath, userPath };
+  if (!fs.existsSync(userPath)) {
+    fs.writeFileSync(userPath, userContent, 'utf8');
+  } else if (options.forceUpdate) {
+    // Preserve Section 4 (Dynamic Learnings) while updating user, title, communication
+    try {
+      const existing = fs.readFileSync(userPath, 'utf8');
+      const sec4Match = existing.match(/##\s*4\.\s*Aprendizajes[\s\S]*?(?:---|---\r?\n\*Conexiones|$)/i) 
+        || existing.match(/##\s*4\.\s*Dynamic Learnings[\s\S]*?(?:---|---\r?\n\*Graph|$)/i);
+      if (sec4Match) {
+        const updatedContent = userContent.replace(
+          /(##\s*4\.\s*(?:Aprendizajes|Dynamic Learnings)[\s\S]*?)(?:---|---\r?\n\*(?:Conexiones|Graph)|$)/i,
+          sec4Match[0].trim() + '\n\n'
+        );
+        fs.writeFileSync(userPath, updatedContent, 'utf8');
+      } else {
+        fs.writeFileSync(userPath, userContent, 'utf8');
+      }
+    } catch (e) {
+      fs.writeFileSync(userPath, userContent, 'utf8');
+    }
+  }
+
+  return { soulPath, userPath, userName, language: lang };
 }
 
-function getSoulAndProfile(vaultPath) {
+function getSoulAndProfile(vaultPath, options = {}) {
   if (!vaultPath || !fs.existsSync(vaultPath)) return null;
-  ensureSoulAndProfile(vaultPath);
+  ensureSoulAndProfile(vaultPath, options);
 
   const almaDir = path.join(vaultPath, 'Antigravity', 'Alma');
   const soulPath = path.join(almaDir, '00 Soul de Antigravity.md');
@@ -166,9 +345,9 @@ function getSoulAndProfile(vaultPath) {
   };
 }
 
-function recordUserLearning(vaultPath, learningText) {
+function recordUserLearning(vaultPath, learningText, options = {}) {
   if (!vaultPath || !fs.existsSync(vaultPath)) return null;
-  ensureSoulAndProfile(vaultPath);
+  ensureSoulAndProfile(vaultPath, options);
 
   const userPath = path.join(vaultPath, 'Antigravity', 'Alma', '00 Perfil de Usuario.md');
   if (!fs.existsSync(userPath)) return null;
@@ -182,6 +361,11 @@ function recordUserLearning(vaultPath, learningText) {
     content = content.replace(
       '## 4. Aprendizajes y Preferencias Dinámicas Acumuladas',
       `## 4. Aprendizajes y Preferencias Dinámicas Acumuladas\n${entry}`
+    );
+  } else if (content.includes('## 4. Dynamic Learnings & Evolved Preferences')) {
+    content = content.replace(
+      '## 4. Dynamic Learnings & Evolved Preferences',
+      `## 4. Dynamic Learnings & Evolved Preferences\n${entry}`
     );
   } else {
     content += `\n## 4. Aprendizajes y Preferencias Dinámicas Acumuladas\n${entry}\n`;
@@ -749,7 +933,7 @@ function syncProject(vaultPath, workspaceRoot) {
   if (fs.existsSync(pkgPath)) {
     try {
       const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-      packageInfo = `\n### 📦 Stack Tecnológico (package.json)\n- **Versión**: \`${pkg.version || '1.0.0'}\`\n- **Dependencias**: ${Object.keys(pkg.dependencies || {}).map(d => `\`${d}\``).join(', ') || 'Ninguna'}\n- **DevDependencies**: ${Object.keys(pkg.devDependencies || {}).map(d => `\`${d}\``).join(', ') || 'Ninguna'}\n`;
+      packageInfo = `\n### Stack Tecnológico (package.json)\n- **Versión**: \`${pkg.version || '1.0.0'}\`\n- **Dependencias**: ${Object.keys(pkg.dependencies || {}).map(d => `\`${d}\``).join(', ') || 'Ninguna'}\n- **DevDependencies**: ${Object.keys(pkg.devDependencies || {}).map(d => `\`${d}\``).join(', ') || 'Ninguna'}\n`;
     } catch (e) {}
   }
 
@@ -789,13 +973,71 @@ ${packageInfo}
 // Generate Main Antigravity Hub (The Central Brain MOC)
 // -------------------------------------------------------------
 
-function generateHub(vaultPath, workspaceRoot) {
+function generateHub(vaultPath, workspaceRoot, options = {}) {
   ensureVaultStructure(vaultPath);
   const hubFile = path.join(vaultPath, 'Antigravity', '00 Antigravity Hub.md');
   const now = new Date().toISOString().split('T')[0];
   const projectName = workspaceRoot ? path.basename(workspaceRoot) : null;
+  const userName = resolveUserName(vaultPath, options.userName);
+  const lang = resolveLanguage(options);
+  const isEn = (lang === 'en');
 
-  const content = `---
+  const content = isEn
+    ? `---
+title: "Antigravity Hub — AI Second Brain"
+type: antigravity-hub
+tags:
+  - antigravity/hub
+  - antigravity/second-brain
+updated: ${now}
+---
+
+# Antigravity Hub — AI Second Brain
+
+Welcome to the interconnected memory, skills, and knowledge core between **Antigravity** and **Obsidian**.
+All nodes in this vault are bidirectionally linked to light up your **Graph View**.
+
+\`\`\`
+       ┌──────────────────────────────┐
+       │     00 Antigravity Hub       │
+       └──────────────┬───────────────┘
+          ┌───────────┼───────────┬───────────┐
+          ▼           ▼           ▼           ▼
+        Soul       Skills      Memory      Projects
+\`\`\`
+
+---
+
+## Soul & Profile (Hermes Core)
+Agent identity and working style of ${userName}:
+- [[00 Soul de Antigravity]] — Decisive archetype, non-negotiable principles, and autonomy
+- [[00 Perfil de Usuario]] — Preferences, technical habits, and accumulated learnings
+
+---
+
+## Available Skills
+Access the complete catalog of capabilities and workflows mastered by the assistant:
+- [[00 Indice de Skills]]
+
+---
+
+## Memory & Knowledge Base (Knowledge Items)
+Lessons learned, architectures, debugging fixes, models, and permanent documentation:
+- [[00 Indice de Memoria]]
+
+---
+
+## Linked Projects
+${projectName ? `- Current Project: [[${projectName}]]` : '- *Open a project in Antigravity to automatically register it.*'}
+
+---
+
+> [!TIP] **How does autonomous sync work?**
+> - Every time Antigravity solves a problem or generates knowledge, it is automatically stored in \`Antigravity/Memoria/\`.
+> - Global skills from \`~/.gemini/config/skills/\` are synchronized in real-time into \`Antigravity/Skills/\`.
+> - You can create or edit skills right here in Markdown and Antigravity will assimilate them.
+`
+    : `---
 title: "Antigravity Hub — Segundo Cerebro IA"
 type: antigravity-hub
 tags:
@@ -821,7 +1063,7 @@ Todos los nodos de esta bóveda están enlazados bidireccionalmente para ilumina
 ---
 
 ## Alma & Perfil (Hermes Core)
-Identidad del agente y estilo de trabajo de Davissss2:
+Identidad del agente y estilo de trabajo de ${userName}:
 - [[00 Soul de Antigravity]] — Arquetipo resolutivo, principios inquebrantables y autonomía
 - [[00 Perfil de Usuario]] — Preferencias, hábitos técnicos y aprendizajes acumulados
 
@@ -983,7 +1225,7 @@ function buildContextManifest(vaultPath) {
       const fp = path.join(memDir, f);
       try {
         const txt = fs.readFileSync(fp, 'utf8');
-        const titleMatch = txt.match(/^title:\s*"([^"\r\n]+)"/m) || txt.match(/^#+\s*🧠?\s*(.+)$/m);
+        const titleMatch = txt.match(/^title:\s*"([^"\r\n]+)"/m) || txt.match(/^#+\s*(.+)$/m);
         const title = titleMatch ? titleMatch[1].trim() : f.replace(/\.md$/, '');
 
         const catMatch = txt.match(/^category:\s*"?([^"\r\n]+)"?/m);
@@ -1025,7 +1267,7 @@ function buildContextManifest(vaultPath) {
       const fp = path.join(skiDir, f);
       try {
         const txt = fs.readFileSync(fp, 'utf8');
-        const nameMatch = txt.match(/^title:\s*"Skill:\s*([^"\r\n]+)"/m) || txt.match(/^#+\s*⚡?\s*Skill:\s*\[\[([^\]]+)\]\]/m);
+        const nameMatch = txt.match(/^title:\s*"Skill:\s*([^"\r\n]+)"/m) || txt.match(/^#+\s*Skill:\s*\[\[([^\]]+)\]\]/m);
         const name = nameMatch ? nameMatch[1].trim() : f.replace(/\.md$/, '').replace(/^\[Proyecto\]\s*/, '');
 
         const scopeMatch = txt.match(/^scope:\s*(\w+)/m);
@@ -1218,7 +1460,7 @@ function peekMemory(vaultPath, noteName) {
   body = body.replace(/---[\s\S]*?\*Conexiones del Grafo:\*[\s\S]*$/, '');
   body = body.replace(/^#+\s*[^\r\n]+/gm, '').trim();
 
-  const detailsMatch = raw.match(/##\s*📝\s*Detalles y Solución\r?\n([\s\S]*?)(?:---|###\s*📄|$)/i);
+  const detailsMatch = raw.match(/##\s*Detalles y Solución\r?\n([\s\S]*?)(?:---|###|$)/i);
   let solutionText = detailsMatch ? detailsMatch[1].trim() : body;
 
   if (solutionText.length > 1200) {
@@ -1241,13 +1483,13 @@ function catalogContext(vaultPath) {
   };
 }
 
-function syncAll(vaultPath, workspaceRoot) {
+function syncAll(vaultPath, workspaceRoot, options = {}) {
   ensureVaultStructure(vaultPath);
-  ensureSoulAndProfile(vaultPath);
+  ensureSoulAndProfile(vaultPath, options);
   const skills = syncSkillsToVault(vaultPath, workspaceRoot);
   const memories = syncKnowledgeToVault(vaultPath);
   const project = workspaceRoot ? syncProject(vaultPath, workspaceRoot) : null;
-  const hub = generateHub(vaultPath, workspaceRoot);
+  const hub = generateHub(vaultPath, workspaceRoot, options);
   syncVaultToKnowledge(vaultPath);
   buildContextManifest(vaultPath);
   const stats = getVaultStats(vaultPath);
@@ -1394,6 +1636,8 @@ module.exports = {
   ensureSoulAndProfile,
   getSoulAndProfile,
   recordUserLearning,
+  resolveUserName,
+  resolveLanguage,
   syncSkillsToVault,
   syncKnowledgeToVault,
   saveNewMemory,

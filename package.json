@@ -2,7 +2,7 @@
   "name": "obsidian-for-antigravity",
   "displayName": "Obsidian for Antigravity",
   "description": "Autonomous Second Brain & persistent memory for Antigravity AI connected to Obsidian. Automatically stores bugfixes, architecture decisions, and skills in your local Vault with real-time Graph View.",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "publisher": "Davissss2",
   "author": {
     "name": "Davissss2",
@@ -82,6 +82,21 @@
         "icon": "$(add)"
       },
       {
+        "command": "antigravityObsidian.showSoul",
+        "title": "Obsidian: View Soul & User Profile",
+        "icon": "$(account)"
+      },
+      {
+        "command": "antigravityObsidian.showStatus",
+        "title": "Obsidian: Connection Status & Stats",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "antigravityObsidian.openGraph",
+        "title": "Obsidian: Open Graph View in App",
+        "icon": "$(graph)"
+      },
+      {
         "command": "antigravityObsidian.resetData",
         "title": "Obsidian: Wipe All Data & Start Fresh",
         "icon": "$(trash)"
@@ -123,6 +138,25 @@
           "type": "string",
           "default": "",
           "description": "Optional Bearer token for Obsidian Local REST API plugin."
+        },
+        "antigravityObsidian.language": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "en",
+            "es",
+            "fr",
+            "de",
+            "zh",
+            "ja"
+          ],
+          "default": "auto",
+          "description": "Preferred language for Antigravity AI interactions and Soul/Profile rules. 'auto' detects from Antigravity IDE UI."
+        },
+        "antigravityObsidian.userName": {
+          "type": "string",
+          "default": "",
+          "description": "Custom user name for the Hermes User Profile and rules. Leave empty to automatically detect."
         }
       }
     }

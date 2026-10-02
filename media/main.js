@@ -66,7 +66,18 @@
       settings_danger_title: "Zona de Peligro / Empezar de Cero",
       settings_danger_desc: "Borra todas las memorias acumuladas, limpia duplicados y resetea el contexto de la IA para empezar completamente limpio desde cero con Obsidian.",
       btn_reset_data: "Borrar Todo y Empezar de Cero",
-      toast_reset_complete: "Memoria reiniciada correctamente. Empezando de cero."
+      toast_reset_complete: "Memoria reiniciada correctamente. Empezando de cero.",
+      soul_title: "Hermes Core — Alma & Perfil",
+      soul_status_active: "Activo",
+      soul_label: "Soul de Antigravity:",
+      soul_desc: "Ingeniero de software senior autónomo, resolutivo, sin rodeos y CERO emojis.",
+      profile_label_prefix: "Perfil de Usuario",
+      profile_desc: "Español/Inglés directo según entorno, filtro anti-ruido estricto y rigor multiplataforma.",
+      soul_view_soul: "Ver Soul",
+      soul_view_profile: "Ver Perfil",
+      settings_user_name_label: "Nombre de Usuario (Perfil Hermes):",
+      settings_user_name_ph: "Davissss2 o tu alias",
+      toast_lang_updated: "Idioma y reglas de IA actualizadas"
     },
     en: {
       brand_title: "Obsidian for Antigravity",
@@ -131,7 +142,18 @@
       settings_danger_title: "Danger Zone / Start From Scratch",
       settings_danger_desc: "Wipes all accumulated memories, cleans duplicates and resets AI context to start completely fresh with Obsidian.",
       btn_reset_data: "Wipe All Data & Start Fresh",
-      toast_reset_complete: "Memory wiped successfully. Starting from scratch."
+      toast_reset_complete: "Memory wiped successfully. Starting from scratch.",
+      soul_title: "Hermes Core — Soul & Profile",
+      soul_status_active: "Active",
+      soul_label: "Antigravity Soul:",
+      soul_desc: "Senior autonomous software engineer: decisive, no fluff, and ZERO emojis.",
+      profile_label_prefix: "User Profile",
+      profile_desc: "Direct English/Spanish based on environment, strict anti-noise filter, and cross-platform rigor.",
+      soul_view_soul: "View Soul",
+      soul_view_profile: "View Profile",
+      settings_user_name_label: "User Name (Hermes Profile):",
+      settings_user_name_ph: "Davissss2 or your alias",
+      toast_lang_updated: "Language and AI rules updated"
     },
     fr: {
       brand_title: "Obsidian for Antigravity",
@@ -192,7 +214,18 @@
       settings_autosave_title: "Apprendre et Enregistrer Autonome",
       settings_autosave_desc: "Enregistre automatiquement les bugs résolus et décisions d'architecture.",
       btn_save_ai_settings: "Enregistrer et Appliquer à tous les Chats",
-      toast_ai_settings_saved: "Paramètres d'IA appliqués à tous les chats"
+      toast_ai_settings_saved: "Paramètres d'IA appliqués à tous les chats",
+      soul_title: "Hermes Core — Âme & Profil",
+      soul_status_active: "Actif",
+      soul_label: "Âme d'Antigravity :",
+      soul_desc: "Ingénieur logiciel senior autonome, résolu, direct et ZÉRO emoji.",
+      profile_label_prefix: "Profil Utilisateur",
+      profile_desc: "Anglais/Français/Espagnol direct selon l'environnement, filtre anti-bruit strict.",
+      soul_view_soul: "Voir l'Âme",
+      soul_view_profile: "Voir le Profil",
+      settings_user_name_label: "Nom d'utilisateur (Profil Hermes) :",
+      settings_user_name_ph: "Davissss2 ou votre pseudo",
+      toast_lang_updated: "Langue et règles IA mises à jour"
     },
     de: {
       brand_title: "Obsidian for Antigravity",
@@ -253,7 +286,18 @@
       settings_autosave_title: "Automatisch lernen & speichern",
       settings_autosave_desc: "Speichert gelöste Fehler und Architektur-Entscheidungen ohne Nachfrage.",
       btn_save_ai_settings: "Speichern & auf alle Chats anwenden",
-      toast_ai_settings_saved: "KI-Einstellungen für alle Chats übernommen"
+      toast_ai_settings_saved: "KI-Einstellungen für alle Chats übernommen",
+      soul_title: "Hermes Core — Seele & Profil",
+      soul_status_active: "Aktiv",
+      soul_label: "Antigravity Seele:",
+      soul_desc: "Autonomer Senior-Software-Ingenieur: zielgerichtet, direkt und NULL Emojis.",
+      profile_label_prefix: "Benutzerprofil",
+      profile_desc: "Direktes Englisch/Deutsch/Spanisch je nach Umgebung, strenger Anti-Rausch-Filter.",
+      soul_view_soul: "Seele anzeigen",
+      soul_view_profile: "Profil anzeigen",
+      settings_user_name_label: "Benutzername (Hermes-Profil):",
+      settings_user_name_ph: "Davissss2 oder Ihr Alias",
+      toast_lang_updated: "Sprache und KI-Regeln aktualisiert"
     },
     zh: {
       brand_title: "Obsidian for Antigravity",
@@ -314,7 +358,18 @@
       settings_autosave_title: "自主沉淀与自动记录",
       settings_autosave_desc: "自动保存复杂 Bug 解决方案与架构决策，无需逐次人工确认。",
       btn_save_ai_settings: "保存并应用于所有对话",
-      toast_ai_settings_saved: "已将设置应用于全局所有 AI 对话"
+      toast_ai_settings_saved: "已将设置应用于全局所有 AI 对话",
+      soul_title: "Hermes Core — 核心与画像",
+      soul_status_active: "活跃",
+      soul_label: "Antigravity 核心:",
+      soul_desc: "自主高级软件工程师：务实高效、零废话、零表情符号。",
+      profile_label_prefix: "用户画像",
+      profile_desc: "根据环境自动适配语言，严格抗噪过滤，跨平台兼容。",
+      soul_view_soul: "查看核心",
+      soul_view_profile: "查看画像",
+      settings_user_name_label: "用户名（Hermes 画像）:",
+      settings_user_name_ph: "Davissss2 或您的别名",
+      toast_lang_updated: "语言和 AI 规则已更新"
     },
     ja: {
       brand_title: "Obsidian for Antigravity",
@@ -375,19 +430,33 @@
       settings_autosave_title: "自動学習と自動保存",
       settings_autosave_desc: "解決したバグや設計判断を、確認なしで自動的に保管庫へ保存します。",
       btn_save_ai_settings: "保存してすべてのチャットに適用",
-      toast_ai_settings_saved: "AI設定を全チャットに適用しました"
+      toast_ai_settings_saved: "AI設定を全チャットに適用しました",
+      soul_title: "Hermes Core — コアとプロファイル",
+      soul_status_active: "アクティブ",
+      soul_label: "Antigravity コア:",
+      soul_desc: "自律的なシニアソフトウェアエンジニア：決断力、無駄なし、絵文字ゼロ。",
+      profile_label_prefix: "ユーザープロファイル",
+      profile_desc: "環境に応じた直接的な言語対応、厳格なノイズ除去フィルター、クロスプラットフォーム。",
+      soul_view_soul: "コアを表示",
+      soul_view_profile: "プロファイルを表示",
+      settings_user_name_label: "ユーザー名（Hermes プロファイル）:",
+      settings_user_name_ph: "Davissss2 またはエイリアス",
+      toast_lang_updated: "言語とAIルールが更新されました"
     }
   };
 
   // State
-  let currentLang = localStorage.getItem('obsidian_bridge_lang') || 'es';
+  const htmlLang = document.documentElement.getAttribute('lang') || 'es';
+  let currentLang = localStorage.getItem('obsidian_bridge_lang') || htmlLang;
   if (!I18N[currentLang]) currentLang = 'es';
 
   function applyLanguage(lang) {
-    if (!I18N[lang]) return;
-    currentLang = lang;
+    const effective = (lang === 'auto')
+      ? (document.documentElement.getAttribute('lang') || 'en')
+      : lang;
+    const dict = I18N[effective] || I18N.es;
+    currentLang = effective;
     localStorage.setItem('obsidian_bridge_lang', lang);
-    const dict = I18N[lang];
 
     document.querySelectorAll('[data-i18n]').forEach(el => {
       const key = el.getAttribute('data-i18n');
@@ -436,7 +505,9 @@
   // Language selectors
   document.querySelectorAll('.lang-select').forEach(sel => {
     sel.addEventListener('change', (e) => {
-      applyLanguage(e.target.value);
+      const selected = e.target.value;
+      applyLanguage(selected);
+      vscode.postMessage({ type: 'setLanguage', language: selected });
     });
   });
 
@@ -500,17 +571,25 @@
     btnSaveAi.addEventListener('click', () => {
       const toggleProactive = document.getElementById('toggle-proactive');
       const toggleAutosave = document.getElementById('toggle-autosave');
+      const userNameInput = document.getElementById('setting-user-name');
+      const languageSelect = document.getElementById('setting-language');
       const proactiveLookup = toggleProactive ? toggleProactive.checked : true;
       const autoSave = toggleAutosave ? toggleAutosave.checked : true;
+      const userName = userNameInput ? userNameInput.value.trim() : '';
+      const language = languageSelect ? languageSelect.value : currentLang;
 
       vscode.postMessage({
         type: 'updateAiConfig',
         data: {
           proactiveLookup,
           autoSave,
+          userName,
+          language,
         },
         proactiveLookup,
         autoSave,
+        userName,
+        language,
       });
 
       const dict = I18N[currentLang] || I18N.es;

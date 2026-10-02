@@ -373,7 +373,7 @@ function runPeek(vaultPath, noteName) {
   body = body.replace(/---[\s\S]*?\*Graph.*\*[\s\S]*$/, '');
   body = body.replace(/^#+\s*[^\r\n]+/gm, '').trim();
 
-  const detailsMatch = raw.match(/##\s*(?:Technical Solution|Solución Técnica|Detalles y Solución|Solución)\r?\n([\s\S]*?)(?:---|###\s*📄|$)/i);
+  const detailsMatch = raw.match(/##\s*(?:Technical Solution|Solución Técnica|Detalles y Solución|Solución)\r?\n([\s\S]*?)(?:---|###|$)/i);
   let solutionText = detailsMatch ? detailsMatch[1].trim() : body;
 
   if (solutionText.length > 1000) {
@@ -411,6 +411,28 @@ function runSaveMemory(vaultPath, argsList) {
       i++;
     }
     else if (a === '--project' && argsList[i+1]) { project = cleanText(argsList[i+1]); i++; }
+  }
+
+  // Support positional arguments if flags were not used
+  const hasFlags = argsList.some(a => typeof a === 'string' && a.startsWith('--'));
+  if (!hasFlags && argsList.length > 0) {
+    if (argsList.length === 1) {
+      const singleText = cleanText(argsList[0]);
+      summary = singleText.slice(0, 140);
+      title = singleText.slice(0, 60);
+      content = argsList[0];
+    } else {
+      title = cleanText(argsList[0]);
+      content = argsList.slice(1).join(' ');
+      summary = cleanText(content).slice(0, 140);
+    }
+  }
+
+  if (!summary && content) {
+    summary = cleanText(content).slice(0, 140);
+  }
+  if (!content && summary) {
+    content = summary;
   }
 
   ensureDirs(vaultPath);
@@ -619,11 +641,28 @@ switch (cmd) {
     const now = new Date().toISOString().split('T')[0];
     const entry = `- \`[${now}]\` ${learning}`;
 
-    let content = fs.existsSync(userFile) ? fs.readFileSync(userFile, 'utf8') : `# Perfil de Trabajo — Davissss2\n\n## 4. Aprendizajes y Preferencias Dinámicas Acumuladas\n`;
+    let runnerUser = 'User';
+    const cfgFile = path.join(os.homedir(), '.gemini', 'config', 'antigravity-obsidian.json');
+    if (fs.existsSync(cfgFile)) {
+      try {
+        const c = JSON.parse(fs.readFileSync(cfgFile, 'utf8'));
+        if (c.userName) runnerUser = c.userName;
+      } catch (e) {}
+    }
+    if (runnerUser === 'User') {
+      runnerUser = process.env.USERNAME || process.env.USER || 'User';
+    }
+
+    let content = fs.existsSync(userFile) ? fs.readFileSync(userFile, 'utf8') : `# Perfil de Trabajo — ${runnerUser}\n\n## 4. Aprendizajes y Preferencias Dinámicas Acumuladas\n`;
     if (content.includes('## 4. Aprendizajes y Preferencias Dinámicas Acumuladas')) {
       content = content.replace(
         '## 4. Aprendizajes y Preferencias Dinámicas Acumuladas',
         `## 4. Aprendizajes y Preferencias Dinámicas Acumuladas\n${entry}`
+      );
+    } else if (content.includes('## 4. Dynamic Learnings & Evolved Preferences')) {
+      content = content.replace(
+        '## 4. Dynamic Learnings & Evolved Preferences',
+        `## 4. Dynamic Learnings & Evolved Preferences\n${entry}`
       );
     } else {
       content += `\n## 4. Aprendizajes y Preferencias Dinámicas Acumuladas\n${entry}\n`;
@@ -782,16 +821,19 @@ switch (cmd) {
     break;
   }
 
+  case 'help':
   default:
     console.log(`
 Comandos de Obsidian for Antigravity (Zero Emojis, Ultra-Bajo Contexto):
+  node obsidian.js status               (Estado de conexion y estadisticas)
   node obsidian.js triage "<query>"     (Triage ultra-compacto: Skill vs Memoria vs Nada)
   node obsidian.js peek "<nota>"        (Solucion tecnica directa sin metadatos)
   node obsidian.js save --title "..." --summary "..." --content "..." (Guardado atomico)
+  node obsidian.js soul                 (Soul de Antigravity y Perfil de Usuario)
+  node obsidian.js learn "<habito>"     (Registra preferencia o habito aprendido)
   node obsidian.js catalog              (Resumen 1-linea de skills y memorias)
   node obsidian.js skills               (Lista rapida de skills con descripcion corta)
   node obsidian.js memories             (Lista rapida de memorias con resumen corto)
-  node obsidian.js status               (Estado de conexion)
   node obsidian.js search "<query>"     (Busqueda compacta)
   node obsidian.js read "<nota>"        (Lectura completa de archivo)
   node obsidian.js open [nota]          (Abrir en Obsidian Desktop)

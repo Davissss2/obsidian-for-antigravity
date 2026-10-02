@@ -95,8 +95,11 @@ async function promptSelectVault(onSuccess) {
     const selectedPath = folderUri[0].fsPath;
     await vscode.workspace.getConfiguration('antigravityObsidian').update('vaultPath', selectedPath, vscode.ConfigurationTarget.Global);
     const newVault = getActiveOrConfiguredVault(selectedPath);
-    installSkillAndRules(selectedPath);
-    syncEngine.syncAll(selectedPath, getWorkspaceRoot());
+    const config = vscode.workspace.getConfiguration('antigravityObsidian');
+    const configuredLang = config.get('language') || 'auto';
+    const configuredUser = config.get('userName') || '';
+    installSkillAndRules(selectedPath, { language: configuredLang, userName: configuredUser });
+    syncEngine.syncAll(selectedPath, getWorkspaceRoot(), { language: configuredLang, userName: configuredUser });
     updateStatusBar(newVault);
     if (onSuccess) onSuccess();
     vscode.window.showInformationMessage(`Bóveda de Obsidian configurada: ${newVault ? newVault.name : selectedPath}`);
@@ -125,13 +128,15 @@ class ObsidianPanelProvider {
     // Auto-sync on panel open so everything is fresh immediately
     const config = vscode.workspace.getConfiguration('antigravityObsidian');
     const configuredPath = config.get('vaultPath');
+    const configuredLang = config.get('language') || 'auto';
+    const configuredUser = config.get('userName') || '';
     const { ensureOrCreateDefaultVault } = require('./src/vault-detector');
     const vault = ensureOrCreateDefaultVault(configuredPath);
     const workspaceRoot = getWorkspaceRoot();
 
     if (vault && vault.exists) {
       try {
-        syncEngine.syncAll(vault.path, workspaceRoot);
+        syncEngine.syncAll(vault.path, workspaceRoot, { language: configuredLang, userName: configuredUser });
       } catch (e) {}
     }
 
@@ -140,12 +145,15 @@ class ObsidianPanelProvider {
     webviewView.webview.onDidReceiveMessage(async (message) => {
       const currentVault = ensureOrCreateDefaultVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
       const currentRoot = getWorkspaceRoot();
+      const currentConfig = vscode.workspace.getConfiguration('antigravityObsidian');
+      const activeLang = currentConfig.get('language') || 'auto';
+      const activeUser = currentConfig.get('userName') || '';
 
       switch (message.type) {
         case 'syncNow': {
           if (currentVault && currentVault.path) {
-            syncEngine.syncAll(currentVault.path, currentRoot);
-            installSkillAndRules(currentVault.path);
+            syncEngine.syncAll(currentVault.path, currentRoot, { language: activeLang, userName: activeUser });
+            installSkillAndRules(currentVault.path, { language: activeLang, userName: activeUser });
             updateStatusBar(currentVault);
             updateView();
             webviewView.webview.postMessage({ type: 'syncComplete' });
@@ -175,7 +183,7 @@ class ObsidianPanelProvider {
               ...message.data,
               project: currentRoot ? path.basename(currentRoot) : null,
             });
-            syncEngine.generateHub(currentVault.path, currentRoot);
+            syncEngine.generateHub(currentVault.path, currentRoot, { language: activeLang, userName: activeUser });
             updateView();
             webviewView.webview.postMessage({ type: 'memorySaved', title: saved.title });
           }
@@ -191,9 +199,22 @@ class ObsidianPanelProvider {
 
         case 'reinstallSkill': {
           if (currentVault && currentVault.path) {
-            installSkillAndRules(currentVault.path);
+            installSkillAndRules(currentVault.path, { language: activeLang, userName: activeUser });
             vscode.window.showInformationMessage('Skill de Obsidian actualizada para todos los chats.');
             updateView();
+          }
+          break;
+        }
+
+        case 'setLanguage': {
+          const newLang = message.language || 'auto';
+          await vscode.workspace.getConfiguration('antigravityObsidian').update('language', newLang, vscode.ConfigurationTarget.Global);
+          if (currentVault && currentVault.path) {
+            syncEngine.ensureSoulAndProfile(currentVault.path, { language: newLang, userName: activeUser, forceUpdate: true });
+            installSkillAndRules(currentVault.path, { language: newLang, userName: activeUser });
+            syncEngine.generateHub(currentVault.path, currentRoot, { language: newLang, userName: activeUser });
+            updateView();
+            vscode.window.showInformationMessage(newLang === 'en' ? 'Language switched to English. Soul, Profile, and AI rules updated.' : `Idioma cambiado a ${newLang.toUpperCase()}. Soul, Perfil y reglas de IA actualizadas.`);
           }
           break;
         }
@@ -202,9 +223,19 @@ class ObsidianPanelProvider {
           const cfgData = message.data || message || {};
           const proactiveLookup = cfgData.proactiveLookup !== undefined ? !!cfgData.proactiveLookup : true;
           const autoSave = cfgData.autoSave !== undefined ? !!cfgData.autoSave : true;
+          const language = cfgData.language !== undefined ? cfgData.language : activeLang;
+          const userName = cfgData.userName !== undefined ? cfgData.userName : activeUser;
+
+          await vscode.workspace.getConfiguration('antigravityObsidian').update('language', language, vscode.ConfigurationTarget.Global);
+          if (userName !== undefined) {
+            await vscode.workspace.getConfiguration('antigravityObsidian').update('userName', userName, vscode.ConfigurationTarget.Global);
+          }
+
           if (currentVault && currentVault.path) {
-            installSkillAndRules(currentVault.path, { proactiveLookup, autoSave });
-            vscode.window.showInformationMessage('Configuración de IA y Segundo Cerebro actualizada.');
+            syncEngine.ensureSoulAndProfile(currentVault.path, { language, userName, forceUpdate: true });
+            installSkillAndRules(currentVault.path, { proactiveLookup, autoSave, language, userName });
+            syncEngine.generateHub(currentVault.path, currentRoot, { language, userName });
+            vscode.window.showInformationMessage('Configuración de IA, idioma y perfil actualizados.');
             updateView();
           }
           break;
@@ -315,8 +346,16 @@ class ObsidianPanelProvider {
       } catch (e) {}
     }
 
+    const configuredLang = config.get('language') || 'auto';
+    const configuredUser = config.get('userName') || '';
+    const ideLang = (vscode.env.language || 'en').toLowerCase();
+    const effectiveLang = configuredLang === 'auto'
+      ? (ideLang.startsWith('en') ? 'en' : (ideLang.startsWith('es') ? 'es' : 'en'))
+      : configuredLang;
+    const effectiveUser = syncEngine.resolveUserName(vault ? vault.path : null, configuredUser);
+
     return `<!DOCTYPE html>
-<html lang="es">
+<html lang="${effectiveLang}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -337,12 +376,13 @@ class ObsidianPanelProvider {
     </div>
     <div class="header-right">
       <select class="lang-selector-compact lang-select" title="Language / Idioma">
-        <option value="es">ES</option>
-        <option value="en">EN</option>
-        <option value="fr">FR</option>
-        <option value="de">DE</option>
-        <option value="zh">ZH</option>
-        <option value="ja">JA</option>
+        <option value="auto" ${configuredLang === 'auto' ? 'selected' : ''}>Auto (${ideLang.toUpperCase()})</option>
+        <option value="es" ${configuredLang === 'es' ? 'selected' : ''}>ES</option>
+        <option value="en" ${configuredLang === 'en' ? 'selected' : ''}>EN</option>
+        <option value="fr" ${configuredLang === 'fr' ? 'selected' : ''}>FR</option>
+        <option value="de" ${configuredLang === 'de' ? 'selected' : ''}>DE</option>
+        <option value="zh" ${configuredLang === 'zh' ? 'selected' : ''}>ZH</option>
+        <option value="ja" ${configuredLang === 'ja' ? 'selected' : ''}>JA</option>
       </select>
       <div class="status-badge" title="Status">
         <div class="status-pulse" style="${isConnected ? '' : 'background:#ef4444;box-shadow:none;'}"></div>
@@ -431,26 +471,26 @@ class ObsidianPanelProvider {
       <div class="soul-header">
         <div class="soul-badge-wrap">
           ${SVGS.brain}
-          <span class="soul-title">Hermes Core — Alma & Perfil</span>
+          <span class="soul-title" data-i18n="soul_title">Hermes Core — Alma & Perfil</span>
         </div>
-        <span class="status-badge" style="background:rgba(16,185,129,0.15);color:#34d399;border:1px solid rgba(16,185,129,0.3);">Activo</span>
+        <span class="status-badge" style="background:rgba(16,185,129,0.15);color:#34d399;border:1px solid rgba(16,185,129,0.3);" data-i18n="soul_status_active">Activo</span>
       </div>
       <div class="soul-body">
         <div class="soul-row">
-          <strong>Soul de Antigravity:</strong>
-          <span>Ingeniero de software senior autónomo, resolutivo, sin rodeos y CERO emojis.</span>
+          <strong data-i18n="soul_label">Soul de Antigravity:</strong>
+          <span data-i18n="soul_desc">Ingeniero de software senior autónomo, resolutivo, sin rodeos y CERO emojis.</span>
         </div>
         <div class="soul-row">
-          <strong>Perfil de Usuario (Davissss2):</strong>
-          <span>Español directo, filtro anti-ruido estricto y rigor multiplataforma (Windows/Ubuntu/Mac).</span>
+          <strong><span data-i18n="profile_label_prefix">Perfil de Usuario</span> (${effectiveUser}):</strong>
+          <span data-i18n="profile_desc">Español/Inglés directo según entorno, filtro anti-ruido estricto y rigor multiplataforma (Windows/Ubuntu/Mac).</span>
         </div>
       </div>
       <div class="soul-actions">
         <button class="btn-open-link btn-open-note" data-note="Antigravity/Alma/00 Soul de Antigravity.md">
-          ${SVGS.open} <span>Ver Soul</span>
+          ${SVGS.open} <span data-i18n="soul_view_soul">Ver Soul</span>
         </button>
         <button class="btn-open-link btn-open-note" data-note="Antigravity/Alma/00 Perfil de Usuario.md">
-          ${SVGS.open} <span>Ver Perfil</span>
+          ${SVGS.open} <span data-i18n="soul_view_profile">Ver Perfil</span>
         </button>
       </div>
     </div>
@@ -562,14 +602,20 @@ class ObsidianPanelProvider {
   <!-- TAB 5: AJUSTES -->
   <div class="tab-pane" id="pane-ajustes">
     <div class="field">
+      <label data-i18n="settings_user_name_label">Nombre de Usuario (Perfil Hermes):</label>
+      <input type="text" class="input-ctrl" id="setting-user-name" value="${configuredUser || effectiveUser}" data-i18n-ph="settings_user_name_ph" placeholder="Davissss2 o tu alias" style="margin-bottom:12px;">
+    </div>
+
+    <div class="field">
       <label data-i18n="language_label">Idioma / Language:</label>
-      <select class="select-ctrl lang-select" style="margin-bottom:12px;">
-        <option value="es">Español (ES)</option>
-        <option value="en">English (EN)</option>
-        <option value="fr">Français (FR)</option>
-        <option value="de">Deutsch (DE)</option>
-        <option value="zh">中文 (ZH)</option>
-        <option value="ja">日本語 (JA)</option>
+      <select class="select-ctrl lang-select" id="setting-language" style="margin-bottom:12px;">
+        <option value="auto" ${configuredLang === 'auto' ? 'selected' : ''}>Automático / Detect (${ideLang.toUpperCase()})</option>
+        <option value="es" ${configuredLang === 'es' ? 'selected' : ''}>Español (ES)</option>
+        <option value="en" ${configuredLang === 'en' ? 'selected' : ''}>English (EN)</option>
+        <option value="fr" ${configuredLang === 'fr' ? 'selected' : ''}>Français (FR)</option>
+        <option value="de" ${configuredLang === 'de' ? 'selected' : ''}>Deutsch (DE)</option>
+        <option value="zh" ${configuredLang === 'zh' ? 'selected' : ''}>中文 (ZH)</option>
+        <option value="ja" ${configuredLang === 'ja' ? 'selected' : ''}>日本語 (JA)</option>
       </select>
     </div>
 
@@ -720,7 +766,7 @@ function activate(context) {
   const initialized = context.globalState.get('obsidian_auto_initialized');
   if (!initialized && vault && vault.exists) {
     vscode.window.showInformationMessage(
-      `✨ Obsidian for Antigravity: Configurado y conectado automáticamente (${vault.name}). Tu Segundo Cerebro de IA ya está activo en todos tus chats.`
+      `Obsidian for Antigravity: Configurado y conectado automáticamente (${vault.name}). Tu Segundo Cerebro de IA ya está activo en todos tus chats.`
     );
     context.globalState.update('obsidian_auto_initialized', true);
   }
@@ -794,6 +840,77 @@ function activate(context) {
           currentWebviewView.webview.html = provider._getHtmlForWebview(currentWebviewView.webview);
         }
         vscode.window.showInformationMessage(`Memoria "${title}" guardada en Obsidian.`);
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('antigravityObsidian.showSoul', async () => {
+      const activeVault = getActiveOrConfiguredVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
+      if (!activeVault || !activeVault.exists) {
+        vscode.window.showWarningMessage('No hay ninguna bóveda de Obsidian conectada.');
+        return;
+      }
+      const almaDir = path.join(activeVault.path, 'Antigravity', 'Alma');
+      const soulPath = path.join(almaDir, '00 Soul de Antigravity.md');
+      const userPath = path.join(almaDir, '00 Perfil de Usuario.md');
+
+      const choice = await vscode.window.showQuickPick([
+        { label: '$(account) Ver Perfil de Usuario', description: '00 Perfil de Usuario.md', path: userPath },
+        { label: '$(circuit-board) Ver Soul de Antigravity', description: '00 Soul de Antigravity.md', path: soulPath },
+        { label: '$(eye) Abrir en Panel Lateral', description: 'Webview', action: 'webview' },
+      ], { placeHolder: 'Selecciona qué vista de Soul o Perfil consultar' });
+
+      if (!choice) return;
+      if (choice.action === 'webview') {
+        if (currentWebviewView) {
+          currentWebviewView.show?.(true);
+          currentWebviewView.webview.postMessage({ type: 'switchTab', tab: 'hub' });
+        }
+      } else if (fs.existsSync(choice.path)) {
+        const doc = await vscode.workspace.openTextDocument(choice.path);
+        await vscode.window.showTextDocument(doc, { preview: false });
+      } else {
+        vscode.window.showWarningMessage(`No se encontró el archivo: ${choice.description}`);
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('antigravityObsidian.showStatus', async () => {
+      const activeVault = getActiveOrConfiguredVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
+      if (!activeVault || !activeVault.exists) {
+        vscode.window.showWarningMessage('Obsidian: Desconectado. No se encontró ninguna bóveda activa.');
+        return;
+      }
+      const manifestPath = path.join(activeVault.path, 'Antigravity', 'context-manifest.json');
+      let statsText = '';
+      if (fs.existsSync(manifestPath)) {
+        try {
+          const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+          statsText = ` | Memorias: ${manifest.stats.memories} | Skills: ${manifest.stats.skills}`;
+        } catch (e) {}
+      }
+      const action = await vscode.window.showInformationMessage(
+        `Obsidian Conectado: ${activeVault.name}${statsText}`,
+        'Abrir Hub',
+        'Sincronizar'
+      );
+      if (action === 'Abrir Hub') {
+        vscode.commands.executeCommand('antigravityObsidian.openHub');
+      } else if (action === 'Sincronizar') {
+        vscode.commands.executeCommand('antigravityObsidian.syncNow');
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('antigravityObsidian.openGraph', () => {
+      const activeVault = getActiveOrConfiguredVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
+      if (activeVault && activeVault.exists) {
+        openInObsidianApp(activeVault.name, 'Antigravity/00 Antigravity Hub');
+      } else {
+        vscode.window.showWarningMessage('No hay ninguna bóveda de Obsidian conectada.');
       }
     })
   );
