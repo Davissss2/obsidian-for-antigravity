@@ -4,6 +4,7 @@
   "description": "Segundo Cerebro y memoria autónoma para Antigravity conectada con Obsidian. Almacena lecciones aprendidas, soluciones a errores, arquitecturas y skills en tu Vault local interconectado en tiempo real con vista gráfica.",
   "version": "1.1.0",
   "publisher": "Davissss2",
+  "license": "SEE LICENSE IN LICENSE.txt",
   "repository": {
     "type": "git",
     "url": "https://github.com/Davissss2/obsidian-for-antigravity"
