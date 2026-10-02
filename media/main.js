@@ -62,7 +62,11 @@
       settings_autosave_title: "Aprender y Guardar Automáticamente",
       settings_autosave_desc: "Guarda lecciones de bugs resueltos y decisiones de arquitectura en el Vault y Knowledge Items.",
       btn_save_ai_settings: "Guardar y Aplicar a Todos los Chats",
-      toast_ai_settings_saved: "Preferencias de IA actualizadas para todos los chats"
+      toast_ai_settings_saved: "Preferencias de IA actualizadas para todos los chats",
+      settings_danger_title: "Zona de Peligro / Empezar de Cero",
+      settings_danger_desc: "Borra todas las memorias acumuladas, limpia duplicados y resetea el contexto de la IA para empezar completamente limpio desde cero con Obsidian.",
+      btn_reset_data: "Borrar Todo y Empezar de Cero",
+      toast_reset_complete: "Memoria reiniciada correctamente. Empezando de cero."
     },
     en: {
       brand_title: "Obsidian for Antigravity",
@@ -123,7 +127,11 @@
       settings_autosave_title: "Autonomously Learn & Save",
       settings_autosave_desc: "Automatically records bugfixes and architecture lessons into Vault and Knowledge Items.",
       btn_save_ai_settings: "Save & Apply to All Chats",
-      toast_ai_settings_saved: "AI settings applied to all chats"
+      toast_ai_settings_saved: "AI settings applied to all chats",
+      settings_danger_title: "Danger Zone / Start From Scratch",
+      settings_danger_desc: "Wipes all accumulated memories, cleans duplicates and resets AI context to start completely fresh with Obsidian.",
+      btn_reset_data: "Wipe All Data & Start Fresh",
+      toast_reset_complete: "Memory wiped successfully. Starting from scratch."
     },
     fr: {
       brand_title: "Obsidian for Antigravity",
@@ -497,12 +505,23 @@
 
       vscode.postMessage({
         type: 'updateAiConfig',
+        data: {
+          proactiveLookup,
+          autoSave,
+        },
         proactiveLookup,
         autoSave,
       });
 
       const dict = I18N[currentLang] || I18N.es;
       showToast(dict.toast_ai_settings_saved || 'Configuración guardada para todas las conversaciones');
+    });
+  }
+
+  const btnResetData = document.getElementById('btn-reset-data');
+  if (btnResetData) {
+    btnResetData.addEventListener('click', () => {
+      vscode.postMessage({ type: 'resetAllData' });
     });
   }
 
@@ -630,6 +649,11 @@
       }
       case 'memorySaved': {
         showToast(`${dict.toast_saved}: "${msg.title}"`);
+        break;
+      }
+      case 'resetComplete': {
+        showToast(dict.toast_reset_complete || 'Memoria reiniciada correctamente.');
+        switchTab('panel');
         break;
       }
       case 'toast': {

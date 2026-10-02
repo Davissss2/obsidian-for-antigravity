@@ -64,6 +64,9 @@ const SVGS = {
   globe: `<svg class="svg-icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`,
   save: `<svg class="svg-icon" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>`,
   dashboard: `<svg class="svg-icon-sm" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>`,
+  check: `<svg class="svg-icon-sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>`,
+  trash: `<svg class="svg-icon-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
+  alert: `<svg class="svg-icon-sm" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
 };
 
 async function promptSelectVault(onSuccess) {
@@ -182,13 +185,35 @@ class ObsidianPanelProvider {
         }
 
         case 'updateAiConfig': {
-          const cfgData = message.data || {};
-          const proactiveLookup = !!cfgData.proactiveLookup;
-          const autoSave = !!cfgData.autoSave;
+          const cfgData = message.data || message || {};
+          const proactiveLookup = cfgData.proactiveLookup !== undefined ? !!cfgData.proactiveLookup : true;
+          const autoSave = cfgData.autoSave !== undefined ? !!cfgData.autoSave : true;
           if (currentVault && currentVault.path) {
             installSkillAndRules(currentVault.path, { proactiveLookup, autoSave });
             vscode.window.showInformationMessage('Configuración de IA y Segundo Cerebro actualizada.');
             updateView();
+          }
+          break;
+        }
+
+        case 'resetAllData': {
+          if (currentVault && currentVault.path) {
+            const answer = await vscode.window.showWarningMessage(
+              '¿Estás seguro de que deseas borrar toda la memoria y notas sincronizadas en Obsidian para empezar de cero? Esta acción eliminará las memorias anteriores y limpiará el contexto acumulado de la IA.',
+              { modal: true },
+              'Borrar Todo y Empezar de Cero',
+              'Cancelar'
+            );
+            if (answer === 'Borrar Todo y Empezar de Cero') {
+              syncEngine.resetAllData(currentVault.path, currentRoot);
+              installSkillAndRules(currentVault.path);
+              updateStatusBar(currentVault);
+              updateView();
+              vscode.window.showInformationMessage('Memoria de Obsidian y contexto de IA reiniciados correctamente. Empezando de cero.');
+              webviewView.webview.postMessage({ type: 'resetComplete' });
+            }
+          } else {
+            vscode.window.showErrorMessage('No hay ninguna bóveda de Obsidian conectada.');
           }
           break;
         }
@@ -563,6 +588,15 @@ class ObsidianPanelProvider {
         Vuelve a comprobar que ~/.gemini/config/skills/ tenga la skill lista para todos los chats.
       </div>
     </div>
+    <div class="danger-zone">
+      <div class="danger-title">${SVGS.alert} <span data-i18n="settings_danger_title">Zona de Peligro / Empezar de Cero</span></div>
+      <div class="danger-desc" data-i18n="settings_danger_desc">
+        Borra todas las memorias acumuladas, limpia duplicados y resetea el contexto de la IA para empezar completamente limpio desde cero con Obsidian.
+      </div>
+      <button class="btn-action btn-danger" id="btn-reset-data">
+        ${SVGS.trash} <span data-i18n="btn_reset_data">Borrar Todo y Empezar de Cero</span>
+      </button>
+    </div>
   </div>
 
   <!-- Toast Bar -->
@@ -718,6 +752,32 @@ function activate(context) {
           currentWebviewView.webview.html = provider._getHtmlForWebview(currentWebviewView.webview);
         }
         vscode.window.showInformationMessage(`Memoria "${title}" guardada en Obsidian.`);
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('antigravityObsidian.resetData', async () => {
+      const { ensureOrCreateDefaultVault } = require('./src/vault-detector');
+      const activeVault = ensureOrCreateDefaultVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
+      if (activeVault && activeVault.exists) {
+        const answer = await vscode.window.showWarningMessage(
+          '¿Estás seguro de que deseas borrar toda la memoria y notas sincronizadas en Obsidian para empezar de cero? Esta acción eliminará las memorias anteriores y limpiará el contexto acumulado de la IA.',
+          { modal: true },
+          'Borrar Todo y Empezar de Cero',
+          'Cancelar'
+        );
+        if (answer === 'Borrar Todo y Empezar de Cero') {
+          syncEngine.resetAllData(activeVault.path, getWorkspaceRoot());
+          installSkillAndRules(activeVault.path);
+          updateStatusBar(activeVault);
+          if (currentWebviewView) {
+            currentWebviewView.webview.html = provider._getHtmlForWebview(currentWebviewView.webview);
+          }
+          vscode.window.showInformationMessage('Memoria de Obsidian y contexto de IA reiniciados correctamente. Empezando de cero.');
+        }
+      } else {
+        vscode.window.showWarningMessage('No hay ninguna bóveda de Obsidian conectada.');
       }
     })
   );

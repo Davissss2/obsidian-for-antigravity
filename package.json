@@ -1,14 +1,23 @@
 {
   "name": "obsidian-for-antigravity",
   "displayName": "Obsidian for Antigravity",
-  "description": "Segundo Cerebro y memoria autónoma para Antigravity conectada con Obsidian. Almacena lecciones aprendidas, soluciones a errores, arquitecturas y skills en tu Vault local interconectado en tiempo real con vista gráfica.",
-  "version": "1.1.0",
+  "description": "Autonomous Second Brain & persistent memory for Antigravity AI connected to Obsidian. Automatically stores bugfixes, architecture decisions, and skills in your local Vault with real-time Graph View.",
+  "version": "1.2.0",
   "publisher": "Davissss2",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "author": {
+    "name": "Davissss2",
+    "url": "https://github.com/Davissss2"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/Davissss2/obsidian-for-antigravity#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Davissss2/obsidian-for-antigravity"
+    "url": "https://github.com/Davissss2/obsidian-for-antigravity.git"
   },
+  "bugs": {
+    "url": "https://github.com/Davissss2/obsidian-for-antigravity/issues"
+  },
+  "qna": "https://github.com/Davissss2/obsidian-for-antigravity/discussions",
   "icon": "logo.png",
   "engines": {
     "vscode": "^1.74.0"
@@ -54,23 +63,28 @@
     "commands": [
       {
         "command": "antigravityObsidian.syncNow",
-        "title": "Obsidian: Sincronizar Todo Ahora",
+        "title": "Obsidian: Sync All Now",
         "icon": "$(sync)"
       },
       {
         "command": "antigravityObsidian.openHub",
-        "title": "Obsidian: Abrir Hub en la App",
+        "title": "Obsidian: Open Hub in App",
         "icon": "$(book)"
       },
       {
         "command": "antigravityObsidian.selectVault",
-        "title": "Obsidian: Seleccionar Bóveda Manualmente",
+        "title": "Obsidian: Select Vault Folder Manually",
         "icon": "$(folder)"
       },
       {
         "command": "antigravityObsidian.newMemory",
-        "title": "Obsidian: Guardar Nueva Memoria",
+        "title": "Obsidian: Save New Memory",
         "icon": "$(add)"
+      },
+      {
+        "command": "antigravityObsidian.resetData",
+        "title": "Obsidian: Wipe All Data & Start Fresh",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -98,17 +112,17 @@
         "antigravityObsidian.vaultPath": {
           "type": "string",
           "default": "",
-          "description": "Ruta personalizada a la bóveda de Obsidian. Dejar vacío para autodetectar automáticamente."
+          "description": "Custom path to local Obsidian vault. Leave empty to automatically detect."
         },
         "antigravityObsidian.autoSync": {
           "type": "boolean",
           "default": true,
-          "description": "Sincronizar automáticamente al iniciar y tras cambios relevantes."
+          "description": "Automatically synchronize on startup and upon relevant changes."
         },
         "antigravityObsidian.apiToken": {
           "type": "string",
           "default": "",
-          "description": "Token Bearer opcional para el plugin Local REST API de Obsidian."
+          "description": "Optional Bearer token for Obsidian Local REST API plugin."
         }
       }
     }

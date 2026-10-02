@@ -471,6 +471,7 @@ Total memorias registradas: **${allFiles.length}**
       fs.writeFileSync(path.join(kiDir, 'metadata.json'), JSON.stringify({
         title,
         summary: summary || content.slice(0, 160),
+        source: 'obsidian-vault',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         references: []
@@ -569,6 +570,64 @@ switch (cmd) {
   case 'manifest': {
     const manifest = buildManifest(vault.path);
     console.log(JSON.stringify({ status: 'ok', stats: manifest.stats, updatedAt: manifest.updatedAt }, null, 2));
+    break;
+  }
+
+  case 'reset': {
+    const memDir = path.join(vault.path, 'Antigravity', 'Memoria');
+    const skiDir = path.join(vault.path, 'Antigravity', 'Skills');
+    const proDir = path.join(vault.path, 'Antigravity', 'Proyectos');
+    const sesDir = path.join(vault.path, 'Antigravity', 'Sesiones');
+
+    if (fs.existsSync(memDir)) {
+      for (const f of fs.readdirSync(memDir)) {
+        try { fs.unlinkSync(path.join(memDir, f)); } catch (e) {}
+      }
+    }
+    if (fs.existsSync(skiDir)) {
+      for (const f of fs.readdirSync(skiDir)) {
+        try { fs.unlinkSync(path.join(skiDir, f)); } catch (e) {}
+      }
+    }
+    if (fs.existsSync(proDir)) {
+      for (const f of fs.readdirSync(proDir)) {
+        try { fs.unlinkSync(path.join(proDir, f)); } catch (e) {}
+      }
+    }
+    if (fs.existsSync(sesDir)) {
+      for (const f of fs.readdirSync(sesDir)) {
+        try { fs.unlinkSync(path.join(sesDir, f)); } catch (e) {}
+      }
+    }
+
+    const { knowledgeDir } = getAntigravityPaths();
+    if (fs.existsSync(knowledgeDir)) {
+      for (const kf of fs.readdirSync(knowledgeDir, { withFileTypes: true })) {
+        if (!kf.isDirectory()) continue;
+        const fp = path.join(knowledgeDir, kf.name);
+        const metaFile = path.join(fp, 'metadata.json');
+        let shouldDel = false;
+        if (fs.existsSync(metaFile)) {
+          try {
+            const meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
+            if (meta.source === 'obsidian-vault') shouldDel = true;
+          } catch (e) {}
+        }
+        const obsPrefixes = ['proyecto-', 'antigravity-', 'arquitectura-antigravity', 'protocolo-de-memoria', 'sincronizacion-bidireccional', 'solucion-a-variables', 'latalaya-arquitectura'];
+        if (obsPrefixes.some(p => kf.name.startsWith(p))) shouldDel = true;
+        if (shouldDel) {
+          try { fs.rmSync(fp, { recursive: true, force: true }); } catch (e) {}
+        }
+      }
+    }
+
+    ensureDirs(vault.path);
+    const now = new Date().toISOString().split('T')[0];
+    const indexFile = path.join(memDir, '00 Indice de Memoria.md');
+    fs.writeFileSync(indexFile, `---\ntitle: "Indice de Memoria de Antigravity"\ntype: antigravity-index\ntags:\n  - antigravity/indice\n  - antigravity/memoria\nupdated: ${now}\n---\n\n# Banco de Memoria & Knowledge Items\n\nTotal de memorias registradas: **0**\n\n*No hay memorias registradas. Empezando de cero.*\n\n---\n*Volver al:* [[00 Antigravity Hub]]\n`, 'utf8');
+
+    const manifest = buildManifest(vault.path);
+    console.log(JSON.stringify({ status: 'ok', message: 'Memoria reiniciada correctamente', stats: manifest.stats }, null, 2));
     break;
   }
 

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.0] - 2026-10-02
+
+### Added
+- **Complete Memory Reset & Start Fresh Button**: Added a dedicated danger zone action button in the Webview Settings panel (`btn-reset-data`) and VS Code command `antigravityObsidian.resetData` to wipe all accumulated memories, remove duplicate Knowledge Items, and reset AI context to start completely clean from scratch with Obsidian.
+- **Native SVG Icon Set**: Added native inline SVGs for `check`, `trash`, and `alert` in `extension.js`.
+
+### Fixed
+- **Fixed Button Rendering `undefined`**: Resolved missing `SVGS.check` icon in the *Save & Apply to All Chats* button, which previously caused the button to render the literal text `undefined`.
+- **Eliminated Duplicate Skills & Stale Project Notes**: `syncSkillsToVault` now avoids re-creating global skills under project names and automatically cleans up stale or orphaned skill notes from previous workspaces in `Antigravity/Skills/`.
+- **Prevented Infinite Recursive Knowledge Sync Loop**: Eliminated recursive re-nesting between `syncKnowledgeToVault` and `syncVaultToKnowledge` by tagging exported notes with `source: 'obsidian-vault'` and stripping redundant nested frontmatters and headers.
+- **Fixed Obsidian Graph View Links**: Replaced inconsistent emoji-bearing links (`[[00 🧠 Antigravity Hub]]`) with exact filename matches (`[[00 Antigravity Hub]]`, `[[00 Indice de Skills]]`, `[[00 Indice de Memoria]]`), ensuring the Graph View renders cleanly without phantom or broken nodes.
+
+---
+
 ## [1.1.0] - 2026-10-02
 
 ### Added

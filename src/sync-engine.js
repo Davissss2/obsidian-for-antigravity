@@ -99,6 +99,9 @@ function syncSkillsToVault(vaultPath, workspaceRoot) {
   const { globalSkillsDir } = getAntigravityPaths();
   const skillsFolder = path.join(vaultPath, 'Antigravity', 'Skills');
   const syncedSkills = [];
+  const activeFilenames = new Set(['00 Indice de Skills.md']);
+  const seenSkillNames = new Set();
+  const nowStr = new Date().toISOString().split('T')[0];
 
   // 1. Scan Global Skills
   if (fs.existsSync(globalSkillsDir)) {
@@ -107,12 +110,22 @@ function syncSkillsToVault(vaultPath, workspaceRoot) {
       if (ent.isDirectory()) {
         const skillMd = path.join(globalSkillsDir, ent.name, 'SKILL.md');
         const parsed = parseSkillMd(skillMd);
-        if (parsed) {
-          const obsFile = path.join(skillsFolder, `${sanitizeFilename(parsed.name)}.md`);
-          const nowStr = new Date().toISOString().split('T')[0];
+        if (parsed && parsed.name) {
+          const cleanName = parsed.name.trim();
+          const fileName = `${sanitizeFilename(cleanName)}.md`;
+          const obsFile = path.join(skillsFolder, fileName);
+          activeFilenames.add(fileName);
+          seenSkillNames.add(cleanName.toLowerCase());
+
+          // Clean body: strip duplicate leading title if present
+          let bodyText = (parsed.body || '').trim();
+          const titlePattern = new RegExp('^#\\s+' + cleanName.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&') + '\\r?\\n*');
+          if (titlePattern.test(bodyText)) {
+            bodyText = bodyText.replace(titlePattern, '').trim();
+          }
 
           const obsContent = `---
-title: "Skill: ${parsed.name}"
+title: "Skill: ${cleanName}"
 type: antigravity-skill
 scope: global
 tags:
@@ -121,22 +134,22 @@ tags:
 updated: ${nowStr}
 ---
 
-# ⚡ Skill: [[${parsed.name}]]
+# Skill: ${cleanName}
 
 > [!INFO] **Metadatos de la Skill**
-> - **Nombre**: \`${parsed.name}\`
+> - **Nombre**: \`${cleanName}\`
 > - **Ámbito**: Global (\`~/.gemini/config/skills/\`)
 > - **Descripción**: ${parsed.description || 'Sin descripción'}
 
-## 📖 Instrucciones del Agente
+## Instrucciones del Agente
 
-${parsed.body}
+${bodyText}
 
 ---
-*Conexiones del Grafo:* [[00 🧠 Antigravity Hub]] | [[00 ⚡ Índice de Skills]]
+*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Indice de Skills]]
 `;
           fs.writeFileSync(obsFile, obsContent, 'utf8');
-          syncedSkills.push({ name: parsed.name, scope: 'global', path: obsFile, description: parsed.description });
+          syncedSkills.push({ name: cleanName, scope: 'global', path: obsFile, description: parsed.description || '' });
         }
       }
     }
@@ -151,12 +164,26 @@ ${parsed.body}
         if (ent.isDirectory()) {
           const skillMd = path.join(projSkillsDir, ent.name, 'SKILL.md');
           const parsed = parseSkillMd(skillMd);
-          if (parsed) {
-            const obsFile = path.join(skillsFolder, `[Proyecto] ${sanitizeFilename(parsed.name)}.md`);
-            const nowStr = new Date().toISOString().split('T')[0];
+          if (parsed && parsed.name) {
+            const cleanName = parsed.name.trim();
+            // Avoid duplicate note if already defined globally
+            if (seenSkillNames.has(cleanName.toLowerCase())) {
+              continue;
+            }
+
+            const fileName = `[Proyecto] ${sanitizeFilename(cleanName)}.md`;
+            const obsFile = path.join(skillsFolder, fileName);
+            activeFilenames.add(fileName);
+            seenSkillNames.add(cleanName.toLowerCase());
+
+            let bodyText = (parsed.body || '').trim();
+            const titlePattern = new RegExp('^#\\s+' + cleanName.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&') + '\\r?\\n*');
+            if (titlePattern.test(bodyText)) {
+              bodyText = bodyText.replace(titlePattern, '').trim();
+            }
 
             const obsContent = `---
-title: "Skill: ${parsed.name}"
+title: "Skill: ${cleanName}"
 type: antigravity-skill
 scope: project
 project: "${path.basename(workspaceRoot)}"
@@ -166,24 +193,36 @@ tags:
 updated: ${nowStr}
 ---
 
-# ⚡ Skill de Proyecto: [[${parsed.name}]]
+# Skill: ${cleanName} (Proyecto)
 
 > [!INFO] **Metadatos de la Skill**
-> - **Nombre**: \`${parsed.name}\`
+> - **Nombre**: \`${cleanName}\`
 > - **Ámbito**: Proyecto actual (\`${path.basename(workspaceRoot)}\`)
 > - **Descripción**: ${parsed.description || 'Sin descripción'}
 
-## 📖 Instrucciones del Agente
+## Instrucciones del Agente
 
-${parsed.body}
+${bodyText}
 
 ---
-*Conexiones del Grafo:* [[00 🧠 Antigravity Hub]] | [[00 ⚡ Índice de Skills]] | [[${path.basename(workspaceRoot)}]]
+*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Indice de Skills]] | [[${path.basename(workspaceRoot)}]]
 `;
             fs.writeFileSync(obsFile, obsContent, 'utf8');
-            syncedSkills.push({ name: parsed.name, scope: 'project', path: obsFile, description: parsed.description });
+            syncedSkills.push({ name: cleanName, scope: 'project', path: obsFile, description: parsed.description || '' });
           }
         }
+      }
+    }
+  }
+
+  // Clean orphan or stale skill notes that are no longer active
+  if (fs.existsSync(skillsFolder)) {
+    const existingFiles = fs.readdirSync(skillsFolder);
+    for (const f of existingFiles) {
+      if (f.endsWith('.md') && !activeFilenames.has(f)) {
+        try {
+          fs.unlinkSync(path.join(skillsFolder, f));
+        } catch (e) {}
       }
     }
   }
@@ -191,37 +230,37 @@ ${parsed.body}
   // 3. Generate Skills Index Note
   const indexFile = path.join(skillsFolder, '00 Indice de Skills.md');
   let indexMd = `---
-title: "Índice de Skills de Antigravity"
+title: "Indice de Skills de Antigravity"
 type: antigravity-index
 tags:
   - antigravity/indice
   - antigravity/skills
-updated: ${new Date().toISOString().split('T')[0]}
+updated: ${nowStr}
 ---
 
-# ⚡ Catálogo de Skills de Antigravity
+# Catalogo de Skills de Antigravity
 
 Total de skills activas sincronizadas: **${syncedSkills.length}**
 
-## 🌐 Skills Globales
-| Skill | Descripción | Nota |
+## Skills Globales
+| Skill | Descripcion | Nota |
 |---|---|---|
 `;
 
   const globalList = syncedSkills.filter(s => s.scope === 'global');
   for (const s of globalList) {
-    indexMd += `| **${s.name}** | ${s.description.replace(/\r?\n/g, ' ')} | [[${s.name}]] |\n`;
+    indexMd += `| **${s.name}** | ${(s.description || 'Sin descripción').replace(/\\r?\\n/g, ' ').slice(0, 150)} | [[${sanitizeFilename(s.name)}]] |\\n`;
   }
 
   const projList = syncedSkills.filter(s => s.scope === 'project');
   if (projList.length > 0) {
-    indexMd += `\n## 📁 Skills de Proyecto\n| Skill | Descripción | Nota |\n|---|---|---|\n`;
+    indexMd += `\\n## Skills de Proyecto\\n| Skill | Descripcion | Nota |\\n|---|---|---|\\n`;
     for (const s of projList) {
-      indexMd += `| **${s.name}** | ${s.description.replace(/\r?\n/g, ' ')} | [[${sanitizeFilename(`[Proyecto] ${s.name}`)}]] |\n`;
+      indexMd += `| **${s.name}** | ${(s.description || 'Sin descripción').replace(/\\r?\\n/g, ' ').slice(0, 150)} | [[${sanitizeFilename(`[Proyecto] ${s.name}`)}]] |\\n`;
     }
   }
 
-  indexMd += `\n---\n*Volver al:* [[00 Antigravity Hub]]\n`;
+  indexMd += `\\n---\\n*Volver al:* [[00 Antigravity Hub]]\\n`;
   fs.writeFileSync(indexFile, indexMd, 'utf8');
 
   return syncedSkills;
@@ -248,12 +287,24 @@ function syncKnowledgeToVault(vaultPath) {
       if (fs.existsSync(metaFile)) {
         try {
           const meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
+
+          // CRITICAL: Skip items that originated from the Obsidian Vault to prevent infinite nesting/duplication!
+          if (meta.source === 'obsidian-vault') {
+            continue;
+          }
+
           const title = meta.title || item.name;
           const summary = meta.summary || 'Sin resumen';
           const safeTitle = sanitizeFilename(title);
           const obsFile = path.join(memoriaFolder, `${safeTitle}.md`);
 
-          // Read artifacts if any
+          // If the file already exists in vault, do not re-create/corrupt it
+          if (fs.existsSync(obsFile)) {
+            syncedMemories.push({ title, path: obsFile, summary });
+            continue;
+          }
+
+          // Read artifacts if any, ensuring clean text without recursive frontmatter
           let artifactsMd = '';
           const artifactsDir = path.join(itemDir, 'artifacts');
           if (fs.existsSync(artifactsDir)) {
@@ -261,8 +312,12 @@ function syncKnowledgeToVault(vaultPath) {
             for (const af of artFiles) {
               const afPath = path.join(artifactsDir, af);
               if (fs.statSync(afPath).isFile() && (af.endsWith('.md') || af.endsWith('.txt'))) {
-                const artContent = fs.readFileSync(afPath, 'utf8');
-                artifactsMd += `\n### 📄 Documento: ${af}\n\n${artContent}\n`;
+                let artContent = fs.readFileSync(afPath, 'utf8');
+                // Strip nested frontmatter if already present
+                artContent = artContent.replace(/^---[\\s\\S]*?---\\r?\\n/, '').trim();
+                // Strip duplicate graph connections
+                artContent = artContent.replace(/---[\\s\\S]*\\*Conexiones del Grafo:\\*[\\s\\S]*$/, '').trim();
+                artifactsMd += `\\n### Documento: ${af}\\n\\n${artContent}\\n`;
               }
             }
           }
@@ -271,6 +326,7 @@ function syncKnowledgeToVault(vaultPath) {
 title: "${title}"
 type: antigravity-memory
 category: knowledge-item
+origin_id: "${item.name}"
 tags:
   - antigravity/memoria
   - antigravity/knowledge-base
@@ -278,17 +334,17 @@ created: ${meta.created_at || new Date().toISOString().split('T')[0]}
 updated: ${meta.updated_at || new Date().toISOString().split('T')[0]}
 ---
 
-# 🧠 ${title}
+# ${title}
 
 > [!ABSTRACT] **Resumen de Conocimiento**
 > ${summary}
 
-## 📚 Artefactos y Referencias Técnicas
+## Artefactos y Referencias Técnicas
 
 ${artifactsMd || '*No se registraron artefactos adicionales.*'}
 
 ---
-*Conexiones del Grafo:* [[00 🧠 Antigravity Hub]] | [[00 🧠 Índice de Memoria]]
+*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Indice de Memoria]]
 `;
 
           fs.writeFileSync(obsFile, obsContent, 'utf8');
@@ -300,10 +356,27 @@ ${artifactsMd || '*No se registraron artefactos adicionales.*'}
     }
   }
 
+  // Also include existing memories in vault
+  if (fs.existsSync(memoriaFolder)) {
+    const memFiles = fs.readdirSync(memoriaFolder).filter(f => f.endsWith('.md') && !f.startsWith('00'));
+    for (const f of memFiles) {
+      const fullPath = path.join(memoriaFolder, f);
+      const title = f.replace(/\\.md$/, '');
+      if (!syncedMemories.some(m => m.title === title)) {
+        try {
+          const content = fs.readFileSync(fullPath, 'utf8');
+          const sumMatch = content.match(/>\\s*\\[!(?:NOTE|ABSTRACT|INFO)\\][^\\r\\n]*\\r?\\n>\\s*([^\\r\\n]+)/i);
+          const summary = sumMatch ? sumMatch[1].trim() : 'Sin resumen';
+          syncedMemories.push({ title, path: fullPath, summary });
+        } catch (e) {}
+      }
+    }
+  }
+
   // Generate Memory Index Note
   const indexFile = path.join(memoriaFolder, '00 Indice de Memoria.md');
   let indexMd = `---
-title: "Índice de Memoria de Antigravity"
+title: "Indice de Memoria de Antigravity"
 type: antigravity-index
 tags:
   - antigravity/indice
@@ -311,7 +384,7 @@ tags:
 updated: ${new Date().toISOString().split('T')[0]}
 ---
 
-# 🧠 Banco de Memoria & Knowledge Items
+# Banco de Memoria & Knowledge Items
 
 Total de memorias y bases de conocimiento registradas: **${syncedMemories.length}**
 
@@ -320,10 +393,10 @@ Total de memorias y bases de conocimiento registradas: **${syncedMemories.length
 `;
 
   for (const m of syncedMemories) {
-    indexMd += `| **${m.title}** | ${m.summary.slice(0, 120)}... | [[${sanitizeFilename(m.title)}]] |\n`;
+    indexMd += `| **${m.title}** | ${m.summary.slice(0, 120)}... | [[${sanitizeFilename(m.title)}]] |\\n`;
   }
 
-  indexMd += `\n---\n*Volver al:* [[00 Antigravity Hub]]\n`;
+  indexMd += `\\n---\\n*Volver al:* [[00 Antigravity Hub]]\\n`;
   fs.writeFileSync(indexFile, indexMd, 'utf8');
 
   return syncedMemories;
@@ -346,14 +419,14 @@ function saveNewMemory(vaultPath, memoryData) {
 
   let relatedLinks = '';
   if (memoryData.relatedSkills && memoryData.relatedSkills.length > 0) {
-    relatedLinks += '\n### ⚡ Skills Relacionadas\n';
+    relatedLinks += '\n### Skills Relacionadas\n';
     for (const sk of memoryData.relatedSkills) {
       relatedLinks += `- [[${sk}]]\n`;
     }
   }
 
   if (memoryData.project) {
-    relatedLinks += `\n### 📁 Proyecto: [[${memoryData.project}]]\n`;
+    relatedLinks += `\n### Proyecto: [[${memoryData.project}]]\n`;
   }
 
   const content = `---
@@ -366,12 +439,12 @@ created: ${now}
 updated: ${now}
 ---
 
-# 🧠 ${title}
+# ${title}
 
 > [!NOTE] **Contexto Registrado por Antigravity**
 > ${memoryData.summary || memoryData.title}
 
-## 📝 Detalles y Solución
+## Detalles y Solución
 
 ${memoryData.content || '*Sin contenido adicional.*'}
 
@@ -388,7 +461,7 @@ ${relatedLinks}
     const indexFile = path.join(memoriaFolder, '00 Indice de Memoria.md');
     const allFiles = fs.readdirSync(memoriaFolder).filter(f => f.endsWith('.md') && !f.startsWith('00'));
     let indexMd = `---
-title: "Índice de Memoria de Antigravity"
+title: "Indice de Memoria de Antigravity"
 type: antigravity-index
 tags:
   - antigravity/indice
@@ -396,7 +469,7 @@ tags:
 updated: ${now}
 ---
 
-# 🧠 Banco de Memoria & Knowledge Items
+# Banco de Memoria & Knowledge Items
 
 Total de memorias registradas: **${allFiles.length}**
 
@@ -431,6 +504,7 @@ Total de memorias registradas: **${allFiles.length}**
       fs.writeFileSync(path.join(kiDir, 'metadata.json'), JSON.stringify({
         title,
         summary: memoryData.summary || memoryData.content?.slice(0, 200) || '',
+        source: 'obsidian-vault',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }, null, 2));
@@ -490,14 +564,14 @@ tags:
 updated: ${now}
 ---
 
-# ⚡ Skill: [[${name}]]
+# Skill: ${name}
 
 > [!INFO] **Metadatos de la Skill**
 > - **Nombre**: \`${name}\`
 > - **Ámbito**: Global (\`~/.gemini/config/skills/\`)
 > - **Descripción**: ${description}
 
-## 📖 Instrucciones del Agente
+## Instrucciones del Agente
 
 ${instructions}
 
@@ -541,7 +615,7 @@ created: ${now}
 updated: ${now}
 ---
 
-# 📁 Proyecto: [[${projectName}]]
+# Proyecto: ${projectName}
 
 > [!INFO] **Ficha del Proyecto**
 > - **Nombre**: \`${projectName}\`
@@ -550,10 +624,10 @@ updated: ${now}
 
 ${packageInfo}
 
-## 🧠 Memorias y Decisiones Vinculadas
+## Memorias y Decisiones Vinculadas
 <!-- Agrega enlaces [[Nombre de la Memoria]] para conectar este proyecto con el grafo de Antigravity -->
 
-## ⚡ Skills de Proyecto
+## Skills de Proyecto
 <!-- Agrega skills específicas usando enlaces [[Skill]] -->
 
 ---
@@ -583,7 +657,7 @@ tags:
 updated: ${now}
 ---
 
-# 🧠 Antigravity Hub — Segundo Cerebro de IA
+# Antigravity Hub — Segundo Cerebro de IA
 
 Bienvenido al núcleo de memoria, skills y conocimiento interconectado entre **Antigravity** y **Obsidian**.
 Todos los nodos de esta bóveda están enlazados bidireccionalmente para iluminar tu **Vista Gráfica (Graph View)**.
@@ -594,25 +668,25 @@ Todos los nodos de esta bóveda están enlazados bidireccionalmente para ilumina
        └──────────────┬───────────────┘
           ┌───────────┼───────────┐
           ▼           ▼           ▼
-    ⚡ Skills    🧠 Memoria   📁 Proyectos
+        Skills      Memoria    Proyectos
 \`\`\`
 
 ---
 
-## ⚡ Skills Disponibles
+## Skills Disponibles
 Accede al catálogo completo de capacidades y flujos que domina el asistente:
-- 📑 [[00 Indice de Skills]]
+- [[00 Indice de Skills]]
 
 ---
 
-## 🧠 Memoria y Base de Conocimiento (Knowledge Items)
+## Memoria y Base de Conocimiento (Knowledge Items)
 Lecciones aprendidas, arquitecturas, trucos, modelos y documentación permanente:
-- 📚 [[00 Indice de Memoria]]
+- [[00 Indice de Memoria]]
 
 ---
 
-## 📁 Proyectos Vinculados
-${projectName ? `- 📂 Proyecto Actual: [[${projectName}]]` : '- *Abre un proyecto en Antigravity para registrarlo automáticamente.*'}
+## Proyectos Vinculados
+${projectName ? `- Proyecto Actual: [[${projectName}]]` : '- *Abre un proyecto en Antigravity para registrarlo automáticamente.*'}
 
 ---
 
@@ -684,6 +758,7 @@ function syncVaultToKnowledge(vaultPath) {
     const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
     let title = base;
     let summary = '';
+    let originId = null;
     let body = content;
 
     if (fmMatch) {
@@ -692,6 +767,8 @@ function syncVaultToKnowledge(vaultPath) {
       for (const l of lines) {
         const tm = l.match(/^title:\s*"?([^"\r\n]+)"?$/);
         if (tm && tm[1]) title = tm[1].trim();
+        const om = l.match(/^origin_id:\s*"?([^"\r\n]+)"?$/);
+        if (om && om[1]) originId = om[1].trim();
       }
     }
 
@@ -702,7 +779,7 @@ function syncVaultToKnowledge(vaultPath) {
       summary = body.replace(/#.*|\r?\n/g, ' ').slice(0, 220).trim() + '...';
     }
 
-    const id = sanitizeId(title) || sanitizeId(base);
+    const id = originId || sanitizeId(title) || sanitizeId(base);
     const targetDir = path.join(knowledgeDir, id);
     const artifactsDir = path.join(targetDir, 'artifacts');
 
@@ -711,6 +788,7 @@ function syncVaultToKnowledge(vaultPath) {
     const meta = {
       title,
       summary,
+      source: 'obsidian-vault',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       references: []
@@ -1027,6 +1105,132 @@ function syncAll(vaultPath, workspaceRoot) {
   };
 }
 
+function resetAllData(vaultPath, workspaceRoot) {
+  if (!vaultPath || !fs.existsSync(vaultPath)) {
+    throw new Error(`El Vault de Obsidian no existe: ${vaultPath}`);
+  }
+
+  const baseDir = path.join(vaultPath, 'Antigravity');
+  const memDir = path.join(baseDir, 'Memoria');
+  const skiDir = path.join(baseDir, 'Skills');
+  const proDir = path.join(baseDir, 'Proyectos');
+  const sesDir = path.join(baseDir, 'Sesiones');
+  const manifestFile = path.join(baseDir, 'context-manifest.json');
+
+  // 1. Wipe Memories in Vault
+  if (fs.existsSync(memDir)) {
+    for (const f of fs.readdirSync(memDir)) {
+      try { fs.unlinkSync(path.join(memDir, f)); } catch (e) {}
+    }
+  }
+
+  // 2. Wipe Skills in Vault
+  if (fs.existsSync(skiDir)) {
+    for (const f of fs.readdirSync(skiDir)) {
+      try { fs.unlinkSync(path.join(skiDir, f)); } catch (e) {}
+    }
+  }
+
+  // 3. Wipe Projects in Vault
+  if (fs.existsSync(proDir)) {
+    for (const f of fs.readdirSync(proDir)) {
+      try { fs.unlinkSync(path.join(proDir, f)); } catch (e) {}
+    }
+  }
+
+  // 4. Wipe Sessions in Vault
+  if (fs.existsSync(sesDir)) {
+    for (const f of fs.readdirSync(sesDir)) {
+      try { fs.unlinkSync(path.join(sesDir, f)); } catch (e) {}
+    }
+  }
+
+  // 5. Delete manifest file
+  if (fs.existsSync(manifestFile)) {
+    try { fs.unlinkSync(manifestFile); } catch (e) {}
+  }
+
+  // 6. Clean Knowledge Items created by Obsidian
+  const { knowledgeDir } = getAntigravityPaths();
+  if (fs.existsSync(knowledgeDir)) {
+    const kiFolders = fs.readdirSync(knowledgeDir, { withFileTypes: true });
+    for (const kf of kiFolders) {
+      if (!kf.isDirectory()) continue;
+      const folderPath = path.join(knowledgeDir, kf.name);
+      const metaPath = path.join(folderPath, 'metadata.json');
+      let shouldDelete = false;
+
+      if (fs.existsSync(metaPath)) {
+        try {
+          const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+          if (meta.source === 'obsidian-vault') {
+            shouldDelete = true;
+          }
+        } catch (e) {}
+      }
+
+      // Known Obsidian generated IDs or duplicate sync items
+      const obsKnownPrefixes = ['proyecto-', 'antigravity-', 'arquitectura-antigravity', 'protocolo-de-memoria', 'sincronizacion-bidireccional', 'solucion-a-variables', 'latalaya-arquitectura'];
+      if (obsKnownPrefixes.some(p => kf.name.startsWith(p))) {
+        shouldDelete = true;
+      }
+
+      if (shouldDelete) {
+        try {
+          fs.rmSync(folderPath, { recursive: true, force: true });
+        } catch (e) {}
+      }
+    }
+  }
+
+  // 7. Re-create vault structure
+  ensureVaultStructure(vaultPath);
+
+  // 8. Re-sync active skills cleanly (no duplicates, no orphans)
+  const skills = syncSkillsToVault(vaultPath, workspaceRoot);
+
+  // 9. Generate fresh empty Memory Index
+  const now = new Date().toISOString().split('T')[0];
+  const indexFile = path.join(memDir, '00 Indice de Memoria.md');
+  const emptyIndexMd = `---
+title: "Indice de Memoria de Antigravity"
+type: antigravity-index
+tags:
+  - antigravity/indice
+  - antigravity/memoria
+updated: ${now}
+---
+
+# Banco de Memoria & Knowledge Items
+
+Total de memorias registradas: **0**
+
+*No hay memorias registradas. La IA guardará lecciones y arquitectura automáticamente o puedes añadir notas desde la pestaña "Crear".*
+
+---
+*Volver al:* [[00 Antigravity Hub]]
+`;
+  fs.writeFileSync(indexFile, emptyIndexMd, 'utf8');
+
+  // 10. Generate fresh Hub
+  const hub = generateHub(vaultPath, workspaceRoot);
+
+  // 11. Re-sync current workspace project if any
+  const project = workspaceRoot ? syncProject(vaultPath, workspaceRoot) : null;
+
+  // 12. Build fresh clean manifest
+  buildContextManifest(vaultPath);
+
+  return {
+    status: 'reset_complete',
+    vaultPath,
+    skillsCount: skills.length,
+    memoriesCount: 0,
+    project,
+    hub,
+  };
+}
+
 module.exports = {
   syncVaultToKnowledge,
   getAntigravityPaths,
@@ -1039,6 +1243,7 @@ module.exports = {
   generateHub,
   getVaultStats,
   syncAll,
+  resetAllData,
   buildContextManifest,
   getContextManifest,
   triageContext,

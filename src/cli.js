@@ -68,6 +68,17 @@ async function main() {
       break;
     }
 
+    case 'reset': {
+      const workspaceRoot = process.cwd();
+      const result = syncEngine.resetAllData(vaultPath, workspaceRoot);
+      console.log(JSON.stringify({
+        status: 'ok',
+        message: 'Reinicio de datos completado. Se borraron memorias y se empezará de cero.',
+        result,
+      }, null, 2));
+      break;
+    }
+
     case 'search': {
       const query = (args[0] || '').toLowerCase();
       const baseDir = path.join(vaultPath, 'Antigravity');
