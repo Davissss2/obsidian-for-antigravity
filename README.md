@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Davissss2/obsidian-for-antigravity"><img src="https://img.shields.io/badge/version-1.2.0-8b5cf6.svg?style=flat-square" alt="Version 1.2.0"></a>
+  <a href="https://github.com/Davissss2/obsidian-for-antigravity"><img src="https://img.shields.io/badge/version-1.4.0-8b5cf6.svg?style=flat-square" alt="Version 1.4.0"></a>
   <a href="https://open-vsx.org"><img src="https://img.shields.io/badge/Open%20VSX-available-blue.svg?style=flat-square" alt="Open VSX"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-purple.svg?style=flat-square" alt="License"></a>
   <a href="https://github.com/Davissss2"><img src="https://img.shields.io/badge/author-Davissss2-emerald.svg?style=flat-square" alt="Author Davissss2"></a>
@@ -59,6 +59,13 @@ Instead of burning thousands of tokens re-reading old logs, your AI assistant au
 - **Agent Soul**: Dedicated identity guidelines (`00 Soul de Antigravity.md`) defining the assistant as a senior, pragmatic, pair-programming engineer who diagnoses root causes and executes with precision.
 - **User Profile & Working Habits**: Persistent profile (`00 Perfil de Usuario.md`) memorizing how you like to work, your preferred style, and project conventions.
 - **Dynamic Learning Loop**: As you correct or guide the agent, new habits are automatically memorized with `learn` and injected across all future sessions.
+
+### 9. Chat Slash Commands (`/obsidian`)
+- Control Obsidian directly from any conversation using fast slash shortcuts: `/obsidian status`, `/obsidian save`, `/obsidian soul`, `/obsidian learn`, `/obsidian triage`, `/obsidian peek`, `/obsidian catalog`, `/obsidian skills`, `/obsidian memories`, and `/obsidian open`.
+
+### 10. Dynamic Multilingual & User Adaptation
+- Works seamlessly in English, Spanish, French, German, Chinese, and Japanese. The assistant dynamically adapts to the user's active language and IDE locale, generating native instructions with zero language mismatch.
+- Dynamic user name resolution across VS Code settings, bridge state, vault profile, Git config, and OS environment.
 
 ---
 
@@ -140,7 +147,7 @@ ovsx install Davissss2.obsidian-for-antigravity
 ### Manual VSIX Installation
 Download the packaged release from the repository and install it in Antigravity IDE / VS Code:
 ```bash
-code --install-extension obsidian-for-antigravity-1.2.0.vsix
+code --install-extension obsidian-for-antigravity-1.4.0.vsix
 ```
 
 ---

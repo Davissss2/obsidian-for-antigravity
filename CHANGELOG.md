@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.0] - 2026-10-02
+
+### Added
+- **Chat Slash Commands (`/obsidian`)**: Direct chat control protocol in Antigravity. Users can type slash commands directly in any conversation (`/obsidian`, `/obsidian status`, `/obsidian save`, `/obsidian soul`, `/obsidian learn`, `/obsidian triage`, `/obsidian peek`, `/obsidian catalog`, `/obsidian skills`, `/obsidian memories`, `/obsidian open`, `/obsidian help`) to trigger instantaneous actions without conversational overhead.
+- **Dynamic Multi-Language Adaptation**: Full multilingual engine supporting `auto`, `en`, `es`, `fr`, `de`, `zh`, and `ja`. In `auto` mode, the extension detects the active Antigravity IDE / VS Code display language or OS locale and generates language-tailored rules and Soul/Profile notes.
+- **Dynamic User Name Resolution**: Removed static user name hardcoding. User identity dynamically resolves in cascade across extension settings (`antigravityObsidian.userName`), bridge state, vault profile, Git global config (`user.name`), and operating system username.
+- **Bilingual Hermes Core Templates**: Native English and Spanish templates for `00 Soul de Antigravity.md` and `00 Perfil de Usuario.md`, ensuring fluent pair-programming in either language while preserving accumulated dynamic preferences.
+- **Command Palette Expansion**: Registered new VS Code commands `antigravityObsidian.showSoul` (View Soul & User Profile), `antigravityObsidian.showStatus` (Connection Status & Stats), and `antigravityObsidian.openGraph` (Open Graph View in App).
+- **Webview Internationalization & Settings**: Added user name configuration and language selection controls to the Settings panel with live reactive i18n translations across English, Spanish, French, German, Chinese, and Japanese.
+- **Flexible Argument Parsing in CLI**: `obsidian.js save` now accepts freeform positional arguments and automatic summary/content fallbacks, allowing seamless natural language note recording.
+
+### Changed
+- Refactored global rule generators (`GEMINI.md`, `AGENTS.md`, and `rules/obsidian-brain.md`) to dynamically adjust language and user profile directives.
+- Cleaned all legacy and regex emoji matches across all source code and sync templates to ensure strict zero-emoji technical formatting.
+
+---
+
 ## [1.3.0] - 2026-10-02
 
 ### Added
