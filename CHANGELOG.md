@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.2] - 2026-10-02
+
+### Added
+- **Fast 1-Line Identity & Configuration Commands (Zero Code Searching)**:
+  - Added dedicated CLI subcommands:
+    - `node obsidian.js name "<newName>"`: Updates AI agent name immediately in 1 line.
+    - `node obsidian.js user "<newCallsign>"`: Updates user callsign / title immediately in 1 line.
+    - `node obsidian.js config get`: Instant JSON dump of active configuration.
+    - `node obsidian.js config set <key> <val>`: Update any configuration parameter.
+  - Added chat slash commands: `/obsidian name <name>`, `/obsidian user <callsign>`, `/obsidian config [get|set]`.
+  - Injected explicit 1-line execution instructions into Section 0 of global rules (`GEMINI.md`, `AGENTS.md`, `obsidian-brain.md`) and `SKILL.md`, allowing any AI agent in any session to execute identity modifications without hesitation, guesswork, or searching through code files.
+- **Universal Zero-Config Out-of-the-Box Experience Across All Machines**:
+  - Removed blocking modal alerts if Obsidian desktop is not installed. The Second Brain provisions and operates autonomously with local markdown files, Knowledge Items, and rules without requiring any manual setup.
+  - Hardened auto-provisioning in `vault-detector.js` and `obsidian-runner.js` with fallback to user home directory (`~/Obsidian Vault`) and automatic creation of all core folders (`Alma`, `Memoria`, `Skills`, `Proyectos`, `Sesiones`, `.obsidian`).
+  - Automatic bridge registration: `antigravity-obsidian.json` is created immediately on startup if missing.
+
+### Fixed
+- **Node.js Deprecation Warning `[DEP0187]`**: Fixed `getAntigravityPaths()` return object to include `skillsDir`, preventing undefined from being passed to `fs.existsSync`.
+- **Dual-Language Personality Note Resolution & Cleanup**: Fixed logic where both English and Spanish personality notes could coexist; the updater now cleans up opposite language notes and prefers configured notes across `status`, `soul`, and `personality`.
+
+---
+
 ## [1.5.1] - 2026-10-02
 
 ### Fixed

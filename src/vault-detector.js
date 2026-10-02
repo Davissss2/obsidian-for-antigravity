@@ -189,15 +189,32 @@ function ensureOrCreateDefaultVault(configuredPath) {
 
   // Fallback: Create default Obsidian Vault in Documents (or localized Documentos)
   const documentsDir = getDocumentsDir();
-  const defaultVaultPath = path.join(documentsDir, 'Obsidian Vault');
+  let defaultVaultPath = path.join(documentsDir, 'Obsidian Vault');
 
   try {
     if (!fs.existsSync(defaultVaultPath)) {
       fs.mkdirSync(defaultVaultPath, { recursive: true });
     }
+  } catch (e) {
+    defaultVaultPath = path.join(os.homedir(), 'Obsidian Vault');
+    try {
+      if (!fs.existsSync(defaultVaultPath)) {
+        fs.mkdirSync(defaultVaultPath, { recursive: true });
+      }
+    } catch (e2) {}
+  }
+
+  try {
     const obsConfDir = path.join(defaultVaultPath, '.obsidian');
     if (!fs.existsSync(obsConfDir)) {
       fs.mkdirSync(obsConfDir, { recursive: true });
+    }
+
+    // Ensure Antigravity folder architecture
+    const subDirs = ['Alma', 'Memoria', 'Skills', 'Proyectos', 'Sesiones'];
+    for (const sub of subDirs) {
+      const p = path.join(defaultVaultPath, 'Antigravity', sub);
+      if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
     }
 
     // Attempt to register in Obsidian's config if it exists or create it
@@ -224,6 +241,22 @@ function ensureOrCreateDefaultVault(configuredPath) {
 
     fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
 
+    // Also ensure bridge config file has this vaultPath
+    const home = os.homedir();
+    const bridgeConfigFile = path.join(home, '.gemini', 'config', 'antigravity-obsidian.json');
+    if (!fs.existsSync(bridgeConfigFile)) {
+      const bDir = path.dirname(bridgeConfigFile);
+      if (!fs.existsSync(bDir)) fs.mkdirSync(bDir, { recursive: true });
+      fs.writeFileSync(bridgeConfigFile, JSON.stringify({
+        vaultPath: defaultVaultPath,
+        vaultName: 'Obsidian Vault',
+        active: true,
+        proactiveLookup: true,
+        autoSave: true,
+        language: 'auto',
+      }, null, 2), 'utf8');
+    }
+
     return {
       id: vaultId,
       name: 'Obsidian Vault',
@@ -233,7 +266,6 @@ function ensureOrCreateDefaultVault(configuredPath) {
       source: 'auto-created',
     };
   } catch (err) {
-    // Return path anyway even if registration fails
     return {
       id: 'default',
       name: 'Obsidian Vault',

@@ -189,6 +189,9 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '',
         '| Slash Command | Equivalent CLI Execution | Description |',
         '|---|---|---|',
+        '| `/obsidian name <name>` | `node "' + normalizedScriptPath + '" name "<name>"` | Change AI agent name immediately |',
+        '| `/obsidian user <callsign>` | `node "' + normalizedScriptPath + '" user "<callsign>"` | Change user callsign/name immediately |',
+        '| `/obsidian config [get|set]` | `node "' + normalizedScriptPath + '" config [args]` | Query or update configuration |',
         '| `/obsidian` or `/obsidian status` | `node "' + normalizedScriptPath + '" status` | Check connection and stats |',
         '| `/obsidian personality [args]` | `node "' + normalizedScriptPath + '" personality [args]` | View or configure AI agent personality, name & user callsign |',
         '| `/obsidian project [register|list|status]` | `node "' + normalizedScriptPath + '" project [args]` | Manage unified projects registry & auto-detection |',
@@ -209,6 +212,9 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '',
         '| Command | Description |',
         '|---|---|',
+        '| `node "' + normalizedScriptPath + '" name "<name>"` | Change AI agent name immediately |',
+        '| `node "' + normalizedScriptPath + '" user "<callsign>"` | Change user callsign immediately |',
+        '| `node "' + normalizedScriptPath + '" config [get|set ...]` | Query or update configuration |',
         '| `node "' + normalizedScriptPath + '" personality [--ai-name <n>] [--user-callsign <c>] [--personality <p>]` | View or configure AI personality & callsign |',
         '| `node "' + normalizedScriptPath + '" project [register|list|status] [path]` | Unified project registry & autonomous stack detection |',
         '| `node "' + normalizedScriptPath + '" triage "query"` | Ultra-compact smart triage (<80 tokens) |',
@@ -298,6 +304,9 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '',
         '| Comando Slash | Ejecucion CLI Equivalente | Descripcion |',
         '|---|---|---|',
+        '| `/obsidian name <nombre>` | `node "' + normalizedScriptPath + '" name "<nombre>"` | Cambia el nombre del agente de IA inmediatamente |',
+        '| `/obsidian user <trato>` | `node "' + normalizedScriptPath + '" user "<trato>"` | Cambia el trato hacia el usuario inmediatamente |',
+        '| `/obsidian config [get|set]` | `node "' + normalizedScriptPath + '" config [args]` | Consulta o actualiza la configuracion |',
         '| `/obsidian` o `/obsidian status` | `node "' + normalizedScriptPath + '" status` | Comprueba estado de conexion y conteos |',
         '| `/obsidian personality [args]` | `node "' + normalizedScriptPath + '" personality [args]` | Consulta o configura personalidad, nombre de IA y trato |',
         '| `/obsidian project [register|list|status]` | `node "' + normalizedScriptPath + '" project [args]` | Gestiona el registro unificado de proyectos y auto-deteccion |',
@@ -318,6 +327,9 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '',
         '| Comando | Descripcion |',
         '|---|---|',
+        '| `node "' + normalizedScriptPath + '" name "<nombre>"` | Cambia el nombre del agente inmediatamente |',
+        '| `node "' + normalizedScriptPath + '" user "<trato>"` | Cambia el trato hacia el usuario inmediatamente |',
+        '| `node "' + normalizedScriptPath + '" config [get|set ...]` | Consulta o actualiza ajustes de configuracion |',
         '| `node "' + normalizedScriptPath + '" personality [--ai-name <n>] [--user-callsign <c>] [--personality <p>]` | Consulta o configura personalidad y trato |',
         '| `node "' + normalizedScriptPath + '" project [register|list|status] [ruta]` | Registro unificado de proyectos y deteccion autonoma de stack |',
         '| `node "' + normalizedScriptPath + '" triage "query"` | Triage inteligente ultra-compacto (<80 tokens) |',
@@ -346,7 +358,13 @@ function installSkillAndRules(targetVaultPath, options = {}) {
             '- **Agent Name:** ' + aiName + '. Always identify as ' + aiName + '.',
             '- **Addressing the User:** Always address the user as **' + userCallsign + '**.',
             '- **Active Demeanor & Traits:** ' + personality,
-            '- **Persistence:** Your personality and names are CONFIGURED and LOCKED. Strictly embody this persona. NEVER ask the user how to behave or introduce yourself as unconfigured again in any future chats unless the user explicitly requests changes or runs `/obsidian personality`.'
+            '- **Persistence:** Your personality and names are CONFIGURED and LOCKED. Strictly embody this persona. NEVER ask the user how to behave or introduce yourself as unconfigured again in any future chats unless the user explicitly requests changes or runs `/obsidian personality`.',
+            '- **FAST IDENTITY & CONFIGURATION (DIRECT EXECUTION / ZERO SEARCHING):**',
+            '  Whenever the user asks to change your name, how to address them, or modify personality/settings, NEVER search through code files. Execute DIRECTLY with `run_command`:',
+            '  - Change AI Name: `node "' + normalizedScriptPath + '" name "<NewName>"`',
+            '  - Change User Name / Callsign: `node "' + normalizedScriptPath + '" user "<NewCallsign>"`',
+            '  - Full Configuration: `node "' + normalizedScriptPath + '" config --personality "<traits>" [--ai-name "<name>"] [--user "<callsign>"]`',
+            '  - View Current Config: `node "' + normalizedScriptPath + '" config get`'
           ].join('\n')
         : [
             '### 0. AGENT IDENTITY & PERSONALITY (Pending Initial Calibration):',
@@ -368,7 +386,13 @@ function installSkillAndRules(targetVaultPath, options = {}) {
             '- **Nombre del Agente:** ' + aiName + '. Identificate siempre como ' + aiName + '.',
             '- **Trato hacia el Usuario:** Dirigete siempre al usuario como **' + userCallsign + '**.',
             '- **Comportamiento y Rasgos Activos:** ' + personality,
-            '- **Permanencia:** Tu identidad y trato estan CONFIGURADOS y FIJADOS. Encarna estrictamente esta personalidad. NUNCA vuelvas a preguntar al usuario como comportarte ni te presentes como no configurado en ningun chat futuro, a menos que el usuario lo solicite expresamente o use `/obsidian personality`.'
+            '- **Permanencia:** Tu identidad y trato estan CONFIGURADOS y FIJADOS. Encarna estrictamente esta personalidad. NUNCA vuelvas a preguntar al usuario como comportarte ni te presentes como no configurado en ningun chat futuro, a menos que el usuario lo solicite expresamente o use `/obsidian personality`.',
+            '- **CAMBIO RAPIDO DE IDENTIDAD Y CONFIGURACION (CERO BUSQUEDAS / EJECUCION DIRECTA):**',
+            '  Siempre que el usuario pida cambiar tu nombre, como dirigirte a el o ajustes de personalidad, NUNCA busques en el codigo. Ejecuta DIRECTAMENTE con `run_command`:',
+            '  - Cambiar nombre de IA: `node "' + normalizedScriptPath + '" name "<nuevoNombre>"`',
+            '  - Cambiar trato de usuario: `node "' + normalizedScriptPath + '" user "<nuevoTrato>"`',
+            '  - Configuracion completa: `node "' + normalizedScriptPath + '" config --personality "<rasgos>" [--ai-name "<nombre>"] [--user "<trato>"]`',
+            '  - Ver configuracion actual: `node "' + normalizedScriptPath + '" config get`'
           ].join('\n')
         : [
             '### 0. IDENTIDAD Y PERSONALIDAD DEL AGENTE (Pendiente de Calibracion Inicial):',
@@ -511,6 +535,9 @@ function installSkillAndRules(targetVaultPath, options = {}) {
     ? [
         '### 5. CHAT SLASH COMMANDS PROTOCOL (/obsidian):',
         'When the user sends a message starting with `/obsidian`, execute the corresponding CLI command IMMEDIATELY using `run_command` without asking for confirmation:',
+        '- `/obsidian name <name>`: Run `node "' + normalizedScriptPath + '" name "<name>"` to change AI name immediately.',
+        '- `/obsidian user <callsign>`: Run `node "' + normalizedScriptPath + '" user "<callsign>"` to change user callsign immediately.',
+        '- `/obsidian config [get|set]`: Run `node "' + normalizedScriptPath + '" config [args]` to query or update configuration.',
         '- `/obsidian` or `/obsidian status`: Run `node "' + normalizedScriptPath + '" status` and report connection status and stats.',
         '- `/obsidian personality [args]`: Run `node "' + normalizedScriptPath + '" personality [args]` to view or configure AI personality, agent name, and user callsign.',
         '- `/obsidian project [register|list|status]`: Run `node "' + normalizedScriptPath + '" project [args]` to manage unified project registry and workspace detection.',
@@ -528,6 +555,9 @@ function installSkillAndRules(targetVaultPath, options = {}) {
     : [
         '### 5. PROTOCOLO DE COMANDOS SLASH (/obsidian):',
         'Cuando el usuario escriba un comando que empiece por `/obsidian`, ejecuta INMEDIATAMENTE el comando CLI correspondiente con `run_command` sin pedir confirmaciones adicionales:',
+        '- `/obsidian name <nombre>`: Ejecuta `node "' + normalizedScriptPath + '" name "<nombre>"` para cambiar el nombre de la IA inmediatamente.',
+        '- `/obsidian user <trato>`: Ejecuta `node "' + normalizedScriptPath + '" user "<trato>"` para cambiar el trato hacia el usuario inmediatamente.',
+        '- `/obsidian config [get|set]`: Ejecuta `node "' + normalizedScriptPath + '" config [args]` para consultar o actualizar la configuracion.',
         '- `/obsidian` o `/obsidian status`: Ejecuta `node "' + normalizedScriptPath + '" status` y muestra el estado y estadisticas de la boveda.',
         '- `/obsidian personality [args]`: Ejecuta `node "' + normalizedScriptPath + '" personality [args]` para ver o configurar la personalidad, nombre de IA y trato.',
         '- `/obsidian project [register|list|status]`: Ejecuta `node "' + normalizedScriptPath + '" project [args]` para gestionar el registro unificado y deteccion de proyectos.',

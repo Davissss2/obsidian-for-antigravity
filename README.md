@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Davissss2/obsidian-for-antigravity"><img src="https://img.shields.io/badge/version-1.5.0-8b5cf6.svg?style=flat-square" alt="Version 1.5.0"></a>
+  <a href="https://github.com/Davissss2/obsidian-for-antigravity"><img src="https://img.shields.io/badge/version-1.5.2-8b5cf6.svg?style=flat-square" alt="Version 1.5.2"></a>
   <a href="https://open-vsx.org"><img src="https://img.shields.io/badge/Open%20VSX-available-blue.svg?style=flat-square" alt="Open VSX"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-purple.svg?style=flat-square" alt="License"></a>
   <a href="https://github.com/Davissss2"><img src="https://img.shields.io/badge/author-Davissss2-emerald.svg?style=flat-square" alt="Author Davissss2"></a>
@@ -130,36 +130,42 @@ All files are structured cleanly inside your vault under the `Antigravity/` fold
 The AI agent and developer can interact directly with the vault using the runner script:
 
 ```powershell
-# 1. AI Personality & Callsign Configuration
+# 1. Instant 1-Line Identity & Callsign Updates (Zero Code Browsing)
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js name "Hermes"
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js user "Davissss2"
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js personality --ai-name "Hermes" --user-callsign "Davissss2" --personality "Senior engineer, pragmatic, surgical, zero fluff"
 
-# 2. Unified Projects Registry & Autonomous Workspace Detection
+# 2. Instant Config Inspection and Updates
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js config get
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js config set aiName "zurumbaba"
+
+# 3. Unified Projects Registry & Autonomous Workspace Detection
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js project register "C:\Path\To\Project"
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js project list
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js project status
 
-# 3. Ultra-Low-Context Triage (<80 tokens)
+# 4. Ultra-Low-Context Triage (<80 tokens)
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js triage "sqlite database locked"
 
-# 4. Extract technical solution without noise
+# 5. Extract technical solution without noise
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js peek "SQLite WAL Concurrency Bugfix"
 
-# 5. Fast atomic save (Zero emojis, technical format)
+# 6. Fast atomic save (Zero emojis, technical format)
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js save --title "Plesk Nginx Proxy Timeout" --category "configuracion" --summary "Timeout 504 -> proxy_read_timeout 300s applied" --content "Root cause: Long-running script. Solution: Directiva nginx proxy_read_timeout 300s."
 
-# 6. Active Soul, User Profile & Personality
+# 7. Active Soul, User Profile & Personality
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js soul
 
-# 7. Learn new preference or habit
+# 8. Learn new preference or habit
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js learn "Always package vsix and run tests"
 
-# 8. 1-Line overview catalog of all skills and memories
+# 9. 1-Line overview catalog of all skills and memories
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js catalog
 
-# 9. Connection status, stats and personality
+# 10. Connection status, stats and personality
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js status
 
-# 10. Open note in Obsidian desktop app
+# 11. Open note in Obsidian desktop app
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js open "Antigravity/00 Antigravity Hub"
 ```
 
@@ -176,7 +182,7 @@ ovsx install Davissss2.obsidian-for-antigravity
 ### Manual VSIX Installation
 Download the packaged release from the repository and install it in Antigravity IDE / VS Code:
 ```bash
-code --install-extension obsidian-for-antigravity-1.5.0.vsix
+code --install-extension obsidian-for-antigravity-1.5.2.vsix
 ```
 
 ---

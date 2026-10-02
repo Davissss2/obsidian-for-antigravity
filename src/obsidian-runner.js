@@ -31,6 +31,24 @@ function getSkillInstaller() {
   return null;
 }
 
+function getPersonalityFile(almaDir, langPreference) {
+  const pFileEs = path.join(almaDir, '00 Personalidad de la IA.md');
+  const pFileEn = path.join(almaDir, '00 AI Personality.md');
+  const isEn = (langPreference === 'en');
+  if (fs.existsSync(pFileEs) && !fs.existsSync(pFileEn)) return pFileEs;
+  if (fs.existsSync(pFileEn) && !fs.existsSync(pFileEs)) return pFileEn;
+  if (!fs.existsSync(pFileEs) && !fs.existsSync(pFileEn)) return isEn ? pFileEn : pFileEs;
+  try {
+    const cEs = fs.readFileSync(pFileEs, 'utf8');
+    const cEn = fs.readFileSync(pFileEn, 'utf8');
+    const esConf = /configured:\s*true/i.test(cEs);
+    const enConf = /configured:\s*true/i.test(cEn);
+    if (esConf && !enConf) return pFileEs;
+    if (enConf && !esConf) return pFileEn;
+  } catch (e) {}
+  return isEn ? pFileEn : pFileEs;
+}
+
 function updateGlobalRulesWithPersonality({ aiName, userCallsign, personality, configured, vaultPath, vaultName }) {
   const home = os.homedir();
   const configDir = path.join(home, '.gemini', 'config');
@@ -55,7 +73,13 @@ function updateGlobalRulesWithPersonality({ aiName, userCallsign, personality, c
                 '- **Agent Name:** ' + aiName + '. Always identify as ' + aiName + '.',
                 '- **Addressing the User:** Always address the user as **' + userCallsign + '**.',
                 '- **Active Demeanor & Traits:** ' + personality,
-                '- **Persistence:** Your personality and names are CONFIGURED and LOCKED. Strictly embody this persona. NEVER ask the user how to behave or introduce yourself as unconfigured again in any future chats unless the user explicitly requests changes or runs `/obsidian personality`.'
+                '- **Persistence:** Your personality and names are CONFIGURED and LOCKED. Strictly embody this persona. NEVER ask the user how to behave or introduce yourself as unconfigured again in any future chats unless the user explicitly requests changes or runs `/obsidian personality`.',
+                '- **FAST IDENTITY & CONFIGURATION (DIRECT EXECUTION / ZERO SEARCHING):**',
+                '  Whenever the user asks to change your name, how to address them, or modify personality/settings, NEVER search through code files. Execute DIRECTLY with `run_command`:',
+                '  - Change AI Name: `node "' + scriptPath + '" name "<NewName>"`',
+                '  - Change User Name / Callsign: `node "' + scriptPath + '" user "<NewCallsign>"`',
+                '  - Full Configuration: `node "' + scriptPath + '" config --personality "<traits>" [--ai-name "<name>"] [--user "<callsign>"]`',
+                '  - View Current Config: `node "' + scriptPath + '" config get`'
               ].join('\n')
             : [
                 '### 0. AGENT IDENTITY & PERSONALITY (Pending Initial Calibration):',
@@ -77,7 +101,13 @@ function updateGlobalRulesWithPersonality({ aiName, userCallsign, personality, c
                 '- **Nombre del Agente:** ' + aiName + '. Identificate siempre como ' + aiName + '.',
                 '- **Trato hacia el Usuario:** Dirigete siempre al usuario como **' + userCallsign + '**.',
                 '- **Comportamiento y Rasgos Activos:** ' + personality,
-                '- **Permanencia:** Tu identidad y trato estan CONFIGURADOS y FIJADOS. Encarna estrictamente esta personalidad. NUNCA vuelvas a preguntar al usuario como comportarte ni te presentes como no configurado en ningun chat futuro, a menos que el usuario lo solicite expresamente o use `/obsidian personality`.'
+                '- **Permanencia:** Tu identidad y trato estan CONFIGURADOS y FIJADOS. Encarna estrictamente esta personalidad. NUNCA vuelvas a preguntar al usuario como comportarte ni te presentes como no configurado en ningun chat futuro, a menos que el usuario lo solicite expresamente o use `/obsidian personality`.',
+                '- **CAMBIO RAPIDO DE IDENTIDAD Y CONFIGURACION (CERO BUSQUEDAS / EJECUCION DIRECTA):**',
+                '  Siempre que el usuario pida cambiar tu nombre, como dirigirte a el o ajustes de personalidad, NUNCA busques en el codigo. Ejecuta DIRECTAMENTE con `run_command`:',
+                '  - Cambiar nombre de IA: `node "' + scriptPath + '" name "<nuevoNombre>"`',
+                '  - Cambiar trato de usuario: `node "' + scriptPath + '" user "<nuevoTrato>"`',
+                '  - Configuracion completa: `node "' + scriptPath + '" config --personality "<rasgos>" [--ai-name "<nombre>"] [--user "<trato>"]`',
+                '  - Ver configuracion actual: `node "' + scriptPath + '" config get`'
               ].join('\n')
             : [
                 '### 0. IDENTIDAD Y PERSONALIDAD DEL AGENTE (Pendiente de Calibracion Inicial):',
@@ -186,9 +216,33 @@ function getVaultPath() {
     if (!fs.existsSync(defaultVault)) {
       fs.mkdirSync(defaultVault, { recursive: true });
     }
+    const obsDir = path.join(defaultVault, '.obsidian');
+    if (!fs.existsSync(obsDir)) fs.mkdirSync(obsDir, { recursive: true });
     return { path: defaultVault, name: 'Obsidian Vault' };
   } catch (e) {
-    return null;
+    const homeVault = path.join(home, 'Obsidian Vault');
+    try {
+      if (!fs.existsSync(homeVault)) fs.mkdirSync(homeVault, { recursive: true });
+      const obsDir = path.join(homeVault, '.obsidian');
+      if (!fs.existsSync(obsDir)) fs.mkdirSync(obsDir, { recursive: true });
+      return { path: homeVault, name: 'Obsidian Vault' };
+    } catch (e2) {
+      return null;
+    }
+  }
+}
+
+function ensureDirs(vaultPath) {
+  const dirs = [
+    path.join(vaultPath, 'Antigravity'),
+    path.join(vaultPath, 'Antigravity', 'Alma'),
+    path.join(vaultPath, 'Antigravity', 'Memoria'),
+    path.join(vaultPath, 'Antigravity', 'Skills'),
+    path.join(vaultPath, 'Antigravity', 'Proyectos'),
+    path.join(vaultPath, 'Antigravity', 'Sesiones'),
+  ];
+  for (const d of dirs) {
+    if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
   }
 }
 
@@ -201,6 +255,7 @@ if (!vault) {
   }, null, 2));
   process.exit(1);
 }
+ensureDirs(vault.path);
 
 function sanitize(n) {
   return (n || '').replace(/[\/:*?"<>|\\]/g, '-').trim();
@@ -220,18 +275,6 @@ function getAntigravityPaths() {
     knowledgeDir: path.join(home, '.gemini', 'antigravity-ide', 'knowledge'),
     configDir: path.join(home, '.gemini', 'config'),
   };
-}
-
-function ensureDirs(vaultPath) {
-  const dirs = [
-    path.join(vaultPath, 'Antigravity'),
-    path.join(vaultPath, 'Antigravity', 'Memoria'),
-    path.join(vaultPath, 'Antigravity', 'Skills'),
-    path.join(vaultPath, 'Antigravity', 'Proyectos'),
-  ];
-  for (const d of dirs) {
-    if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
-  }
 }
 
 // -------------------------------------------------------------
@@ -687,6 +730,197 @@ function runCatalog(vaultPath) {
 }
 
 // -------------------------------------------------------------
+// Shared Personality & Identity Updater
+// -------------------------------------------------------------
+function applyPersonalityUpdate(options = {}) {
+  const almaDir = path.join(vault.path, 'Antigravity', 'Alma');
+  if (!fs.existsSync(almaDir)) fs.mkdirSync(almaDir, { recursive: true });
+
+  const cfgFile = path.join(os.homedir(), '.gemini', 'config', 'antigravity-obsidian.json');
+  let existingCfg = {};
+  if (fs.existsSync(cfgFile)) {
+    try { existingCfg = JSON.parse(fs.readFileSync(cfgFile, 'utf8')); } catch (e) {}
+  }
+
+  const pFileEs = path.join(almaDir, '00 Personalidad de la IA.md');
+  const pFileEn = path.join(almaDir, '00 AI Personality.md');
+  const userFile = path.join(almaDir, '00 Perfil de Usuario.md');
+  const pFile = getPersonalityFile(almaDir, existingCfg.language);
+
+  if (options.reset) {
+    existingCfg.personalityConfigured = false;
+    fs.writeFileSync(cfgFile, JSON.stringify(existingCfg, null, 2), 'utf8');
+
+    if (fs.existsSync(pFile)) {
+      let content = fs.readFileSync(pFile, 'utf8');
+      content = content.replace(/^configured:\s*(?:true|false)/m, 'configured: false')
+        .replace(/^status:\s*["']?[^"'\r\n]+["']?/m, 'status: "pending_onboarding"');
+      fs.writeFileSync(pFile, content, 'utf8');
+    }
+
+    updateGlobalRulesWithPersonality({
+      aiName: existingCfg.aiName || 'Hermes',
+      userCallsign: existingCfg.userCallsign || existingCfg.userName || 'User',
+      personality: existingCfg.personality || 'Ingeniero senior de élite, autónomo, pragmático y de precisión quirúrgica. CERO emojis.',
+      configured: false,
+      vaultPath: vault.path,
+      vaultName: vault.name,
+    });
+
+    try {
+      const installer = getSkillInstaller();
+      if (installer && typeof installer.installSkillAndRules === 'function') {
+        installer.installSkillAndRules(vault.path, { personalityConfigured: false });
+      }
+    } catch (e) {}
+
+    return {
+      status: 'ok',
+      configured: false,
+      message: 'Personalidad reiniciada. Se solicitará calibración en la primera interacción del chat.',
+    };
+  }
+
+  if (options.language) {
+    existingCfg.language = options.language.trim();
+  }
+
+  const finalAiName = (options.aiName !== undefined ? options.aiName : (existingCfg.aiName || 'Hermes')).trim();
+  const finalCallsign = (options.userCallsign !== undefined ? options.userCallsign : (existingCfg.userCallsign || existingCfg.userName || process.env.USERNAME || 'User')).trim();
+  const finalPersonality = (options.personality !== undefined ? options.personality : (existingCfg.personality || 'Ingeniero senior de élite, autónomo, pragmático y de precisión quirúrgica. Respuestas técnicas, directas, sin paja corporativa y estrictamente CERO emojis.')).trim();
+
+  existingCfg.aiName = finalAiName;
+  existingCfg.userCallsign = finalCallsign;
+  existingCfg.personality = finalPersonality;
+  existingCfg.personalityConfigured = true;
+  existingCfg.lastUpdated = new Date().toISOString();
+  fs.writeFileSync(cfgFile, JSON.stringify(existingCfg, null, 2), 'utf8');
+
+  const isEn = existingCfg.language === 'en';
+  const now = new Date().toISOString().split('T')[0];
+  const targetNotePath = isEn ? pFileEn : pFileEs;
+  const otherNotePath = isEn ? pFileEs : pFileEn;
+
+  const noteContent = isEn
+    ? `---
+title: "AI Personality & Agent Identity"
+type: antigravity-personality
+tags:
+  - antigravity/personality
+  - antigravity/agent
+ai_name: "${finalAiName}"
+user_callsign: "${finalCallsign}"
+configured: true
+status: "configured"
+language: en
+updated: ${now}
+---
+
+# Agent Personality & Identity — ${finalAiName}
+
+> [!NOTE] **Agent Identity & Communication Dynamics**
+> - **Agent Name**: \`${finalAiName}\`
+> - **User Callsign / Title**: \`${finalCallsign}\`
+> - **Status**: \`Configured (Active)\`
+
+## 1. Archetype & Personality Traits
+${finalPersonality}
+
+## 2. Communication Protocol
+- The agent embodies the identity of **${finalAiName}** in all interactions.
+- The agent always addresses the user as **${finalCallsign}**.
+- Zero corporate fluff, no condescension, and strictly ZERO emojis.
+- **Persistence**: Personality is configured and locked. The AI will NEVER ask again how to behave in any chat unless explicitly requested by the user or via \`/obsidian personality\`.
+
+---
+*Graph Connections:* [[00 Antigravity Hub]] | [[00 Soul de Antigravity]] | [[00 Perfil de Usuario]]
+`
+    : `---
+title: "Personalidad de la IA y Trato de Agente"
+type: antigravity-personality
+tags:
+  - antigravity/personalidad
+  - antigravity/agente
+ai_name: "${finalAiName}"
+user_callsign: "${finalCallsign}"
+configured: true
+status: "configured"
+language: es
+updated: ${now}
+---
+
+# Personalidad e Identidad del Agente — ${finalAiName}
+
+> [!NOTE] **Identidad y Dinámica de Trato**
+> - **Nombre del Agente**: \`${finalAiName}\`
+> - **Trato hacia el usuario**: \`${finalCallsign}\`
+> - **Estado de Calibración**: \`Configurado (Activo)\`
+
+## 1. Arquetipo y Rasgos de Personalidad
+${finalPersonality}
+
+## 2. Protocolo de Comunicación
+- El agente responderá asumiendo plenamente el nombre e identidad de **${finalAiName}**.
+- El agente se dirigirá siempre al usuario como **${finalCallsign}**.
+- Comunicación técnica de alta densidad, cero rodeos corporativos y estrictamente CERO emojis.
+- **Permanencia**: La personalidad está fijada de forma permanente. La IA NUNCA volverá a preguntar cómo comportarse en ningún chat, a menos que el usuario lo solicite expresamente o use \`/obsidian personality\`.
+
+---
+*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Soul de Antigravity]] | [[00 Perfil de Usuario]]
+`;
+
+  fs.writeFileSync(targetNotePath, noteContent, 'utf8');
+  if (fs.existsSync(otherNotePath)) {
+    try { fs.unlinkSync(otherNotePath); } catch (e) {}
+  }
+
+  // Also update 00 Perfil de Usuario.md if userCallsign was updated
+  if (fs.existsSync(userFile) && options.userCallsign !== undefined) {
+    try {
+      let uContent = fs.readFileSync(userFile, 'utf8');
+      uContent = uContent.replace(/^user:\s*["']?[^"'\r\n]+["']?/m, `user: "${finalCallsign}"`);
+      uContent = uContent.replace(/^#+\s*Perfil de Trabajo\s*[—–-]\s*[^\r\n]+/m, `# Perfil de Trabajo — ${finalCallsign}`);
+      uContent = uContent.replace(/^#+\s*Work Profile\s*[—–-]\s*[^\r\n]+/m, `# Work Profile — ${finalCallsign}`);
+      fs.writeFileSync(userFile, uContent, 'utf8');
+    } catch (e) {}
+  }
+
+  // Update global rules (obsidian-brain.md, GEMINI.md, AGENTS.md) immediately and directly
+  updateGlobalRulesWithPersonality({
+    aiName: finalAiName,
+    userCallsign: finalCallsign,
+    personality: finalPersonality,
+    configured: true,
+    vaultPath: vault.path,
+    vaultName: vault.name,
+  });
+
+  // Also refresh rules and Hub via skill-installer if available
+  try {
+    const installer = getSkillInstaller();
+    if (installer && typeof installer.installSkillAndRules === 'function') {
+      installer.installSkillAndRules(vault.path, {
+        aiName: finalAiName,
+        userCallsign: finalCallsign,
+        personality: finalPersonality,
+        personalityConfigured: true,
+      });
+    }
+  } catch (e) {}
+
+  return {
+    status: 'ok',
+    configured: true,
+    aiName: finalAiName,
+    userCallsign: finalCallsign,
+    personality: finalPersonality,
+    language: existingCfg.language || 'auto',
+    notePath: targetNotePath,
+    message: 'Configuración y personalidad del agente actualizadas con éxito.',
+  };
+}
+
+// -------------------------------------------------------------
 // CLI Dispatcher
 // -------------------------------------------------------------
 const [,, cmd, ...args] = process.argv;
@@ -738,21 +972,131 @@ switch (cmd) {
     break;
   }
 
+  case 'name':
+  case 'set-name': {
+    const newName = args.join(' ').replace(/^["']|["']$/g, '').trim();
+    if (!newName) {
+      console.error(JSON.stringify({ error: 'Especifica el nuevo nombre para el agente.' }));
+      process.exit(1);
+    }
+    const res = applyPersonalityUpdate({ aiName: newName });
+    console.log(JSON.stringify({
+      status: 'ok',
+      action: 'name-updated',
+      aiName: res.aiName,
+      userCallsign: res.userCallsign,
+      message: `Nombre del agente actualizado a "${res.aiName}". Ya no se volverá a preguntar en ningún chat.`
+    }, null, 2));
+    break;
+  }
+
+  case 'user':
+  case 'set-user':
+  case 'callsign': {
+    const newCallsign = args.join(' ').replace(/^["']|["']$/g, '').trim();
+    if (!newCallsign) {
+      console.error(JSON.stringify({ error: 'Especifica cómo debe dirigirse la IA hacia ti.' }));
+      process.exit(1);
+    }
+    const res = applyPersonalityUpdate({ userCallsign: newCallsign });
+    console.log(JSON.stringify({
+      status: 'ok',
+      action: 'user-updated',
+      aiName: res.aiName,
+      userCallsign: res.userCallsign,
+      message: `Trato hacia el usuario actualizado a "${res.userCallsign}".`
+    }, null, 2));
+    break;
+  }
+
+  case 'config':
+  case 'settings': {
+    const sub = (args[0] || '').toLowerCase();
+    const cfgFile = path.join(os.homedir(), '.gemini', 'config', 'antigravity-obsidian.json');
+    let cfg = {};
+    if (fs.existsSync(cfgFile)) {
+      try { cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf8')); } catch (e) {}
+    }
+
+    if (!sub || sub === 'get' || sub === 'show' || sub === 'status') {
+      const almaDir = path.join(vault.path, 'Antigravity', 'Alma');
+      const pFile = getPersonalityFile(almaDir, cfg.language);
+      let curAi = cfg.aiName || 'Hermes';
+      let curCall = cfg.userCallsign || cfg.userName || process.env.USERNAME || 'User';
+      let curPers = cfg.personality || 'Ingeniero senior de élite, autónomo, pragmático y de precisión quirúrgica.';
+      let curConf = !!cfg.personalityConfigured;
+      if (fs.existsSync(pFile)) {
+        try {
+          const c = fs.readFileSync(pFile, 'utf8');
+          const mAi = c.match(/^ai_name:\s*["']?([^"'\r\n]+)["']?/m);
+          if (mAi) curAi = mAi[1].trim();
+          const mCall = c.match(/^user_callsign:\s*["']?([^"'\r\n]+)["']?/m);
+          if (mCall) curCall = mCall[1].trim();
+          const mConf = c.match(/^configured:\s*(true|false)/m);
+          if (mConf) curConf = curConf || (mConf[1] === 'true');
+        } catch (e) {}
+      }
+      console.log(JSON.stringify({
+        status: 'ok',
+        configured: curConf,
+        aiName: curAi,
+        userCallsign: curCall,
+        personality: curPers,
+        language: cfg.language || 'auto',
+        vaultPath: vault.path,
+        vaultName: vault.name,
+        autoSave: cfg.autoSave !== undefined ? !!cfg.autoSave : true,
+        proactiveLookup: cfg.proactiveLookup !== undefined ? !!cfg.proactiveLookup : true,
+      }, null, 2));
+      break;
+    }
+
+    if (sub === 'set') {
+      const key = (args[1] || '').toLowerCase();
+      const val = args.slice(2).join(' ').replace(/^["']|["']$/g, '').trim();
+      if (!key || !val) {
+        console.error(JSON.stringify({ error: 'Uso: node obsidian.js config set <clave> <valor>' }));
+        process.exit(1);
+      }
+      const opts = {};
+      if (['name', 'ainame', 'ai-name', 'ia', 'agent'].includes(key)) opts.aiName = val;
+      else if (['user', 'usercallsign', 'user-callsign', 'usuario', 'callsign'].includes(key)) opts.userCallsign = val;
+      else if (['personality', 'personalidad', 'traits'].includes(key)) opts.personality = val;
+      else if (['language', 'idioma', 'lang'].includes(key)) opts.language = val;
+      else {
+        cfg[args[1]] = val;
+        fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf8');
+        console.log(JSON.stringify({ status: 'ok', updated: args[1], value: val }, null, 2));
+        break;
+      }
+      const res = applyPersonalityUpdate(opts);
+      console.log(JSON.stringify(res, null, 2));
+      break;
+    }
+
+    // Flag-based parsing
+    const opts = {};
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i];
+      if ((a === '--ai-name' || a === '--name') && args[i + 1]) opts.aiName = args[++i];
+      else if ((a === '--user' || a === '--user-callsign' || a === '--callsign') && args[i + 1]) opts.userCallsign = args[++i];
+      else if ((a === '--personality' || a === '--traits') && args[i + 1]) opts.personality = args[++i];
+      else if ((a === '--language' || a === '--lang') && args[i + 1]) opts.language = args[++i];
+      else if (a === '--reset') opts.reset = true;
+    }
+    const res = applyPersonalityUpdate(opts);
+    console.log(JSON.stringify(res, null, 2));
+    break;
+  }
+
   case 'personality': {
     const almaDir = path.join(vault.path, 'Antigravity', 'Alma');
-    if (!fs.existsSync(almaDir)) fs.mkdirSync(almaDir, { recursive: true });
-
-    const pFileEs = path.join(almaDir, '00 Personalidad de la IA.md');
-    const pFileEn = path.join(almaDir, '00 AI Personality.md');
-    let pFile = fs.existsSync(pFileEn) ? pFileEn : pFileEs;
-
     const cfgFile = path.join(os.homedir(), '.gemini', 'config', 'antigravity-obsidian.json');
     let existingCfg = {};
     if (fs.existsSync(cfgFile)) {
       try { existingCfg = JSON.parse(fs.readFileSync(cfgFile, 'utf8')); } catch (e) {}
     }
 
-    // Parse flags
     let aiName = null;
     let userCallsign = null;
     let personality = null;
@@ -760,18 +1104,12 @@ switch (cmd) {
 
     for (let i = 0; i < args.length; i++) {
       const a = args[i];
-      if (a === '--ai-name' && args[i + 1]) {
-        aiName = args[++i];
-      } else if (a === '--user-callsign' && args[i + 1]) {
-        userCallsign = args[++i];
-      } else if (a === '--personality' && args[i + 1]) {
-        personality = args[++i];
-      } else if (a === '--reset' || a === 'reset') {
-        reset = true;
-      }
+      if (a === '--ai-name' && args[i + 1]) aiName = args[++i];
+      else if (a === '--user-callsign' && args[i + 1]) userCallsign = args[++i];
+      else if (a === '--personality' && args[i + 1]) personality = args[++i];
+      else if (a === '--reset' || a === 'reset') reset = true;
     }
 
-    // If positional arguments passed without flags
     if (!aiName && !userCallsign && !personality && !reset && args.length > 0) {
       if (args[0] === 'reset') {
         reset = true;
@@ -783,169 +1121,23 @@ switch (cmd) {
     }
 
     if (reset) {
-      existingCfg.personalityConfigured = false;
-      fs.writeFileSync(cfgFile, JSON.stringify(existingCfg, null, 2), 'utf8');
-
-      if (fs.existsSync(pFile)) {
-        let content = fs.readFileSync(pFile, 'utf8');
-        content = content.replace(/^configured:\s*(?:true|false)/m, 'configured: false')
-          .replace(/^status:\s*["']?[^"'\r\n]+["']?/m, 'status: "pending_onboarding"');
-        fs.writeFileSync(pFile, content, 'utf8');
-      }
-
-      updateGlobalRulesWithPersonality({
-        aiName: existingCfg.aiName || 'Hermes',
-        userCallsign: existingCfg.userCallsign || existingCfg.userName || 'User',
-        personality: existingCfg.personality || 'Ingeniero senior de élite, autónomo, pragmático y de precisión quirúrgica. CERO emojis.',
-        configured: false,
-        vaultPath: vault.path,
-        vaultName: vault.name,
-      });
-
-      try {
-        const installer = getSkillInstaller();
-        if (installer && typeof installer.installSkillAndRules === 'function') {
-          installer.installSkillAndRules(vault.path, { personalityConfigured: false });
-        }
-      } catch (e) {}
-
-      console.log(JSON.stringify({
-        status: 'ok',
-        configured: false,
-        message: 'Personalidad reiniciada. Se solicitará calibración en la primera interacción del chat.',
-      }, null, 2));
+      const res = applyPersonalityUpdate({ reset: true });
+      console.log(JSON.stringify(res, null, 2));
       break;
     }
 
-    const isUpdating = (aiName !== null || userCallsign !== null || personality !== null);
-
-    if (isUpdating) {
-      const finalAiName = (aiName || existingCfg.aiName || 'Hermes').trim();
-      const finalCallsign = (userCallsign || existingCfg.userCallsign || existingCfg.userName || process.env.USERNAME || 'User').trim();
-      const finalPersonality = (personality || existingCfg.personality || 'Ingeniero senior de élite, autónomo, pragmático y de precisión quirúrgica. Respuestas técnicas, directas, sin paja corporativa y estrictamente CERO emojis.').trim();
-
-      existingCfg.aiName = finalAiName;
-      existingCfg.userCallsign = finalCallsign;
-      existingCfg.personality = finalPersonality;
-      existingCfg.personalityConfigured = true;
-      existingCfg.lastUpdated = new Date().toISOString();
-      fs.writeFileSync(cfgFile, JSON.stringify(existingCfg, null, 2), 'utf8');
-
-      const isEn = existingCfg.language === 'en';
-      const now = new Date().toISOString().split('T')[0];
-      const targetNotePath = isEn ? pFileEn : pFileEs;
-
-      const noteContent = isEn
-        ? `---
-title: "AI Personality & Agent Identity"
-type: antigravity-personality
-tags:
-  - antigravity/personality
-  - antigravity/agent
-ai_name: "${finalAiName}"
-user_callsign: "${finalCallsign}"
-configured: true
-status: "configured"
-language: en
-updated: ${now}
----
-
-# Agent Personality & Identity — ${finalAiName}
-
-> [!NOTE] **Agent Identity & Communication Dynamics**
-> - **Agent Name**: \`${finalAiName}\`
-> - **User Callsign / Title**: \`${finalCallsign}\`
-> - **Status**: \`Configured (Active)\`
-
-## 1. Archetype & Personality Traits
-${finalPersonality}
-
-## 2. Communication Protocol
-- The agent embodies the identity of **${finalAiName}** in all interactions.
-- The agent always addresses the user as **${finalCallsign}**.
-- Zero corporate fluff, no condescension, and strictly ZERO emojis.
-- **Persistence**: Personality is configured and locked. The AI will NEVER ask again how to behave in any chat unless explicitly requested by the user or via \`/obsidian personality\`.
-
----
-*Graph Connections:* [[00 Antigravity Hub]] | [[00 Soul de Antigravity]] | [[00 Perfil de Usuario]]
-`
-        : `---
-title: "Personalidad de la IA y Trato de Agente"
-type: antigravity-personality
-tags:
-  - antigravity/personalidad
-  - antigravity/agente
-ai_name: "${finalAiName}"
-user_callsign: "${finalCallsign}"
-configured: true
-status: "configured"
-language: es
-updated: ${now}
----
-
-# Personalidad e Identidad del Agente — ${finalAiName}
-
-> [!NOTE] **Identidad y Dinámica de Trato**
-> - **Nombre del Agente**: \`${finalAiName}\`
-> - **Trato hacia el usuario**: \`${finalCallsign}\`
-> - **Estado de Calibración**: \`Configurado (Activo)\`
-
-## 1. Arquetipo y Rasgos de Personalidad
-${finalPersonality}
-
-## 2. Protocolo de Comunicación
-- El agente responderá asumiendo plenamente el nombre e identidad de **${finalAiName}**.
-- El agente se dirigirá siempre al usuario como **${finalCallsign}**.
-- Comunicación técnica de alta densidad, cero rodeos corporativos y estrictamente CERO emojis.
-- **Permanencia**: La personalidad está fijada de forma permanente. La IA NUNCA volverá a preguntar cómo comportarse en ningún chat, a menos que el usuario lo solicite expresamente o use \`/obsidian personality\`.
-
----
-*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Soul de Antigravity]] | [[00 Perfil de Usuario]]
-`;
-
-      fs.writeFileSync(targetNotePath, noteContent, 'utf8');
-
-      // Update global rules (obsidian-brain.md, GEMINI.md, AGENTS.md) immediately and directly
-      updateGlobalRulesWithPersonality({
-        aiName: finalAiName,
-        userCallsign: finalCallsign,
-        personality: finalPersonality,
-        configured: true,
-        vaultPath: vault.path,
-        vaultName: vault.name,
-      });
-
-      // Also refresh rules and Hub via skill-installer if available
-      try {
-        const installer = getSkillInstaller();
-        if (installer && typeof installer.installSkillAndRules === 'function') {
-          installer.installSkillAndRules(vault.path, {
-            aiName: finalAiName,
-            userCallsign: finalCallsign,
-            personality: finalPersonality,
-            personalityConfigured: true,
-          });
-        }
-      } catch (e) {}
-
-      console.log(JSON.stringify({
-        status: 'ok',
-        configured: true,
-        aiName: finalAiName,
-        userCallsign: finalCallsign,
-        personality: finalPersonality,
-        notePath: targetNotePath,
-        message: 'Personalidad del agente calibrada y fijada con éxito. Ya no se volverá a preguntar en ningún chat.',
-      }, null, 2));
+    if (aiName !== null || userCallsign !== null || personality !== null) {
+      const res = applyPersonalityUpdate({ aiName, userCallsign, personality });
+      console.log(JSON.stringify(res, null, 2));
       break;
     }
 
-    // Read current personality
+    // Default: read current
+    const pFile = getPersonalityFile(almaDir, existingCfg.language);
     let curAi = existingCfg.aiName || 'Hermes';
     let curCall = existingCfg.userCallsign || existingCfg.userName || process.env.USERNAME || 'User';
     let curPers = existingCfg.personality || 'Ingeniero senior de élite, autónomo, pragmático y de precisión quirúrgica. CERO emojis.';
     let curConf = !!existingCfg.personalityConfigured;
-
     if (fs.existsSync(pFile)) {
       try {
         const c = fs.readFileSync(pFile, 'utf8');
@@ -959,7 +1151,6 @@ ${finalPersonality}
         if (mStatus && mStatus[1].trim() === 'configured') curConf = true;
       } catch (e) {}
     }
-
     console.log(JSON.stringify({
       status: 'ok',
       configured: curConf,
@@ -975,9 +1166,13 @@ ${finalPersonality}
     const almaDir = path.join(vault.path, 'Antigravity', 'Alma');
     const soulFile = path.join(almaDir, '00 Soul de Antigravity.md');
     const userFile = path.join(almaDir, '00 Perfil de Usuario.md');
-    const pFile = fs.existsSync(path.join(almaDir, '00 AI Personality.md'))
-      ? path.join(almaDir, '00 AI Personality.md')
-      : path.join(almaDir, '00 Personalidad de la IA.md');
+
+    let langPref = 'auto';
+    const cfgFile = path.join(os.homedir(), '.gemini', 'config', 'antigravity-obsidian.json');
+    if (fs.existsSync(cfgFile)) {
+      try { langPref = JSON.parse(fs.readFileSync(cfgFile, 'utf8')).language || 'auto'; } catch (e) {}
+    }
+    const pFile = getPersonalityFile(almaDir, langPref);
 
     const soul = fs.existsSync(soulFile) ? fs.readFileSync(soulFile, 'utf8') : 'No configurado';
     const profile = fs.existsSync(userFile) ? fs.readFileSync(userFile, 'utf8') : 'No configurado';
@@ -1100,12 +1295,26 @@ ${finalPersonality}
   case 'status': {
     const manifest = getManifest(vault.path);
     const almaDir = path.join(vault.path, 'Antigravity', 'Alma');
-    const pFile = fs.existsSync(path.join(almaDir, '00 AI Personality.md'))
-      ? path.join(almaDir, '00 AI Personality.md')
-      : path.join(almaDir, '00 Personalidad de la IA.md');
-    let aiName = 'Hermes';
-    let userCallsign = 'User';
-    let personalityConfigured = false;
+
+    let langPref = 'auto';
+    let cfgAi = null;
+    let cfgCall = null;
+    let cfgConf = undefined;
+    const cfgFile = path.join(os.homedir(), '.gemini', 'config', 'antigravity-obsidian.json');
+    if (fs.existsSync(cfgFile)) {
+      try {
+        const c = JSON.parse(fs.readFileSync(cfgFile, 'utf8'));
+        langPref = c.language || 'auto';
+        if (c.aiName) cfgAi = c.aiName;
+        if (c.userCallsign) cfgCall = c.userCallsign;
+        if (c.personalityConfigured !== undefined) cfgConf = !!c.personalityConfigured;
+      } catch (e) {}
+    }
+
+    const pFile = getPersonalityFile(almaDir, langPref);
+    let aiName = cfgAi || 'Hermes';
+    let userCallsign = cfgCall || 'User';
+    let personalityConfigured = cfgConf !== undefined ? cfgConf : false;
     if (fs.existsSync(pFile)) {
       try {
         const c = fs.readFileSync(pFile, 'utf8');
@@ -1115,6 +1324,8 @@ ${finalPersonality}
         if (mCall) userCallsign = mCall[1].trim();
         const mConf = c.match(/^configured:\s*(true|false)/m);
         if (mConf) personalityConfigured = mConf[1] === 'true';
+        const mStatus = c.match(/^status:\s*["']?([^"'\r\n]+)["']?/m);
+        if (mStatus && mStatus[1].trim() === 'configured') personalityConfigured = true;
       } catch (e) {}
     }
     console.log(JSON.stringify({
@@ -1606,8 +1817,11 @@ ${skillsSection}
   default:
     console.log(`
 Comandos de Obsidian for Antigravity (Zero Emojis, Ultra-Bajo Contexto):
+  node obsidian.js name "<nombre>"      (Cambiar nombre del agente de IA inmediatamente)
+  node obsidian.js user "<trato>"       (Cambiar trato hacia el usuario inmediatamente)
+  node obsidian.js config [get|set ...] (Consultar o actualizar ajustes de configuracion)
   node obsidian.js status               (Estado de conexion, stats y personalidad)
-  node obsidian.js personality [args]   (Ver o configurar personalidad, nombre de IA y trato)
+  node obsidian.js personality [args]   (Ver o calibrar personalidad completa y trato)
   node obsidian.js project [register|list|status] [path] (Indice unificado y deteccion de proyectos)
   node obsidian.js triage "<query>"     (Triage ultra-compacto: Skill vs Memoria vs Nada)
   node obsidian.js peek "<nota>"        (Solucion tecnica directa sin metadatos)

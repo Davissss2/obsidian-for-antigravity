@@ -793,49 +793,48 @@ function activate(context) {
     context.subscriptions.push({ dispose: () => clearInterval(periodicTimer) });
   }
 
-  // 4. First-launch welcoming notification or Missing Obsidian Alert
-  const { isObsidianAppInstalled } = require('./src/vault-detector');
-  const obsidianAppInstalled = isObsidianAppInstalled();
-
-  if (!vault || !vault.exists || !obsidianAppInstalled) {
-    const isMissingApp = !obsidianAppInstalled;
-    const msg = isMissingApp
-      ? 'No se ha encontrado Obsidian instalado en tu sistema. Instala Obsidian para habilitar tu Segundo Cerebro con IA, o selecciona manualmente la carpeta de tu Bóveda.'
-      : 'No se ha encontrado ninguna Bóveda de Obsidian activa en tu sistema. Selecciona la carpeta de tu Bóveda o crea una para empezar.';
-
-    const optInstall = 'Instalar Obsidian';
-    const optSelect = 'Seleccionar Bóveda...';
-
-    vscode.window.showWarningMessage(msg, optInstall, optSelect).then(choice => {
-      if (choice === optInstall) {
-        vscode.env.openExternal(vscode.Uri.parse('https://obsidian.md/download'));
-      } else if (choice === optSelect) {
-        promptSelectVault(() => {
-          if (currentWebviewView) {
-            currentWebviewView.webview.html = provider._getHtmlForWebview(currentWebviewView.webview);
-          }
-        });
-      }
-    });
-  } else {
-    const initialized = context.globalState.get('obsidian_auto_initialized');
-    if (!initialized) {
-      vscode.window.showInformationMessage(
-        `Obsidian for Antigravity: Configurado y conectado automáticamente (${vault.name}). Tu Segundo Cerebro de IA ya está activo en todos tus chats.`
-      );
-      context.globalState.update('obsidian_auto_initialized', true);
-    }
-  }
-
+  // 4. Status Bar and notification (Zero config, immediate out-of-the-box readiness)
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   updateStatusBar(vault);
   context.subscriptions.push(statusBarItem);
+
+  if (vault && vault.exists) {
+    const initialized = context.globalState.get('obsidian_auto_initialized');
+    if (!initialized) {
+      vscode.window.showInformationMessage(
+        `Obsidian for Antigravity: Conectado automáticamente (${vault.name}). Tu Segundo Cerebro y memoria persistente están listos en todos tus chats.`
+      );
+      context.globalState.update('obsidian_auto_initialized', true);
+    }
+  } else {
+    vscode.window.showWarningMessage(
+      'Obsidian for Antigravity: No se pudo conectar a una bóveda automáticamente. Selecciona tu carpeta de bóveda para empezar.',
+      'Seleccionar Bóveda...'
+    ).then(choice => {
+      if (choice) promptSelectVault();
+    });
+  }
 
   context.subscriptions.push(
     vscode.commands.registerCommand('antigravityObsidian.openHub', () => {
       const activeVault = getActiveOrConfiguredVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
       if (activeVault && activeVault.exists) {
-        openInObsidianApp(activeVault.name, 'Antigravity/00 Antigravity Hub');
+        const { isObsidianAppInstalled } = require('./src/vault-detector');
+        if (!isObsidianAppInstalled()) {
+          vscode.window.showInformationMessage(
+            `Tus notas están guardadas en "${activeVault.path}". Si deseas visualizarlas en la app oficial de Obsidian, puedes descargarla gratis.`,
+            'Descargar Obsidian',
+            'Abrir Carpeta de Notas'
+          ).then(choice => {
+            if (choice === 'Descargar Obsidian') {
+              vscode.env.openExternal(vscode.Uri.parse('https://obsidian.md/download'));
+            } else if (choice === 'Abrir Carpeta de Notas') {
+              vscode.env.openExternal(vscode.Uri.file(activeVault.path));
+            }
+          });
+        } else {
+          openInObsidianApp(activeVault.name, 'Antigravity/00 Antigravity Hub');
+        }
       } else {
         vscode.window.showWarningMessage('No hay ninguna bóveda de Obsidian conectada.');
       }

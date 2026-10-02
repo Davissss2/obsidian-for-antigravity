@@ -14,10 +14,13 @@ function sanitizeFilename(name) {
 
 function getAntigravityPaths() {
   const home = os.homedir();
+  const globalSkillsDir = path.join(home, '.gemini', 'config', 'skills');
   return {
-    globalSkillsDir: path.join(home, '.gemini', 'config', 'skills'),
+    globalSkillsDir,
+    skillsDir: globalSkillsDir,
     knowledgeDir: path.join(home, '.gemini', 'antigravity-ide', 'knowledge'),
     brainDir: path.join(home, '.gemini', 'antigravity-ide', 'brain'),
+    configDir: path.join(home, '.gemini', 'config'),
   };
 }
 
@@ -160,7 +163,24 @@ function resolvePersonality(vaultPath, explicitOptions = {}) {
     const almaDir = path.join(vaultPath, 'Antigravity', 'Alma');
     const pFile = path.join(almaDir, '00 Personalidad de la IA.md');
     const pFileEn = path.join(almaDir, '00 AI Personality.md');
-    const targetFile = fs.existsSync(pFile) ? pFile : (fs.existsSync(pFileEn) ? pFileEn : null);
+    let targetFile = null;
+    if (fs.existsSync(pFile) && !fs.existsSync(pFileEn)) {
+      targetFile = pFile;
+    } else if (fs.existsSync(pFileEn) && !fs.existsSync(pFile)) {
+      targetFile = pFileEn;
+    } else if (fs.existsSync(pFile) && fs.existsSync(pFileEn)) {
+      try {
+        const cEs = fs.readFileSync(pFile, 'utf8');
+        const cEn = fs.readFileSync(pFileEn, 'utf8');
+        const esConf = /configured:\s*true/i.test(cEs);
+        const enConf = /configured:\s*true/i.test(cEn);
+        if (esConf && !enConf) targetFile = pFile;
+        else if (enConf && !esConf) targetFile = pFileEn;
+        else targetFile = (resolveLanguage(explicitOptions) === 'en') ? pFileEn : pFile;
+      } catch (e) {
+        targetFile = pFile;
+      }
+    }
     if (targetFile) {
       try {
         const content = fs.readFileSync(targetFile, 'utf8');
@@ -220,6 +240,11 @@ function ensurePersonality(vaultPath, options = {}) {
   const isEn = (lang === 'en');
   const pFileName = isEn ? '00 AI Personality.md' : '00 Personalidad de la IA.md';
   const personalityPath = path.join(almaDir, pFileName);
+  const otherFileName = isEn ? '00 Personalidad de la IA.md' : '00 AI Personality.md';
+  const otherPath = path.join(almaDir, otherFileName);
+  if (fs.existsSync(otherPath)) {
+    try { fs.unlinkSync(otherPath); } catch (e) {}
+  }
 
   const { aiName, userCallsign, personality, configured } = resolvePersonality(vaultPath, options);
 
