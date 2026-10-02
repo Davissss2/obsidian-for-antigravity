@@ -427,6 +427,34 @@ class ObsidianPanelProvider {
       </button>
     </div>
 
+    <div class="soul-card" id="card-soul">
+      <div class="soul-header">
+        <div class="soul-badge-wrap">
+          ${SVGS.brain}
+          <span class="soul-title">Hermes Core — Alma & Perfil</span>
+        </div>
+        <span class="status-badge" style="background:rgba(16,185,129,0.15);color:#34d399;border:1px solid rgba(16,185,129,0.3);">Activo</span>
+      </div>
+      <div class="soul-body">
+        <div class="soul-row">
+          <strong>Soul de Antigravity:</strong>
+          <span>Ingeniero de software senior autónomo, resolutivo, sin rodeos y CERO emojis.</span>
+        </div>
+        <div class="soul-row">
+          <strong>Perfil de Usuario (Davissss2):</strong>
+          <span>Español directo, filtro anti-ruido estricto y rigor multiplataforma (Windows/Ubuntu/Mac).</span>
+        </div>
+      </div>
+      <div class="soul-actions">
+        <button class="btn-open-link btn-open-note" data-note="Antigravity/Alma/00 Soul de Antigravity.md">
+          ${SVGS.open} <span>Ver Soul</span>
+        </button>
+        <button class="btn-open-link btn-open-note" data-note="Antigravity/Alma/00 Perfil de Usuario.md">
+          ${SVGS.open} <span>Ver Perfil</span>
+        </button>
+      </div>
+    </div>
+
     <div class="info-banner">
       <strong data-i18n="info_title">Sincronización Autónoma Activa</strong><br>
       <span data-i18n="info_desc">Antigravity aprende de tus conversaciones y guarda lecciones en tu Vault automáticamente sin pedir confirmación.</span>

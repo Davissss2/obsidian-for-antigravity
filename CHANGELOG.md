@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.0] - 2026-10-02
+
+### Added
+- **Hermes Core Architecture (Agent Soul & User Profile)**: Introduced multi-tier memory replicating the Hermes agentic framework. Separates technical persistence (vault notes/skills) from the Agent's Soul (`00 Soul de Antigravity.md`) and the User's Profile (`00 Perfil de Usuario.md`).
+- **Dynamic Learning Loop (`learn` Command)**: The agent continuously learns user preferences, working habits, and coding styles across chats. Any user correction or preferred guideline is permanently memorized into `00 Perfil de Usuario.md` and compiled into global IDE instructions.
+- **Active Soul & Profile Dashboard Card**: Added a dedicated Hermes Core status card in the extension sidebar panel with quick navigation buttons to inspect and edit the Soul and User Profile in Obsidian with one click.
+- **CLI Commands `soul` and `learn`**: Added `node obsidian.js soul` to display the active Soul & Profile, and `node obsidian.js learn "<learning>"` for instant atomic preference registration.
+- **Memory Reset Safety Shield**: `resetAllData` now preserves `Antigravity/Alma` so user habits and identity are never lost when clearing temporary technical memories.
+
+---
+
 ## [1.2.2] - 2026-10-02
 
 ### Added

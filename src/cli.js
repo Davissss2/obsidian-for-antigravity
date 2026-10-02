@@ -239,6 +239,37 @@ async function main() {
       break;
     }
 
+    case 'soul': {
+      const data = syncEngine.getSoulAndProfile(vaultPath);
+      console.log(JSON.stringify({
+        status: 'ok',
+        soul: data.soulText.slice(0, 400) + '...',
+        profile: data.userText.slice(0, 400) + '...',
+        soulPath: data.soulPath,
+        userPath: data.userPath,
+      }, null, 2));
+      break;
+    }
+
+    case 'learn': {
+      const learning = args.join(' ');
+      if (!learning) {
+        console.error(JSON.stringify({ error: 'Especifica la preferencia o aprendizaje sobre el usuario.' }));
+        process.exit(1);
+      }
+      const res = syncEngine.recordUserLearning(vaultPath, learning);
+      try {
+        const { installSkillAndRules } = require('./skill-installer');
+        installSkillAndRules(vaultPath);
+      } catch (e) {}
+      console.log(JSON.stringify({
+        status: 'ok',
+        message: 'Aprendizaje registrado en el Perfil de Usuario y actualizado en las reglas globales.',
+        res,
+      }, null, 2));
+      break;
+    }
+
     case 'memories': {
       const result = syncEngine.catalogContext(vaultPath);
       console.log(JSON.stringify(result.memories, null, 2));

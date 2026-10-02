@@ -589,6 +589,61 @@ switch (cmd) {
     break;
   }
 
+  case 'soul': {
+    const almaDir = path.join(vault.path, 'Antigravity', 'Alma');
+    const soulFile = path.join(almaDir, '00 Soul de Antigravity.md');
+    const userFile = path.join(almaDir, '00 Perfil de Usuario.md');
+
+    const soul = fs.existsSync(soulFile) ? fs.readFileSync(soulFile, 'utf8') : 'No configurado';
+    const profile = fs.existsSync(userFile) ? fs.readFileSync(userFile, 'utf8') : 'No configurado';
+
+    console.log(JSON.stringify({
+      status: 'ok',
+      soul: soul.slice(0, 400) + '...',
+      profile: profile.slice(0, 400) + '...',
+      soulPath: soulFile,
+      userPath: userFile,
+    }, null, 2));
+    break;
+  }
+
+  case 'learn': {
+    const learning = args.join(' ').trim();
+    if (!learning) {
+      console.error(JSON.stringify({ error: 'Especifica la preferencia o aprendizaje sobre el usuario.' }));
+      process.exit(1);
+    }
+    const almaDir = path.join(vault.path, 'Antigravity', 'Alma');
+    if (!fs.existsSync(almaDir)) fs.mkdirSync(almaDir, { recursive: true });
+    const userFile = path.join(almaDir, '00 Perfil de Usuario.md');
+    const now = new Date().toISOString().split('T')[0];
+    const entry = `- \`[${now}]\` ${learning}`;
+
+    let content = fs.existsSync(userFile) ? fs.readFileSync(userFile, 'utf8') : `# Perfil de Trabajo — Davissss2\n\n## 4. Aprendizajes y Preferencias Dinámicas Acumuladas\n`;
+    if (content.includes('## 4. Aprendizajes y Preferencias Dinámicas Acumuladas')) {
+      content = content.replace(
+        '## 4. Aprendizajes y Preferencias Dinámicas Acumuladas',
+        `## 4. Aprendizajes y Preferencias Dinámicas Acumuladas\n${entry}`
+      );
+    } else {
+      content += `\n## 4. Aprendizajes y Preferencias Dinámicas Acumuladas\n${entry}\n`;
+    }
+    fs.writeFileSync(userFile, content, 'utf8');
+
+    // Also update global GEMINI.md & AGENTS.md rules immediately
+    try {
+      const { installSkillAndRules } = require(path.join(__dirname, 'skill-installer'));
+      installSkillAndRules(vault.path);
+    } catch (e) {}
+
+    console.log(JSON.stringify({
+      status: 'ok',
+      message: 'Aprendizaje registrado en el Perfil de Usuario y actualizado en el Soul de Antigravity.',
+      entry,
+    }, null, 2));
+    break;
+  }
+
   case 'status': {
     const manifest = getManifest(vault.path);
     console.log(JSON.stringify({

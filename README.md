@@ -53,7 +53,12 @@ Instead of burning thousands of tokens re-reading old logs, your AI assistant au
 - Dedicated Antigravity IDE panel with live stats, search filters, one-click manual synchronization, and instant deep-links to the desktop Obsidian application (`obsidian://open`).
 
 ### 7. Wipe & Start Fresh ("Empezar de Cero")
-- Need to reset memory completely? A single click in the **Danger Zone** wipes accumulated memories, eliminates duplicates, and resets AI context to start 100% fresh with Obsidian.
+- Need to reset memory completely? A single click in the **Danger Zone** wipes accumulated memories, eliminates duplicates, and resets AI context to start 100% fresh with Obsidian while safely preserving your Soul & User Profile.
+
+### 8. Hermes Core (Agent Soul & User Profile)
+- **Agent Soul**: Dedicated identity guidelines (`00 Soul de Antigravity.md`) defining the assistant as a senior, pragmatic, pair-programming engineer who diagnoses root causes and executes with precision.
+- **User Profile & Working Habits**: Persistent profile (`00 Perfil de Usuario.md`) memorizing how you like to work, your preferred style, and project conventions.
+- **Dynamic Learning Loop**: As you correct or guide the agent, new habits are automatically memorized with `learn` and injected across all future sessions.
 
 ---
 

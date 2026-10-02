@@ -151,6 +151,8 @@ function installSkillAndRules(targetVaultPath, options = {}) {
     '| `node "' + normalizedScriptPath + '" catalog` | Resumen de 1 linea de todas las skills y memorias |',
     '| `node "' + normalizedScriptPath + '" skills` | Lista rapida de skills con descripcion corta |',
     '| `node "' + normalizedScriptPath + '" memories` | Lista rapida de memorias con resumen corto |',
+    '| `node "' + normalizedScriptPath + '" soul` | Muestra el Soul activo y Perfil del Usuario |',
+    '| `node "' + normalizedScriptPath + '" learn "texto"` | Registra un nuevo habito o preferencia aprendida |',
     '| `node "' + normalizedScriptPath + '" status` | Estado de conexion y estadisticas |',
     '| `node "' + normalizedScriptPath + '" search "query"` | Busqueda compacta |',
     '| `node "' + normalizedScriptPath + '" read "Nota"` | Lectura completa (usar solo si es imprescindible) |',
@@ -159,8 +161,18 @@ function installSkillAndRules(targetVaultPath, options = {}) {
   ].join('\n');
   fs.writeFileSync(skillMdPath, skillMdContent, 'utf8');
 
-  // 4. Write Global Rule (Zero Emojis, High Density)
+  // 4. Write Global Rule (Hermes Core: Soul + User Profile + Obsidian Brain)
   const rulePath = path.join(rulesDir, 'obsidian-brain.md');
+
+  const hermesSection = [
+    '### 0. ALMA DEL AGENTE & PERFIL DEL USUARIO (Hermes Core):',
+    '- **Soul de Antigravity:** Eres un ingeniero senior de elite, autonomo, pragmatico y de precision quirurgica. Diagnostica causas raiz, ejecuta soluciones terminadas y probadas sin pedir permiso para pasos obvios ni dejar placeholders.',
+    '- **Perfil de Trabajo de Davissss2:** Comunicacion en espanol directo, tecnico, sin introducciones obvias ("¡Por supuesto!"), sin condescendencia, sin disculpas vacias y CERO EMOJIS en absolutamente todo momento.',
+    '- **Rigor Multiplataforma:** Soluciones probadas y compatibles para Windows, Ubuntu (Linux) y macOS.',
+    '- **Aprendizaje Continuo de Habitos:** Cuando el usuario indique una correccion o preferencia de como trabajar, asimilala de inmediato ejecutando:',
+    '  `node "' + normalizedScriptPath + '" learn "<preferencia o habito aprendido>"`'
+  ].join('\n');
+
   const proactiveSection = proactiveLookup
     ? [
         '### 1. CONSULTA INTELIGENTE DE BAJO CONTEXTO (Zero Token Waste):',
@@ -205,25 +217,28 @@ function installSkillAndRules(targetVaultPath, options = {}) {
 
   const ruleContent = [
     '---',
-    'description: Segundo Cerebro Autonomo y Memoria Persistente de Bajo Contexto — Obsidian for Antigravity',
+    'description: Segundo Cerebro Autonomo, Soul Hermes y Memoria Persistente — Obsidian for Antigravity',
     '---',
     '',
-    '# Protocolo de Segundo Cerebro Autonomo — Obsidian for Antigravity',
+    '# Protocolo Hermes & Segundo Cerebro — Obsidian for Antigravity',
     '',
     'El usuario tiene conectada su boveda de Obsidian como **Segundo Cerebro y Memoria Persistente**:',
     '- Boveda activa: **' + vaultName + '** (`' + vaultPath + '`).',
+    '- Soul e Identidad: **Hermes Core (Activo)** (`Antigravity/Alma/`).',
     '- Skill activa en todos los chats: **`antigravity-obsidian`**.',
     '- Modo de consulta: **Triage Inteligente de Ultra-Bajo Contexto (Zero Token Waste)**.',
     '- Guardado autonomo: **' + (autoSave ? 'ACTIVADO (AUTOMATICO)' : 'Bajo peticion') + '**.',
     '',
     '## REGLAS MANDATORIAS PARA EL ASISTENTE:',
     '',
+    hermesSection,
+    '',
     proactiveSection,
     '',
     autoSaveSection,
     '',
     '### 3. Interconexion en Grafo:',
-    '- Todas las notas se vinculan a `[[00 Antigravity Hub]]` e `[[00 Indice de Memoria]]` manteniendo activo el Graph View.',
+    '- Todas las notas se vinculan a `[[00 Antigravity Hub]]`, `[[00 Soul de Antigravity]]` e `[[00 Indice de Memoria]]` manteniendo activo el Graph View.',
     ''
   ].join('\n');
   fs.writeFileSync(rulePath, ruleContent, 'utf8');
