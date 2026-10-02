@@ -630,11 +630,25 @@ switch (cmd) {
   }
 
   case 'learn': {
-    const learning = args.join(' ').trim();
+    let project = null;
+    let learnArgs = [...args];
+    if (learnArgs[0] === '--project' && learnArgs[1]) {
+      project = cleanText(learnArgs[1]);
+      learnArgs = learnArgs.slice(2);
+    }
+    const learning = learnArgs.join(' ').trim();
     if (!learning) {
       console.error(JSON.stringify({ error: 'Especifica la preferencia o aprendizaje sobre el usuario.' }));
       process.exit(1);
     }
+
+    if (!project) {
+      const projTagMatch = learning.match(/^\[([a-zA-Z0-9_\-.]+)\]/);
+      if (projTagMatch) {
+        project = projTagMatch[1];
+      }
+    }
+
     const almaDir = path.join(vault.path, 'Antigravity', 'Alma');
     if (!fs.existsSync(almaDir)) fs.mkdirSync(almaDir, { recursive: true });
     const userFile = path.join(almaDir, '00 Perfil de Usuario.md');
@@ -669,6 +683,37 @@ switch (cmd) {
     }
     fs.writeFileSync(userFile, content, 'utf8');
 
+    // Also persist in Project note if a project was targeted
+    let projectNoteUpdated = null;
+    if (project) {
+      const projDir = path.join(vault.path, 'Antigravity', 'Proyectos');
+      if (fs.existsSync(projDir)) {
+        let projFile = path.join(projDir, `${project}.md`);
+        if (!fs.existsSync(projFile)) {
+          for (const f of fs.readdirSync(projDir)) {
+            if (f.toLowerCase() === `${project.toLowerCase()}.md`) {
+              projFile = path.join(projDir, f);
+              break;
+            }
+          }
+        }
+        if (fs.existsSync(projFile)) {
+          let pContent = fs.readFileSync(projFile, 'utf8');
+          const ruleHeader = '## Reglas y Condiciones Obligatorias del Proyecto';
+          const ruleHeaderAlt = '## Project Rules & Constraints';
+          if (pContent.includes(ruleHeader)) {
+            pContent = pContent.replace(ruleHeader, `${ruleHeader}\n${entry}`);
+          } else if (pContent.includes(ruleHeaderAlt)) {
+            pContent = pContent.replace(ruleHeaderAlt, `${ruleHeaderAlt}\n${entry}`);
+          } else {
+            pContent = pContent.replace('---', `## Reglas y Condiciones Obligatorias del Proyecto\n${entry}\n\n---`);
+          }
+          fs.writeFileSync(projFile, pContent, 'utf8');
+          projectNoteUpdated = projFile;
+        }
+      }
+    }
+
     // Also update global GEMINI.md & AGENTS.md rules immediately
     try {
       const { installSkillAndRules } = require(path.join(__dirname, 'skill-installer'));
@@ -677,8 +722,9 @@ switch (cmd) {
 
     console.log(JSON.stringify({
       status: 'ok',
-      message: 'Aprendizaje registrado en el Perfil de Usuario y actualizado en el Soul de Antigravity.',
+      message: 'Aprendizaje registrado en Perfil de Usuario' + (projectNoteUpdated ? ' y en la ficha del Proyecto' : '') + '.',
       entry,
+      projectNoteUpdated,
     }, null, 2));
     break;
   }

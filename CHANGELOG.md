@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.1] - 2026-10-02
+
+### Added
+- **Automatic Project-Level Rules & Conditions Persistence**: The assistant now automatically captures project-specific constraints, workflow conditions, and directory guidelines when instructed by the user.
+- **Bi-Level `learn` Persistence**: The `learn` command and Hermes Core now automatically detect project tags (e.g. `[obsi]` or `--project <name>`) and write the rule both into the User Profile (`00 Perfil de Usuario.md`) and into the Project's dedicated note (`Antigravity/Proyectos/<Project>.md`) under `## Reglas y Condiciones Obligatorias del Proyecto`.
+- **Project Rules Preservation in Sync Engine**: `syncProject` now permanently preserves user-defined and assistant-learned project conditions during vault resynchronization cycles.
+- **Mandatory Directive in Hermes Core**: Global rules (`GEMINI.md`, `AGENTS.md`, and `obsidian-brain.md`) now mandate immediate recording of any user workflow rule or condition without hesitation or waiting to be reminded.
+
+---
+
 ## [1.4.0] - 2026-10-02
 
 ### Added

@@ -937,6 +937,27 @@ function syncProject(vaultPath, workspaceRoot) {
     } catch (e) {}
   }
 
+  let existingRules = '';
+  let existingMemories = '';
+  let existingSkills = '';
+  if (fs.existsSync(obsFile)) {
+    try {
+      const existing = fs.readFileSync(obsFile, 'utf8');
+      const rulesMatch = existing.match(/##\s*(?:Reglas y Condiciones Obligatorias del Proyecto|Project Rules & Constraints)[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
+      if (rulesMatch && rulesMatch[1].trim()) {
+        existingRules = rulesMatch[1].trim();
+      }
+      const memMatch = existing.match(/##\s*Memorias y Decisiones Vinculadas[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
+      if (memMatch && memMatch[1].trim() && !memMatch[1].includes('<!-- Agrega enlaces')) {
+        existingMemories = memMatch[1].trim();
+      }
+      const skiMatch = existing.match(/##\s*Skills de Proyecto[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
+      if (skiMatch && skiMatch[1].trim() && !skiMatch[1].includes('<!-- Agrega skills')) {
+        existingSkills = skiMatch[1].trim();
+      }
+    } catch (e) {}
+  }
+
   const content = `---
 title: "Proyecto: ${projectName}"
 type: antigravity-project
@@ -955,11 +976,14 @@ updated: ${now}
 
 ${packageInfo}
 
+## Reglas y Condiciones Obligatorias del Proyecto
+${existingRules || '<!-- Reglas operativas y condiciones obligatorias para este proyecto (commits, empaquetado, workflows, etc.) -->'}
+
 ## Memorias y Decisiones Vinculadas
-<!-- Agrega enlaces [[Nombre de la Memoria]] para conectar este proyecto con el grafo de Antigravity -->
+${existingMemories || '<!-- Agrega enlaces [[Nombre de la Memoria]] para conectar este proyecto con el grafo de Antigravity -->'}
 
 ## Skills de Proyecto
-<!-- Agrega skills específicas usando enlaces [[Skill]] -->
+${existingSkills || '<!-- Agrega skills específicas usando enlaces [[Skill]] -->'}
 
 ---
 *Conexiones del Grafo:* [[00 Antigravity Hub]]
