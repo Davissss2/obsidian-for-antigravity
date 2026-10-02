@@ -17,21 +17,55 @@ function getVaultPath() {
   if (process.env.OBSIDIAN_VAULT_PATH && fs.existsSync(process.env.OBSIDIAN_VAULT_PATH)) {
     return { path: process.env.OBSIDIAN_VAULT_PATH, name: path.basename(process.env.OBSIDIAN_VAULT_PATH) };
   }
-  const obsJson = path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'obsidian', 'obsidian.json');
-  if (fs.existsSync(obsJson)) {
-    try {
-      const data = JSON.parse(fs.readFileSync(obsJson, 'utf8'));
-      for (const [id, v] of Object.entries(data.vaults || {})) {
-        if (v && v.path && fs.existsSync(v.path)) {
-          return { path: v.path, name: path.basename(v.path) };
+
+  // Cross-platform config candidates
+  const home = os.homedir();
+  const platform = process.platform;
+  const configCandidates = [];
+
+  if (platform === 'win32') {
+    const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
+    configCandidates.push(path.join(appData, 'obsidian', 'obsidian.json'));
+  } else if (platform === 'darwin') {
+    configCandidates.push(path.join(home, 'Library', 'Application Support', 'obsidian', 'obsidian.json'));
+  } else {
+    // Linux / Ubuntu: Native XDG, Flatpak, Snap
+    const xdgConfig = process.env.XDG_CONFIG_HOME || path.join(home, '.config');
+    configCandidates.push(
+      path.join(xdgConfig, 'obsidian', 'obsidian.json'),
+      path.join(home, '.var', 'app', 'md.obsidian.Obsidian', 'config', 'obsidian', 'obsidian.json'),
+      path.join(home, 'snap', 'obsidian', 'current', '.config', 'obsidian', 'obsidian.json')
+    );
+  }
+
+  for (const obsJson of configCandidates) {
+    if (fs.existsSync(obsJson)) {
+      try {
+        const data = JSON.parse(fs.readFileSync(obsJson, 'utf8'));
+        for (const [id, v] of Object.entries(data.vaults || {})) {
+          if (v && v.path && fs.existsSync(v.path)) {
+            return { path: v.path, name: path.basename(v.path) };
+          }
         }
-      }
-    } catch (e) {}
+      } catch (e) {}
+    }
   }
-  const docVault = path.join(os.homedir(), 'Documents', 'Obsidian Vault');
-  if (fs.existsSync(docVault)) {
-    return { path: docVault, name: 'Obsidian Vault' };
+
+  // Fallback directories across macOS & Linux
+  const fallbackDirs = [
+    path.join(home, 'Documents', 'Obsidian Vault'),
+    path.join(home, 'Documentos', 'Obsidian Vault'),
+    path.join(home, 'Obsidian Vault'),
+  ];
+  if (platform === 'darwin') {
+    fallbackDirs.push(path.join(home, 'Library', 'Mobile Documents', 'iCloud~md~obsidian', 'Documents'));
   }
+  for (const docVault of fallbackDirs) {
+    if (fs.existsSync(docVault)) {
+      return { path: docVault, name: path.basename(docVault) };
+    }
+  }
+
   return null;
 }
 

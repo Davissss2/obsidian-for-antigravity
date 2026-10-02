@@ -8,80 +8,143 @@ const os = require('os');
  * without requiring any user tokens or manual input.
  */
 
-function getObsidianConfigPath() {
+function getObsidianConfigCandidates() {
   const platform = process.platform;
   const home = os.homedir();
 
   if (platform === 'win32') {
     const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
-    return path.join(appData, 'obsidian', 'obsidian.json');
+    return [path.join(appData, 'obsidian', 'obsidian.json')];
   } else if (platform === 'darwin') {
-    return path.join(home, 'Library', 'Application Support', 'obsidian', 'obsidian.json');
+    return [
+      path.join(home, 'Library', 'Application Support', 'obsidian', 'obsidian.json'),
+    ];
   } else {
-    // Linux / BSD
-    const configHome = process.env.XDG_CONFIG_HOME || path.join(home, '.config');
-    return path.join(configHome, 'obsidian', 'obsidian.json');
+    // Linux / Ubuntu: Native XDG, Flatpak, and Snap locations
+    const xdgConfig = process.env.XDG_CONFIG_HOME || path.join(home, '.config');
+    return [
+      path.join(xdgConfig, 'obsidian', 'obsidian.json'),
+      path.join(home, '.var', 'app', 'md.obsidian.Obsidian', 'config', 'obsidian', 'obsidian.json'),
+      path.join(home, 'snap', 'obsidian', 'current', '.config', 'obsidian', 'obsidian.json'),
+    ];
   }
 }
 
+function getObsidianConfigPath() {
+  const candidates = getObsidianConfigCandidates();
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return candidates[0];
+}
+
+function getDocumentsDir() {
+  const home = os.homedir();
+  const docs = path.join(home, 'Documents');
+  if (fs.existsSync(docs)) return docs;
+  const docsEs = path.join(home, 'Documentos');
+  if (fs.existsSync(docsEs)) return docsEs;
+  return docs;
+}
+
+function getFallbackVaultPaths() {
+  const home = os.homedir();
+  const platform = process.platform;
+  const docsDir = getDocumentsDir();
+  const candidates = [
+    path.join(docsDir, 'Obsidian Vault'),
+    path.join(home, 'Documents', 'Obsidian Vault'),
+    path.join(home, 'Documentos', 'Obsidian Vault'),
+    path.join(home, 'Obsidian Vault'),
+  ];
+  if (platform === 'darwin') {
+    candidates.push(path.join(home, 'Library', 'Mobile Documents', 'iCloud~md~obsidian', 'Documents'));
+  }
+  return candidates;
+}
+
 function detectVaults() {
-  const configPath = getObsidianConfigPath();
+  const configCandidates = getObsidianConfigCandidates();
   const results = {
     configFound: false,
-    configPath,
+    configPath: configCandidates[0],
     vaults: [],
     activeVault: null,
   };
 
-  if (!fs.existsSync(configPath)) {
-    return results;
-  }
+  const vaultsList = [];
+  const seenPaths = new Set();
 
-  results.configFound = true;
+  for (const configPath of configCandidates) {
+    if (!fs.existsSync(configPath)) continue;
+    results.configFound = true;
+    results.configPath = configPath;
 
-  try {
-    const raw = fs.readFileSync(configPath, 'utf8');
-    const data = JSON.parse(raw);
+    try {
+      const raw = fs.readFileSync(configPath, 'utf8');
+      const data = JSON.parse(raw);
 
-    if (data && data.vaults && typeof data.vaults === 'object') {
-      const vaultsList = [];
+      if (data && data.vaults && typeof data.vaults === 'object') {
+        for (const [id, info] of Object.entries(data.vaults)) {
+          if (!info || !info.path) continue;
 
-      for (const [id, info] of Object.entries(data.vaults)) {
-        if (!info || !info.path) continue;
+          const vaultPath = path.normalize(info.path);
+          if (seenPaths.has(vaultPath)) continue;
+          seenPaths.add(vaultPath);
 
-        const vaultPath = path.normalize(info.path);
-        const exists = fs.existsSync(vaultPath);
-        const vaultName = path.basename(vaultPath);
+          const exists = fs.existsSync(vaultPath);
+          const vaultName = path.basename(vaultPath);
 
-        const vaultItem = {
-          id,
-          name: vaultName,
-          path: vaultPath,
-          open: !!info.open,
-          ts: info.ts || 0,
-          exists,
-        };
+          const vaultItem = {
+            id,
+            name: vaultName,
+            path: vaultPath,
+            open: !!info.open,
+            ts: info.ts || 0,
+            exists,
+          };
 
-        if (exists) {
-          vaultsList.push(vaultItem);
+          if (exists) {
+            vaultsList.push(vaultItem);
+          }
         }
       }
+    } catch (err) {
+      results.error = err.message;
+    }
+  }
 
-      // Sort: active/open first, then by timestamp descending
-      vaultsList.sort((a, b) => {
-        if (a.open && !b.open) return -1;
-        if (!a.open && b.open) return 1;
-        return (b.ts || 0) - (a.ts || 0);
-      });
-
-      results.vaults = vaultsList;
-      if (vaultsList.length > 0) {
-        // Active vault is the open one, or the most recently used
-        results.activeVault = vaultsList.find(v => v.open) || vaultsList[0];
+  // Fallback: If no vaults detected via obsidian.json, inspect common OS directories
+  if (vaultsList.length === 0) {
+    const fallbacks = getFallbackVaultPaths();
+    for (const fbPath of fallbacks) {
+      if (fs.existsSync(fbPath)) {
+        const norm = path.normalize(fbPath);
+        if (!seenPaths.has(norm)) {
+          seenPaths.add(norm);
+          vaultsList.push({
+            id: 'fallback_' + path.basename(norm).toLowerCase().replace(/\s+/g, '_'),
+            name: path.basename(norm),
+            path: norm,
+            open: true,
+            ts: Date.now(),
+            exists: true,
+          });
+        }
       }
     }
-  } catch (err) {
-    results.error = err.message;
+  }
+
+  // Sort: active/open first, then by timestamp descending
+  vaultsList.sort((a, b) => {
+    if (a.open && !b.open) return -1;
+    if (!a.open && b.open) return 1;
+    return (b.ts || 0) - (a.ts || 0);
+  });
+
+  results.vaults = vaultsList;
+  if (vaultsList.length > 0) {
+    results.activeVault = vaultsList.find(v => v.open) || vaultsList[0];
   }
 
   return results;
@@ -124,8 +187,8 @@ function ensureOrCreateDefaultVault(configuredPath) {
     return existing;
   }
 
-  // Fallback: Create default Obsidian Vault in Documents
-  const documentsDir = path.join(os.homedir(), 'Documents');
+  // Fallback: Create default Obsidian Vault in Documents (or localized Documentos)
+  const documentsDir = getDocumentsDir();
   const defaultVaultPath = path.join(documentsDir, 'Obsidian Vault');
 
   try {

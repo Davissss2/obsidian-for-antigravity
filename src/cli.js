@@ -192,11 +192,11 @@ async function main() {
       const uri = `obsidian://open?vault=${vaultName}&file=${notePath}`;
 
       if (process.platform === 'win32') {
-        exec(`start "" "${uri}"`);
+        exec(`start "" "${uri}"`, () => {});
       } else if (process.platform === 'darwin') {
-        exec(`open "${uri}"`);
+        exec(`open "${uri}"`, () => {});
       } else {
-        exec(`xdg-open "${uri}"`);
+        exec(`xdg-open "${uri}"`, () => {});
       }
 
       console.log(JSON.stringify({ status: 'ok', uri }, null, 2));

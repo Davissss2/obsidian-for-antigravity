@@ -64,6 +64,11 @@ function installSkillAndRules(targetVaultPath, options = {}) {
   const runnerSource = path.join(__dirname, 'obsidian-runner.js');
   if (fs.existsSync(runnerSource)) {
     fs.copyFileSync(runnerSource, scriptPath);
+    if (process.platform !== 'win32') {
+      try {
+        fs.chmodSync(scriptPath, 0o755);
+      } catch (e) {}
+    }
   }
 
   // Normalized script execution path for Markdown
@@ -97,7 +102,7 @@ function installSkillAndRules(targetVaultPath, options = {}) {
     '## Protocolo de Consulta de Bajo Contexto',
     '',
     '### Paso 1: Triage Inteligente (<80 tokens)',
-    '```powershell',
+    '```bash',
     'node "' + normalizedScriptPath + '" triage "terminos clave del problema o proyecto"',
     '```',
     '- **Si triage devuelve un resumen:** Usalo directamente. Resuelve el problema sin leer mas archivos.',
@@ -105,7 +110,7 @@ function installSkillAndRules(targetVaultPath, options = {}) {
     '- **Si hasAntecedents es false:** Resuelve directamente sin hacer mas busquedas.',
     '',
     '### Paso 2: Extraccion Selectiva con Peek (Solo si el resumen no basta)',
-    '```powershell',
+    '```bash',
     'node "' + normalizedScriptPath + '" peek "NombreDeLaNota"',
     '```',
     '*(Extrae exclusivamente la solucion tecnica, ahorrando el 90% de contexto vs read).*',
@@ -127,7 +132,7 @@ function installSkillAndRules(targetVaultPath, options = {}) {
     '- **Solo datos tecnicos**: Causa raiz, codigo/comando exacto y verificacion. Sin introducciones ni relleno.',
     '',
     '**Comando de guardado atomico (solo para conocimiento de alto valor):**',
-    '```powershell',
+    '```bash',
     'node "' + normalizedScriptPath + '" save --title "Titulo Descriptivo" --category "bugfix|arquitectura|configuracion|general" --summary "Problema -> Solucion aplicada" --content "Causa raiz, pasos tecnicos y codigo aplicado"',
     '```',
     '',

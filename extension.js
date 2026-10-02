@@ -24,12 +24,26 @@ function openInObsidianApp(vaultName, notePath) {
   const encFile = encodeURIComponent(cleanNote);
   const uri = `obsidian://open?vault=${encVault}&file=${encFile}`;
 
+  try {
+    vscode.env.openExternal(vscode.Uri.parse(uri)).then(success => {
+      if (!success) {
+        fallbackOpenUri(uri);
+      }
+    }, () => {
+      fallbackOpenUri(uri);
+    });
+  } catch (e) {
+    fallbackOpenUri(uri);
+  }
+}
+
+function fallbackOpenUri(uri) {
   if (process.platform === 'win32') {
-    exec(`start "" "${uri}"`);
+    exec(`start "" "${uri}"`, () => {});
   } else if (process.platform === 'darwin') {
-    exec(`open "${uri}"`);
+    exec(`open "${uri}"`, () => {});
   } else {
-    exec(`xdg-open "${uri}"`);
+    exec(`xdg-open "${uri}"`, () => {});
   }
 }
 

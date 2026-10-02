@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.2] - 2026-10-02
+
+### Added
+- **Full Ubuntu & Linux Cross-Platform Compatibility**: Enhanced vault auto-detection to support native package/AppImage setups (`~/.config/obsidian`), Flatpak sandboxes (`~/.var/app/md.obsidian.Obsidian`), and Snap packages (`~/snap/obsidian/current`). Added support for localized Spanish `~/Documentos` directories and automatic `0o755` executable permissions for Linux CLI scripts.
+- **Full macOS Cross-Platform Compatibility**: Added native support for macOS configuration path (`~/Library/Application Support/obsidian/obsidian.json`), iCloud Drive synced vaults (`~/Library/Mobile Documents/iCloud~md~obsidian/Documents`), and desktop document fallbacks.
+- **Universal External URI Opening**: Upgraded Obsidian desktop URI dispatching in `extension.js` to prioritize `vscode.env.openExternal` with native fallback cascades, guaranteeing seamless `obsidian://open` deep-linking across Windows, macOS, and Linux (Wayland & X11).
+
+---
+
 ## [1.2.1] - 2026-10-02
 
 ### Added
