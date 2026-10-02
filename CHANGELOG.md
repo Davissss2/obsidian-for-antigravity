@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.0] - 2026-10-02
+
+### Added
+- **Autonomous AI Skill Management Suite (Zero Token Waste)**:
+  - First-class CLI and slash commands designed specifically for AI agents to create, inspect, modify, and manage skills in one atomic execution without manual directory creation or token-heavy file searches:
+    - `node obsidian.js skill list [--scope global|project]`: Instant listing of all skills across global (`~/.gemini/config/skills`), workspace (`.agents/skills`), and Obsidian Vault (`Antigravity/Skills/`), including script and reference file counts.
+    - `node obsidian.js skill view <name> [--full|--scripts|--files]`: Low-context distilled peek of operational skill instructions (<1200 characters), with options to inspect helper scripts or view raw contents.
+    - `node obsidian.js skill create <name> --desc "<desc>" --content "<instructions>" [--scope global|project]`: Atomic creation of compliant Antigravity skills with YAML frontmatter, directory scaffolding (`scripts/`, `references/`), bidirectional sync into Obsidian Vault (`Antigravity/Skills/`), and automatic index regeneration (`00 Indice de Skills.md`, `00 Antigravity Hub.md`).
+    - `node obsidian.js skill edit <name> [--desc "..."] [--content "..."] [--append "..."]`: Clean modification of skill metadata, body replacement, or incremental instruction appending.
+    - `node obsidian.js skill delete <name>`: Safe deletion of skill directory and clean unlinking of Obsidian mirror notes.
+    - `node obsidian.js skill script <skill> add <file> --code "..."`: Direct helper script attachment with automatic executable permissions (`chmod 755`).
+- **Rule Inspection & Management Subsystem**:
+  - `node obsidian.js rule list`: Lists active global (`rules/obsidian-brain.md`, `GEMINI.md`), workspace (`.agents/rules/`), and dynamic learned conditions.
+  - `node obsidian.js rule view <name>`: Direct inspection of specific rule files without context pollution.
+  - `node obsidian.js rule add "[<Project>] <rule>"`: Direct shortcut to learn and persist mandatory folder and workflow conditions.
+- **Agent Rules & Slash Commands Expansion**:
+  - Injected Section `2b. Autonomous Skill & Rule Management` into global rules (`obsidian-brain.md`, `GEMINI.md`, `AGENTS.md`) and `SKILL.md` to instruct the AI agent to execute skill operations directly with zero searching.
+  - Added chat slash commands `/obsidian skill [list|view|create|edit|delete]` and `/obsidian rule [list|view|add]`.
+  - Added VS Code commands `antigravityObsidian.newSkill` and `antigravityObsidian.listSkills`.
+
+---
+
 ## [1.5.2] - 2026-10-02
 
 ### Added

@@ -196,6 +196,8 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '| `/obsidian personality [args]` | `node "' + normalizedScriptPath + '" personality [args]` | View or configure AI agent personality, name & user callsign |',
         '| `/obsidian project [register|list|status]` | `node "' + normalizedScriptPath + '" project [args]` | Manage unified projects registry & auto-detection |',
         '| `/obsidian save <title> [content]` | `node "' + normalizedScriptPath + '" save --title "<title>" --content "<content>"` | Save technical solution |',
+        '| `/obsidian skill [list|view|create|edit|delete]` | `node "' + normalizedScriptPath + '" skill [args]` | Manage AI agent skills (create, edit, view, delete) |',
+        '| `/obsidian rule [list|view|add]` | `node "' + normalizedScriptPath + '" rule [args]` | Inspect or register operational rules |',
         '| `/obsidian soul` | `node "' + normalizedScriptPath + '" soul` | View active Soul & User Profile |',
         '| `/obsidian learn <preference>` | `node "' + normalizedScriptPath + '" learn "<preference>"` | Learn new user workflow habit |',
         '| `/obsidian triage <query>` | `node "' + normalizedScriptPath + '" triage "<query>"` | Low-context triage |',
@@ -217,6 +219,14 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '| `node "' + normalizedScriptPath + '" config [get|set ...]` | Query or update configuration |',
         '| `node "' + normalizedScriptPath + '" personality [--ai-name <n>] [--user-callsign <c>] [--personality <p>]` | View or configure AI personality & callsign |',
         '| `node "' + normalizedScriptPath + '" project [register|list|status] [path]` | Unified project registry & autonomous stack detection |',
+        '| `node "' + normalizedScriptPath + '" skill list [--scope global|project]` | List all installed skills across workspace and global |',
+        '| `node "' + normalizedScriptPath + '" skill view <name>` | Low-context view of skill instructions and helper scripts |',
+        '| `node "' + normalizedScriptPath + '" skill create <name> --desc "<d>" --content "<c>"` | Create standard AI skill & sync with Obsidian |',
+        '| `node "' + normalizedScriptPath + '" skill edit <name> [--desc "<d>"] [--content "<c>"] [--append "<a>"]` | Modify existing skill cleanly |',
+        '| `node "' + normalizedScriptPath + '" skill delete <name>` | Safely remove skill and clean Obsidian note |',
+        '| `node "' + normalizedScriptPath + '" skill script <skill> add <file> --code "..."` | Attach executable script to skill |',
+        '| `node "' + normalizedScriptPath + '" rule list` | List all active global, workspace, and dynamic rules |',
+        '| `node "' + normalizedScriptPath + '" rule view <name>` | Inspect specific rule content |',
         '| `node "' + normalizedScriptPath + '" triage "query"` | Ultra-compact smart triage (<80 tokens) |',
         '| `node "' + normalizedScriptPath + '" peek "Note"` | Direct technical solution without metadata overhead |',
         '| `node "' + normalizedScriptPath + '" save --title "..." ...` | Atomic save to vault and Knowledge Items |',
@@ -311,6 +321,8 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '| `/obsidian personality [args]` | `node "' + normalizedScriptPath + '" personality [args]` | Consulta o configura personalidad, nombre de IA y trato |',
         '| `/obsidian project [register|list|status]` | `node "' + normalizedScriptPath + '" project [args]` | Gestiona el registro unificado de proyectos y auto-deteccion |',
         '| `/obsidian save <titulo> [contenido]` | `node "' + normalizedScriptPath + '" save --title "<titulo>" --content "<contenido>"` | Guarda solucion tecnica |',
+        '| `/obsidian skill [list|view|create|edit|delete]` | `node "' + normalizedScriptPath + '" skill [args]` | Gestiona skills de la IA (crear, editar, consultar, borrar) |',
+        '| `/obsidian rule [list|view|add]` | `node "' + normalizedScriptPath + '" rule [args]` | Consulta o registra reglas del sistema |',
         '| `/obsidian soul` | `node "' + normalizedScriptPath + '" soul` | Muestra el Soul activo y Perfil de Usuario |',
         '| `/obsidian learn <preferencia>` | `node "' + normalizedScriptPath + '" learn "<preferencia>"` | Aprende un nuevo habito de trabajo |',
         '| `/obsidian triage <query>` | `node "' + normalizedScriptPath + '" triage "<query>"` | Triage de bajo contexto |',
@@ -332,6 +344,14 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '| `node "' + normalizedScriptPath + '" config [get|set ...]` | Consulta o actualiza ajustes de configuracion |',
         '| `node "' + normalizedScriptPath + '" personality [--ai-name <n>] [--user-callsign <c>] [--personality <p>]` | Consulta o configura personalidad y trato |',
         '| `node "' + normalizedScriptPath + '" project [register|list|status] [ruta]` | Registro unificado de proyectos y deteccion autonoma de stack |',
+        '| `node "' + normalizedScriptPath + '" skill list [--scope global|project]` | Lista todas las skills instaladas (global y workspace) |',
+        '| `node "' + normalizedScriptPath + '" skill view <nombre>` | Inspeccion de instrucciones y scripts con bajo consumo de tokens |',
+        '| `node "' + normalizedScriptPath + '" skill create <nombre> --desc "<d>" --content "<c>"` | Crea skill estandar de Antigravity y sincroniza con Obsidian |',
+        '| `node "' + normalizedScriptPath + '" skill edit <nombre> [--desc "<d>"] [--content "<c>"] [--append "<a>"]` | Modifica una skill existente |',
+        '| `node "' + normalizedScriptPath + '" skill delete <nombre>` | Elimina una skill y su nota espejo en Obsidian |',
+        '| `node "' + normalizedScriptPath + '" skill script <skill> add <file> --code "..."` | Vincula un script ejecutable a una skill |',
+        '| `node "' + normalizedScriptPath + '" rule list` | Lista reglas activas globales, de workspace y dinamicas |',
+        '| `node "' + normalizedScriptPath + '" rule view <nombre>` | Consulta el contenido de una regla |',
         '| `node "' + normalizedScriptPath + '" triage "query"` | Triage inteligente ultra-compacto (<80 tokens) |',
         '| `node "' + normalizedScriptPath + '" peek "Nota"` | Solucion tecnica directa sin metadatos |',
         '| `node "' + normalizedScriptPath + '" save --title "..." ...` | Guardado atomico en vault y Knowledge Items |',
@@ -531,6 +551,32 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '- Para consultar reglas profundas, notas o skills especificas del proyecto, haz peek en `[[Proyecto: <Nombre>]]` o activa su skill vinculada bajo demanda.'
       ].join('\n');
 
+  const skillsManagementSection = isEn
+    ? [
+        '### 2b. AUTONOMOUS SKILL & RULE MANAGEMENT (DIRECT CLI EXECUTION / ZERO HUNTING):',
+        'Whenever the user asks to create, modify, inspect, or manage technical skills or rules, NEVER create directories by hand or hunt through folders. Execute DIRECTLY with `run_command`:',
+        '- **List all skills:** `node "' + normalizedScriptPath + '" skill list [--scope global|project]`',
+        '- **Inspect/View skill (low-context peek):** `node "' + normalizedScriptPath + '" skill view <name>`',
+        '- **Create standard skill:** `node "' + normalizedScriptPath + '" skill create <name> --desc "<description>" --content "<instructions>" [--scope global|project]`',
+        '- **Edit existing skill:** `node "' + normalizedScriptPath + '" skill edit <name> [--desc "<desc>"] [--content "<content>"] [--append "<extra>"]`',
+        '- **Delete skill & mirror:** `node "' + normalizedScriptPath + '" skill delete <name>`',
+        '- **Attach helper script:** `node "' + normalizedScriptPath + '" skill script <skill> add <file> --code "..."`',
+        '- **List active system rules:** `node "' + normalizedScriptPath + '" rule list`',
+        '- **View rule content:** `node "' + normalizedScriptPath + '" rule view <name>`'
+      ].join('\n')
+    : [
+        '### 2b. CREACIÓN, MODIFICACIÓN Y GESTIÓN DE SKILLS Y REGLAS (EJECUCIÓN DIRECTA):',
+        'Siempre que el usuario te pida crear una nueva skill, editar una existente, consultarla o listar skills/reglas, NUNCA crees carpetas a mano ni busques por el explorador de archivos. Ejecuta DIRECTAMENTE con `run_command`:',
+        '- **Listar todas las skills:** `node "' + normalizedScriptPath + '" skill list [--scope global|project]`',
+        '- **Consultar/Ver skill (ultra-bajo contexto):** `node "' + normalizedScriptPath + '" skill view <nombre>`',
+        '- **Crear skill técnica estándar:** `node "' + normalizedScriptPath + '" skill create <nombre> --desc "<descripcion>" --content "<instrucciones>" [--scope global|project]`',
+        '- **Editar skill existente:** `node "' + normalizedScriptPath + '" skill edit <nombre> [--desc "<desc>"] [--content "<contenido>"] [--append "<añadido>"]`',
+        '- **Eliminar skill y nota espejo:** `node "' + normalizedScriptPath + '" skill delete <nombre>`',
+        '- **Adjuntar script ejecutable:** `node "' + normalizedScriptPath + '" skill script <skill> add <archivo> --code "..."`',
+        '- **Listar reglas del sistema:** `node "' + normalizedScriptPath + '" rule list`',
+        '- **Consultar regla específica:** `node "' + normalizedScriptPath + '" rule view <nombre>`'
+      ].join('\n');
+
   const slashCommandsSection = isEn
     ? [
         '### 5. CHAT SLASH COMMANDS PROTOCOL (/obsidian):',
@@ -542,6 +588,8 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '- `/obsidian personality [args]`: Run `node "' + normalizedScriptPath + '" personality [args]` to view or configure AI personality, agent name, and user callsign.',
         '- `/obsidian project [register|list|status]`: Run `node "' + normalizedScriptPath + '" project [args]` to manage unified project registry and workspace detection.',
         '- `/obsidian save <title> [content]`: Run `node "' + normalizedScriptPath + '" save --title "<title>" --content "<content>"` and confirm save.',
+        '- `/obsidian skill [list|view|create|edit|delete]`: Run `node "' + normalizedScriptPath + '" skill [args]` to manage AI skills immediately.',
+        '- `/obsidian rule [list|view|add]`: Run `node "' + normalizedScriptPath + '" rule [args]` to inspect or add rules.',
         '- `/obsidian soul`: Run `node "' + normalizedScriptPath + '" soul` and summarize active Soul and User Profile.',
         '- `/obsidian learn <habit>`: Run `node "' + normalizedScriptPath + '" learn "<habit>"` to record the new workflow habit.',
         '- `/obsidian triage <terms>`: Run `node "' + normalizedScriptPath + '" triage "<terms>"` to determine the best knowledge source.',
@@ -562,6 +610,8 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '- `/obsidian personality [args]`: Ejecuta `node "' + normalizedScriptPath + '" personality [args]` para ver o configurar la personalidad, nombre de IA y trato.',
         '- `/obsidian project [register|list|status]`: Ejecuta `node "' + normalizedScriptPath + '" project [args]` para gestionar el registro unificado y deteccion de proyectos.',
         '- `/obsidian save <titulo> [contenido]`: Ejecuta `node "' + normalizedScriptPath + '" save --title "<titulo>" --content "<contenido>"` y confirma el guardado.',
+        '- `/obsidian skill [list|view|create|edit|delete]`: Ejecuta `node "' + normalizedScriptPath + '" skill [args]` para gestionar skills tecnicas de la IA.',
+        '- `/obsidian rule [list|view|add]`: Ejecuta `node "' + normalizedScriptPath + '" rule [args]` para gestionar o consultar reglas del sistema.',
         '- `/obsidian soul`: Ejecuta `node "' + normalizedScriptPath + '" soul` y resume el Soul activo y el Perfil del Usuario.',
         '- `/obsidian learn <habito>`: Ejecuta `node "' + normalizedScriptPath + '" learn "<habito>"` para registrar la nueva preferencia.',
         '- `/obsidian triage <terminos>`: Ejecuta `node "' + normalizedScriptPath + '" triage "<terminos>"` para determinar la mejor fuente de conocimiento.',
@@ -599,13 +649,14 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '',
         autoSaveSection,
         '',
+        skillsManagementSection,
+        '',
         projectSection,
         '',
         '### 4. Graph Interconnection:',
         '- All notes link to `[[00 Antigravity Hub]]`, `[[00 Soul de Antigravity]]`, and `[[00 Indice de Memoria]]` keeping the Graph View connected.',
         '',
-        slashCommandsSection,
-        ''
+        slashCommandsSection
       ].join('\n')
     : [
         '---',
@@ -619,8 +670,8 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '- Soul e Identidad: **Hermes Core (Activo)** (`Antigravity/Alma/`).',
         '- Skill activa en todos los chats: **`antigravity-obsidian`**.',
         '- Modo de consulta: **Triage Inteligente de Ultra-Bajo Contexto (Zero Token Waste)**.',
-        '- Guardado autonomo: **' + (autoSave ? 'ACTIVADO (AUTOMATICO)' : 'Bajo peticion') + '**.',
-        '- Nombre del Agente: **' + aiName + '** | Trato hacia ti: **' + userCallsign + '** | Estado: **' + (personalityConfigured ? 'CONFIGURADO' : 'PENDIENTE_CALIBRACION') + '**.',
+        '- Guardado autonomo: **' + (autoSave ? 'ACTIVADO (AUTOMATICO)' : 'Bajo demanda') + '**.',
+        '- Nombre del Agente: **' + aiName + '** | Trato hacia ti: **' + userCallsign + '** | Estado: **' + (personalityConfigured ? 'CONFIGURADO' : 'PENDIENTE_ONBOARDING') + '**.',
         '',
         '## REGLAS MANDATORIAS PARA EL ASISTENTE:',
         '',
@@ -632,13 +683,14 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '',
         autoSaveSection,
         '',
+        skillsManagementSection,
+        '',
         projectSection,
         '',
         '### 4. Interconexion en Grafo:',
         '- Todas las notas se vinculan a `[[00 Antigravity Hub]]`, `[[00 Soul de Antigravity]]` e `[[00 Indice de Memoria]]` manteniendo activo el Graph View.',
         '',
-        slashCommandsSection,
-        ''
+        slashCommandsSection
       ].join('\n');
 
   fs.writeFileSync(rulePath, ruleContent, 'utf8');

@@ -2,7 +2,7 @@
   "name": "obsidian-for-antigravity",
   "displayName": "Obsidian for Antigravity",
   "description": "Autonomous Second Brain & persistent memory for Antigravity AI connected to Obsidian. Automatically stores bugfixes, architecture decisions, and skills in your local Vault with real-time Graph View.",
-  "version": "1.5.2",
+  "version": "1.6.0",
   "publisher": "Davissss2",
   "author": {
     "name": "Davissss2",
@@ -80,6 +80,16 @@
         "command": "antigravityObsidian.newMemory",
         "title": "Obsidian: Save New Memory",
         "icon": "$(add)"
+      },
+      {
+        "command": "antigravityObsidian.newSkill",
+        "title": "Obsidian: Create New AI Skill",
+        "icon": "$(zap)"
+      },
+      {
+        "command": "antigravityObsidian.listSkills",
+        "title": "Obsidian: View AI Skills Catalog",
+        "icon": "$(list-unordered)"
       },
       {
         "command": "antigravityObsidian.showSoul",

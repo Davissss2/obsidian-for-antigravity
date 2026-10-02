@@ -31,6 +31,45 @@ function getSkillInstaller() {
   return null;
 }
 
+function getSyncEngine() {
+  const candidates = [
+    path.join(__dirname, 'sync-engine.js'),
+    path.join(__dirname, 'sync-engine'),
+    path.join(__dirname, '..', 'sync-engine.js'),
+    path.join(__dirname, '..', '..', '..', 'src', 'sync-engine.js'),
+    path.join(__dirname, '..', 'src', 'sync-engine.js'),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) {
+      try {
+        return require(c);
+      } catch (e) {}
+    }
+  }
+  return null;
+}
+
+function parseFlags(argvList) {
+  const flags = {};
+  const positional = [];
+  for (let i = 0; i < argvList.length; i++) {
+    const item = argvList[i];
+    if (typeof item === 'string' && item.startsWith('--')) {
+      const key = item.slice(2);
+      const next = argvList[i + 1];
+      if (next !== undefined && !next.startsWith('--')) {
+        flags[key] = next;
+        i++;
+      } else {
+        flags[key] = true;
+      }
+    } else {
+      positional.push(item);
+    }
+  }
+  return { flags, positional };
+}
+
 function getPersonalityFile(almaDir, langPreference) {
   const pFileEs = path.join(almaDir, '00 Personalidad de la IA.md');
   const pFileEn = path.join(almaDir, '00 AI Personality.md');
@@ -957,11 +996,277 @@ switch (cmd) {
     break;
   }
 
+  case 'skill':
   case 'skills':
   case 'list-skills': {
-    const manifest = getManifest(vault.path);
-    const compactSkills = manifest.skills.map(s => ({ name: s.name, desc: s.description }));
-    console.log(JSON.stringify(compactSkills, null, 2));
+    const syncEngine = getSyncEngine();
+    const { flags, positional } = parseFlags(args);
+    let sub = (positional[0] || '').toLowerCase();
+
+    // If called as `node obsidian.js skills` with query or no subcommand
+    if (cmd === 'skills' || cmd === 'list-skills') {
+      if (!sub || sub.startsWith('--')) {
+        sub = 'list';
+      } else if (['list', 'ls', 'search'].includes(sub)) {
+        sub = 'list';
+      } else if (!['create', 'new', 'add', 'edit', 'update', 'modify', 'view', 'show', 'peek', 'get', 'read', 'delete', 'remove', 'rm', 'script'].includes(sub)) {
+        flags.query = positional[0];
+        sub = 'list';
+      }
+    }
+
+    if (!sub || sub === 'list' || sub === 'ls') {
+      const scope = flags.scope || (positional[1] && ['global', 'project', 'all'].includes(positional[1].toLowerCase()) ? positional[1].toLowerCase() : 'all');
+      const query = flags.query || flags.q || (positional[1] && !['global', 'project', 'all'].includes(positional[1].toLowerCase()) ? positional[1] : '');
+      if (syncEngine && typeof syncEngine.listAllSkills === 'function') {
+        const list = syncEngine.listAllSkills(vault.path, process.cwd(), { scope, query });
+        if (flags.table) {
+          console.log(`| Skill | Ámbito | Descripción | Ruta |`);
+          console.log(`|---|---|---|---|`);
+          for (const s of list) {
+            console.log(`| **${s.name}** | \`${s.scope}\` | ${(s.description || 'Sin descripción').replace(/\r?\n/g, ' ').slice(0, 80)} | \`${s.path}\` |`);
+          }
+        } else {
+          console.log(JSON.stringify(list, null, 2));
+        }
+      } else {
+        const manifest = getManifest(vault.path);
+        let compactSkills = manifest.skills.map(s => ({ name: s.name, scope: s.scope || 'global', desc: s.description }));
+        if (query) {
+          compactSkills = compactSkills.filter(s => s.name.toLowerCase().includes(query.toLowerCase()) || (s.desc || '').toLowerCase().includes(query.toLowerCase()));
+        }
+        console.log(JSON.stringify(compactSkills, null, 2));
+      }
+      break;
+    }
+
+    if (sub === 'view' || sub === 'show' || sub === 'get' || sub === 'read' || sub === 'peek') {
+      const skillName = positional[1];
+      if (!skillName) {
+        console.error(JSON.stringify({ error: 'Uso: node obsidian.js skill view <nombre> [--full|--scripts|--files|--json]' }));
+        process.exit(1);
+      }
+      const isPeek = sub === 'peek' || flags.peek || (!flags.full && !flags.raw);
+      if (syncEngine && typeof syncEngine.getSkillDetails === 'function') {
+        const details = syncEngine.getSkillDetails(vault.path, process.cwd(), skillName, {
+          peek: isPeek,
+          full: !!(flags.full || flags.raw),
+          scripts: !!(flags.scripts || flags.files),
+        });
+        if (details.error) {
+          console.error(JSON.stringify(details, null, 2));
+          process.exit(1);
+        }
+        if (flags.json) {
+          console.log(JSON.stringify(details, null, 2));
+        } else {
+          console.log(`[SKILL: ${details.name}] (Ámbito: ${details.scope})\nDescripción: ${details.description}\nUbicación: ${details.path}\n\n## Instrucciones:\n${details.instructions}`);
+        }
+      } else {
+        console.error(JSON.stringify({ error: 'sync-engine no disponible para inspeccionar skill.' }));
+        process.exit(1);
+      }
+      break;
+    }
+
+    if (sub === 'create' || sub === 'new' || sub === 'add') {
+      const skillName = positional[1];
+      const desc = flags.desc || flags.description || flags.d;
+      const content = flags.content || flags.instructions || flags.c || positional.slice(2).join(' ');
+      const scope = flags.scope || 'global';
+      const wsPath = flags.workspace || flags.ws || process.cwd();
+
+      if (!skillName) {
+        console.error(JSON.stringify({ error: 'Uso: node obsidian.js skill create <nombre> --desc "<descripcion>" [--content "<instrucciones>"] [--scope global|project]' }));
+        process.exit(1);
+      }
+      if (!desc && !content) {
+        console.error(JSON.stringify({ error: 'Debes proporcionar al menos --desc "<descripcion>" o --content "<instrucciones>" para crear la skill.' }));
+        process.exit(1);
+      }
+
+      if (syncEngine && typeof syncEngine.createSkill === 'function') {
+        try {
+          const res = syncEngine.createSkill(vault.path, wsPath, {
+            name: skillName,
+            description: desc || `Skill ${skillName}`,
+            content: content || 'Instrucciones operativas para el agente.',
+            scope,
+            workspacePath: wsPath,
+            overwrite: !!flags.overwrite,
+          });
+          console.log(JSON.stringify(res, null, 2));
+        } catch (e) {
+          console.error(JSON.stringify({ error: e.message }));
+          process.exit(1);
+        }
+      } else {
+        console.error(JSON.stringify({ error: 'sync-engine no disponible para crear skills.' }));
+        process.exit(1);
+      }
+      break;
+    }
+
+    if (sub === 'edit' || sub === 'update' || sub === 'modify') {
+      const skillName = positional[1];
+      const desc = flags.desc || flags.description;
+      const content = flags.content || flags.instructions;
+      const append = flags.append || flags.add;
+      const scope = flags.scope;
+
+      if (!skillName) {
+        console.error(JSON.stringify({ error: 'Uso: node obsidian.js skill edit <nombre> [--desc "..."] [--content "..."] [--append "..."]' }));
+        process.exit(1);
+      }
+
+      if (syncEngine && typeof syncEngine.editSkill === 'function') {
+        try {
+          const res = syncEngine.editSkill(vault.path, process.cwd(), {
+            name: skillName,
+            description: desc,
+            content,
+            append,
+            scope,
+          });
+          console.log(JSON.stringify(res, null, 2));
+        } catch (e) {
+          console.error(JSON.stringify({ error: e.message }));
+          process.exit(1);
+        }
+      } else {
+        console.error(JSON.stringify({ error: 'sync-engine no disponible para editar skills.' }));
+        process.exit(1);
+      }
+      break;
+    }
+
+    if (sub === 'delete' || sub === 'remove' || sub === 'rm') {
+      const skillName = positional[1];
+      if (!skillName) {
+        console.error(JSON.stringify({ error: 'Uso: node obsidian.js skill delete <nombre>' }));
+        process.exit(1);
+      }
+
+      if (syncEngine && typeof syncEngine.deleteSkill === 'function') {
+        try {
+          const res = syncEngine.deleteSkill(vault.path, process.cwd(), { name: skillName });
+          console.log(JSON.stringify(res, null, 2));
+        } catch (e) {
+          console.error(JSON.stringify({ error: e.message }));
+          process.exit(1);
+        }
+      } else {
+        console.error(JSON.stringify({ error: 'sync-engine no disponible para eliminar skills.' }));
+        process.exit(1);
+      }
+      break;
+    }
+
+    if (sub === 'script') {
+      const skillName = positional[1];
+      const scriptAction = (positional[2] || '').toLowerCase();
+      const scriptFile = positional[3];
+      const code = flags.code || flags.content || '';
+
+      if (!skillName || !scriptAction) {
+        console.error(JSON.stringify({ error: 'Uso: node obsidian.js skill script <skillName> add <filename> --code "..."' }));
+        process.exit(1);
+      }
+
+      if (scriptAction === 'add') {
+        if (!scriptFile || !code) {
+          console.error(JSON.stringify({ error: 'Especifica el nombre del script y --code "..."' }));
+          process.exit(1);
+        }
+        if (syncEngine && typeof syncEngine.addSkillScript === 'function') {
+          try {
+            const res = syncEngine.addSkillScript(vault.path, process.cwd(), {
+              skillName,
+              scriptName: scriptFile,
+              code,
+            });
+            console.log(JSON.stringify(res, null, 2));
+          } catch (e) {
+            console.error(JSON.stringify({ error: e.message }));
+            process.exit(1);
+          }
+        }
+      } else {
+        console.error(JSON.stringify({ error: `Acción de script no soportada: '${scriptAction}'. Usa 'add'.` }));
+        process.exit(1);
+      }
+      break;
+    }
+
+    console.error(JSON.stringify({
+      error: `Subcomando de skill no reconocido: '${sub}'`,
+      supported: ['list', 'view', 'create', 'edit', 'delete', 'script'],
+    }));
+    process.exit(1);
+    break;
+  }
+
+  case 'rule':
+  case 'rules': {
+    const syncEngine = getSyncEngine();
+    const { flags, positional } = parseFlags(args);
+    const sub = (positional[0] || 'list').toLowerCase();
+
+    if (sub === 'list' || sub === 'ls') {
+      if (syncEngine && typeof syncEngine.listRules === 'function') {
+        const res = syncEngine.listRules(vault.path, process.cwd());
+        console.log(JSON.stringify(res, null, 2));
+      } else {
+        console.log(JSON.stringify({ status: 'ok', rules: [] }));
+      }
+      break;
+    }
+
+    if (sub === 'view' || sub === 'show' || sub === 'peek') {
+      const ruleName = positional[1];
+      if (!ruleName) {
+        console.error(JSON.stringify({ error: 'Uso: node obsidian.js rule view <nombre-regla>' }));
+        process.exit(1);
+      }
+      if (syncEngine && typeof syncEngine.viewRule === 'function') {
+        try {
+          const res = syncEngine.viewRule(vault.path, process.cwd(), ruleName);
+          console.log(`[REGLA: ${res.name}] (${res.scope})\nRuta: ${res.path}\n\n${res.peek}`);
+        } catch (e) {
+          console.error(JSON.stringify({ error: e.message }));
+          process.exit(1);
+        }
+      } else {
+        console.error(JSON.stringify({ error: 'sync-engine no disponible para consultar reglas.' }));
+        process.exit(1);
+      }
+      break;
+    }
+
+    if (sub === 'add' || sub === 'learn') {
+      const ruleText = positional.slice(1).join(' ') || flags.rule || flags.text;
+      if (!ruleText) {
+        console.error(JSON.stringify({ error: 'Uso: node obsidian.js rule add "[<Proyecto>] <regla obligatoria>"' }));
+        process.exit(1);
+      }
+      if (syncEngine && typeof syncEngine.recordUserLearning === 'function') {
+        const res = syncEngine.recordUserLearning(vault.path, ruleText);
+        try {
+          const installer = getSkillInstaller();
+          if (installer && typeof installer.installSkillAndRules === 'function') {
+            installer.installSkillAndRules(vault.path);
+          }
+        } catch (e) {}
+        console.log(JSON.stringify({ status: 'ok', message: 'Regla registrada en el perfil y reglas globales.', ...res }, null, 2));
+      } else {
+        console.error(JSON.stringify({ error: 'sync-engine no disponible para registrar reglas.' }));
+        process.exit(1);
+      }
+      break;
+    }
+
+    console.error(JSON.stringify({ error: `Subcomando de rule no reconocido: '${sub}'. Usa list, view o add.` }));
+    process.exit(1);
     break;
   }
 
@@ -1826,6 +2131,15 @@ Comandos de Obsidian for Antigravity (Zero Emojis, Ultra-Bajo Contexto):
   node obsidian.js triage "<query>"     (Triage ultra-compacto: Skill vs Memoria vs Nada)
   node obsidian.js peek "<nota>"        (Solucion tecnica directa sin metadatos)
   node obsidian.js save --title "..." --summary "..." --content "..." (Guardado atomico)
+  node obsidian.js skill list [--scope global|project] (Listar skills disponibles)
+  node obsidian.js skill view <nombre>  (Ver instrucciones y scripts de una skill con bajo contexto)
+  node obsidian.js skill create <nombre> --desc "<desc>" --content "<instrucciones>" [--scope global|project]
+  node obsidian.js skill edit <nombre> [--desc "..."] [--content "..."] [--append "..."]
+  node obsidian.js skill delete <nombre> (Eliminar skill y su sincronizacion)
+  node obsidian.js skill script <skill> add <file> --code "..." (Agregar script a una skill)
+  node obsidian.js rule list            (Listar reglas activas globales y de workspace)
+  node obsidian.js rule view <nombre>   (Ver contenido de una regla)
+  node obsidian.js rule add "[<Proyecto>] <regla>" (Registrar regla obligatoria)
   node obsidian.js soul                 (Soul de Antigravity, Perfil de Usuario y Personalidad)
   node obsidian.js learn "<habito>"     (Registra preferencia o habito aprendido)
   node obsidian.js catalog              (Resumen 1-linea de skills y memorias)

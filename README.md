@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Davissss2/obsidian-for-antigravity"><img src="https://img.shields.io/badge/version-1.5.2-8b5cf6.svg?style=flat-square" alt="Version 1.5.2"></a>
+  <a href="https://github.com/Davissss2/obsidian-for-antigravity"><img src="https://img.shields.io/badge/version-1.6.0-8b5cf6.svg?style=flat-square" alt="Version 1.6.0"></a>
   <a href="https://open-vsx.org"><img src="https://img.shields.io/badge/Open%20VSX-available-blue.svg?style=flat-square" alt="Open VSX"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-purple.svg?style=flat-square" alt="License"></a>
   <a href="https://github.com/Davissss2"><img src="https://img.shields.io/badge/author-Davissss2-emerald.svg?style=flat-square" alt="Author Davissss2"></a>
@@ -61,7 +61,7 @@ Instead of burning thousands of tokens re-reading old logs, your AI assistant au
 - **Dynamic Learning Loop**: As you correct or guide the agent, new habits are automatically memorized with `learn` and injected across all future sessions.
 
 ### 9. Chat Slash Commands (`/obsidian`)
-- Control Obsidian directly from any conversation using fast slash shortcuts: `/obsidian status`, `/obsidian save`, `/obsidian soul`, `/obsidian learn`, `/obsidian triage`, `/obsidian peek`, `/obsidian catalog`, `/obsidian skills`, `/obsidian memories`, and `/obsidian open`.
+- Control Obsidian directly from any conversation using fast slash shortcuts: `/obsidian status`, `/obsidian save`, `/obsidian soul`, `/obsidian learn`, `/obsidian triage`, `/obsidian peek`, `/obsidian catalog`, `/obsidian skills`, `/obsidian memories`, `/obsidian skill`, `/obsidian rule`, and `/obsidian open`.
 
 ### 10. Dynamic Multilingual & User Adaptation
 - Works seamlessly in English, Spanish, French, German, Chinese, and Japanese. The assistant dynamically adapts to the user's active language and IDE locale, generating native instructions with zero language mismatch.
@@ -84,6 +84,11 @@ Instead of burning thousands of tokens re-reading old logs, your AI assistant au
 ### 14. Autonomous Workspace Detection & Missing Obsidian Alert
 - Detects project stack automatically from `package.json`, `pyproject.toml`, `Cargo.toml`, `composer.json`, `go.mod`, and `README.md`.
 - If Obsidian or a vault is not detected on the machine, the extension displays a helpful onboarding banner with a one-click Obsidian download link and a folder picker.
+
+### 15. Autonomous Skill & Rule Management Suite (Zero-Token Overhead)
+- Create, inspect, edit, and delete Antigravity Skills and Rules with single CLI commands without browsing code or hand-crafting YAML frontmatter.
+- Direct helper scripts injection (`skill script <skill> add <file> --code "..."`) and instant rule registration across global (`~/.gemini/config/`) and project (`.agents/`) scopes.
+- Bidirectional vault synchronization into `Antigravity/Skills/` and automatic catalog indexing.
 
 ---
 
@@ -167,6 +172,19 @@ node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js status
 
 # 11. Open note in Obsidian desktop app
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js open "Antigravity/00 Antigravity Hub"
+
+# 12. AI Skill Management (List, View, Create, Edit, Script injection, Delete)
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js skill list
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js skill view my-skill --full
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js skill create deploy-tool --desc "Deployment automation" --content "# Deploy\nUse scripts/deploy.sh"
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js skill edit deploy-tool --append "## Verification\nRun verify step"
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js skill script deploy-tool add deploy.sh --code "npm run build && rsync..."
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js skill delete deploy-tool
+
+# 13. AI Rule Management (List, View, Add)
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js rule list
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js rule view obsidian-brain
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js rule add "[my-repo] Always run lint before commit"
 ```
 
 ---
@@ -182,7 +200,7 @@ ovsx install Davissss2.obsidian-for-antigravity
 ### Manual VSIX Installation
 Download the packaged release from the repository and install it in Antigravity IDE / VS Code:
 ```bash
-code --install-extension obsidian-for-antigravity-1.5.2.vsix
+code --install-extension obsidian-for-antigravity-1.6.0.vsix
 ```
 
 ---

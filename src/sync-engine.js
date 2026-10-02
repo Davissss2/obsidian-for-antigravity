@@ -1102,67 +1102,558 @@ Total de memorias registradas: **${allFiles.length}**
 }
 
 // -------------------------------------------------------------
-// Save New Custom Skill (Two-way: Obsidian + Antigravity)
+// AI Skill & Rules Management Subsystem (Zero Token Waste)
 // -------------------------------------------------------------
 
-function saveSkill(vaultPath, skillData) {
-  ensureVaultStructure(vaultPath);
+function listAllSkills(vaultPath, workspaceRoot, options = {}) {
   const { globalSkillsDir } = getAntigravityPaths();
-  const name = skillData.name.trim();
-  const description = skillData.description ? skillData.description.trim() : '';
-  const instructions = skillData.instructions ? skillData.instructions.trim() : '';
+  const scopeFilter = (options.scope || 'all').toLowerCase();
+  const query = (options.query || '').toLowerCase().trim();
+  const skillsMap = new Map();
 
-  // 1. Write to Antigravity Global Skills
-  const agSkillDir = path.join(globalSkillsDir, name);
-  if (!fs.existsSync(agSkillDir)) {
-    fs.mkdirSync(agSkillDir, { recursive: true });
+  function scanDir(dir, scope) {
+    if (!fs.existsSync(dir)) return;
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const ent of entries) {
+        if (!ent.isDirectory()) continue;
+        const sDir = path.join(dir, ent.name);
+        const skillMd = path.join(sDir, 'SKILL.md');
+        let parsed = parseSkillMd(skillMd);
+        const name = (parsed && parsed.name) ? parsed.name.trim() : ent.name;
+        const desc = (parsed && parsed.description) ? parsed.description.trim() : '';
+
+        let scripts = [];
+        const scriptsDir = path.join(sDir, 'scripts');
+        if (fs.existsSync(scriptsDir)) {
+          try {
+            scripts = fs.readdirSync(scriptsDir).filter(f => !f.startsWith('.'));
+          } catch (e) {}
+        }
+
+        let references = [];
+        const refDir = path.join(sDir, 'references');
+        if (fs.existsSync(refDir)) {
+          try {
+            references = fs.readdirSync(refDir).filter(f => !f.startsWith('.'));
+          } catch (e) {}
+        }
+
+        const safeKey = name.toLowerCase();
+        if (!skillsMap.has(safeKey) || scope === 'project') {
+          skillsMap.set(safeKey, {
+            name,
+            scope,
+            description: desc,
+            path: sDir,
+            skillMdPath: skillMd,
+            hasSkillMd: fs.existsSync(skillMd),
+            scripts,
+            references,
+            vaultNote: vaultPath ? path.join(vaultPath, 'Antigravity', 'Skills', (scope === 'project' ? `[Proyecto] ${sanitizeFilename(name)}.md` : `${sanitizeFilename(name)}.md`)) : null,
+          });
+        }
+      }
+    } catch (e) {}
   }
 
-  const skillMdContent = `---
-name: ${name}
-description: >
-  ${description.replace(/\n/g, '\n  ')}
----
+  // 1. Scan global skills
+  if (scopeFilter === 'all' || scopeFilter === 'global') {
+    scanDir(globalSkillsDir, 'global');
+  }
 
-# ${name}
+  // 2. Scan workspace skills
+  const effectiveWs = workspaceRoot || process.cwd();
+  if (scopeFilter === 'all' || scopeFilter === 'project') {
+    if (effectiveWs) {
+      scanDir(path.join(effectiveWs, '.agents', 'skills'), 'project');
+    }
+  }
 
-${instructions}
-`;
-  fs.writeFileSync(path.join(agSkillDir, 'SKILL.md'), skillMdContent, 'utf8');
+  // 3. Include vault notes if not found in disk
+  if (vaultPath) {
+    const vSkills = path.join(vaultPath, 'Antigravity', 'Skills');
+    if (fs.existsSync(vSkills)) {
+      try {
+        for (const vf of fs.readdirSync(vSkills)) {
+          if (!vf.endsWith('.md') || vf.startsWith('00')) continue;
+          const isProj = vf.startsWith('[Proyecto]');
+          const clean = vf.replace(/\.md$/, '').replace(/^\[Proyecto\]\s*/, '');
+          const key = clean.toLowerCase();
+          if (!skillsMap.has(key)) {
+            skillsMap.set(key, {
+              name: clean,
+              scope: isProj ? 'project' : 'global',
+              description: 'Skill en Bóveda de Obsidian',
+              path: path.join(vSkills, vf),
+              skillMdPath: null,
+              hasSkillMd: false,
+              scripts: [],
+              references: [],
+              vaultNote: path.join(vSkills, vf),
+            });
+          }
+        }
+      } catch (e) {}
+    }
+  }
 
-  // 2. Write to Obsidian Vault
-  const skillsFolder = path.join(vaultPath, 'Antigravity', 'Skills');
-  const obsFile = path.join(skillsFolder, `${sanitizeFilename(name)}.md`);
-  const now = new Date().toISOString().split('T')[0];
+  let list = Array.from(skillsMap.values());
 
-  const obsContent = `---
-title: "Skill: ${name}"
-type: antigravity-skill
-scope: global
-tags:
-  - antigravity/skill
-  - antigravity/skill/global
-updated: ${now}
----
+  if (scopeFilter !== 'all') {
+    list = list.filter(s => s.scope === scopeFilter);
+  }
 
-# Skill: ${name}
+  if (query) {
+    list = list.filter(s =>
+      s.name.toLowerCase().includes(query) ||
+      s.description.toLowerCase().includes(query)
+    );
+  }
 
-> [!INFO] **Metadatos de la Skill**
-> - **Nombre**: \`${name}\`
-> - **Ámbito**: Global (\`~/.gemini/config/skills/\`)
-> - **Descripción**: ${description}
+  return list.sort((a, b) => a.name.localeCompare(b.name));
+}
 
-## Instrucciones del Agente
+function getSkillDetails(vaultPath, workspaceRoot, skillName, options = {}) {
+  if (!skillName) return { error: 'Especifica el nombre de la skill a consultar.' };
+  const all = listAllSkills(vaultPath, workspaceRoot);
+  const cleanQuery = skillName.toLowerCase().replace(/[^a-z0-9_-]/g, '');
 
-${instructions}
+  let found = all.find(s => s.name.toLowerCase() === skillName.toLowerCase());
+  if (!found) {
+    found = all.find(s => s.name.toLowerCase().replace(/[^a-z0-9_-]/g, '') === cleanQuery);
+  }
+  if (!found) {
+    found = all.find(s => s.name.toLowerCase().includes(skillName.toLowerCase()));
+  }
 
----
-*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Indice de Skills]]
-`;
+  if (!found) {
+    return { error: `Skill no encontrada: '${skillName}'` };
+  }
 
-  fs.writeFileSync(obsFile, obsContent, 'utf8');
+  let raw = '';
+  let body = '';
+  let description = found.description;
+  if (found.skillMdPath && fs.existsSync(found.skillMdPath)) {
+    raw = fs.readFileSync(found.skillMdPath, 'utf8');
+    const parsed = parseSkillMd(found.skillMdPath);
+    if (parsed) {
+      body = parsed.body || '';
+      if (parsed.description) description = parsed.description;
+    }
+  } else if (found.vaultNote && fs.existsSync(found.vaultNote)) {
+    raw = fs.readFileSync(found.vaultNote, 'utf8');
+    body = raw.replace(/^---[\s\S]*?---\r?\n/, '').trim();
+  }
 
-  return { name, path: obsFile, agSkillDir };
+  let scriptDetails = [];
+  if (options.scripts || options.full) {
+    const scriptsDir = path.join(found.path, 'scripts');
+    if (fs.existsSync(scriptsDir)) {
+      for (const sf of fs.readdirSync(scriptsDir)) {
+        const sfp = path.join(scriptsDir, sf);
+        if (fs.statSync(sfp).isFile()) {
+          try {
+            const sContent = fs.readFileSync(sfp, 'utf8');
+            scriptDetails.push({
+              filename: sf,
+              path: sfp,
+              sizeBytes: fs.statSync(sfp).size,
+              preview: sContent.slice(0, 500),
+            });
+          } catch (e) {}
+        }
+      }
+    }
+  }
+
+  let peekInstructions = body;
+  if (options.peek || !options.full) {
+    if (peekInstructions.length > 1200) {
+      peekInstructions = peekInstructions.slice(0, 1200) + '\n\n*(Instrucciones recortadas para optimizar contexto. Usa --full para ver el archivo completo).*';
+    }
+  }
+
+  return {
+    status: 'ok',
+    name: found.name,
+    scope: found.scope,
+    description,
+    path: found.path,
+    skillMdPath: found.skillMdPath,
+    vaultNote: found.vaultNote,
+    scripts: found.scripts,
+    references: found.references,
+    scriptDetails: scriptDetails.length > 0 ? scriptDetails : undefined,
+    instructions: options.full ? body : peekInstructions,
+    raw: options.full ? raw : undefined,
+  };
+}
+
+function createSkill(vaultPath, workspaceRoot, options = {}) {
+  const { globalSkillsDir } = getAntigravityPaths();
+  let name = (options.name || '').trim();
+  if (!name) throw new Error('Especifica el nombre de la skill.');
+
+  const safeName = name.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  if (!safeName) throw new Error(`Nombre de skill no válido: "${name}"`);
+
+  const scope = (options.scope || 'global').toLowerCase() === 'project' ? 'project' : 'global';
+  const description = (options.description || options.desc || `Skill técnica ${safeName}`).trim();
+  const content = (options.content || options.instructions || `# ${safeName}\n\nInstrucciones operativas para el agente.`).trim();
+
+  const effectiveWs = options.workspacePath || workspaceRoot || process.cwd();
+  let skillDir = '';
+  if (scope === 'project') {
+    if (!effectiveWs) throw new Error('No se detectó la carpeta del workspace para la skill de proyecto.');
+    skillDir = path.join(effectiveWs, '.agents', 'skills', safeName);
+  } else {
+    skillDir = path.join(globalSkillsDir, safeName);
+  }
+
+  if (fs.existsSync(skillDir) && !options.overwrite) {
+    return {
+      status: 'exists',
+      error: `La skill '${safeName}' ya existe en ${skillDir}. Usa 'skill edit' para modificarla o añade --overwrite para sobrescribir.`,
+      path: skillDir,
+    };
+  }
+
+  // 1. Create skill directory and structure
+  fs.mkdirSync(path.join(skillDir, 'scripts'), { recursive: true });
+  fs.mkdirSync(path.join(skillDir, 'references'), { recursive: true });
+
+  // 2. Write standard SKILL.md with YAML frontmatter
+  const skillMdContent = [
+    '---',
+    `name: ${safeName}`,
+    'description: >',
+    `  ${description.replace(/\r?\n/g, ' ')}`,
+    '---',
+    '',
+    content.startsWith('#') ? content : `# ${safeName}\n\n${content}`,
+    ''
+  ].join('\n');
+  fs.writeFileSync(path.join(skillDir, 'SKILL.md'), skillMdContent, 'utf8');
+
+  // 3. Mirror into Obsidian Vault
+  let obsFile = null;
+  if (vaultPath && fs.existsSync(vaultPath)) {
+    ensureVaultStructure(vaultPath);
+    const skillsFolder = path.join(vaultPath, 'Antigravity', 'Skills');
+    const fileName = scope === 'project' ? `[Proyecto] ${sanitizeFilename(safeName)}.md` : `${sanitizeFilename(safeName)}.md`;
+    obsFile = path.join(skillsFolder, fileName);
+    const nowStr = new Date().toISOString().split('T')[0];
+
+    const obsContent = [
+      '---',
+      `title: "Skill: ${safeName}"`,
+      'type: antigravity-skill',
+      `scope: ${scope}`,
+      ...(scope === 'project' ? [`project: "${path.basename(effectiveWs)}"`] : []),
+      'tags:',
+      '  - antigravity/skill',
+      `  - antigravity/skill/${scope}`,
+      `updated: ${nowStr}`,
+      '---',
+      '',
+      `# Skill: ${safeName}${scope === 'project' ? ' (Proyecto)' : ''}`,
+      '',
+      '> [!INFO] **Metadatos de la Skill**',
+      `> - **Nombre**: \`${safeName}\``,
+      `> - **Ámbito**: ${scope === 'project' ? `Proyecto (\`${path.basename(effectiveWs)}\`)` : 'Global (`~/.gemini/config/skills/`)'}`,
+      `> - **Descripción**: ${description}`,
+      `> - **Ruta local**: \`${skillDir}\``,
+      '',
+      '## Instrucciones del Agente',
+      '',
+      content,
+      '',
+      '---',
+      `*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Indice de Skills]]${scope === 'project' ? ` | [[${path.basename(effectiveWs)}]]` : ''}`,
+      ''
+    ].join('\n');
+    fs.writeFileSync(obsFile, obsContent, 'utf8');
+
+    // 4. If project scope, update project note in Antigravity/Proyectos
+    if (scope === 'project') {
+      try {
+        const projDir = path.join(vaultPath, 'Antigravity', 'Proyectos');
+        const projNote = path.join(projDir, `${path.basename(effectiveWs)}.md`);
+        if (fs.existsSync(projNote)) {
+          let pTxt = fs.readFileSync(projNote, 'utf8');
+          const skillLink = `[[${safeName}]]`;
+          if (!pTxt.includes(skillLink)) {
+            if (pTxt.includes('## Skills de Proyecto')) {
+              pTxt = pTxt.replace('## Skills de Proyecto', `## Skills de Proyecto\n- Skill vinculada: ${skillLink}`);
+            } else {
+              pTxt = pTxt.replace('---', `## Skills de Proyecto\n- Skill vinculada: ${skillLink}\n\n---`);
+            }
+            fs.writeFileSync(projNote, pTxt, 'utf8');
+          }
+        }
+      } catch (e) {}
+    }
+
+    // 5. Update Skills index and Hub
+    syncSkillsToVault(vaultPath, effectiveWs);
+    generateHub(vaultPath, effectiveWs);
+    buildContextManifest(vaultPath);
+  }
+
+  return {
+    status: 'ok',
+    action: 'created',
+    name: safeName,
+    scope,
+    description,
+    path: skillDir,
+    skillMd: path.join(skillDir, 'SKILL.md'),
+    vaultNote: obsFile,
+    message: `Skill '${safeName}' creada con éxito (${scope}) y vinculada con Obsidian.`
+  };
+}
+
+function editSkill(vaultPath, workspaceRoot, options = {}) {
+  let name = (options.name || '').trim();
+  if (!name) throw new Error('Especifica el nombre de la skill a editar.');
+
+  const all = listAllSkills(vaultPath, workspaceRoot);
+  const cleanQuery = name.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+  let found = all.find(s => s.name.toLowerCase() === name.toLowerCase());
+  if (!found) {
+    found = all.find(s => s.name.toLowerCase().replace(/[^a-z0-9_-]/g, '') === cleanQuery);
+  }
+  if (!found) {
+    found = all.find(s => s.name.toLowerCase().includes(name.toLowerCase()));
+  }
+
+  if (!found) {
+    throw new Error(`No se encontró ninguna skill con el nombre '${name}'.`);
+  }
+
+  const skillMdPath = found.skillMdPath;
+  if (!skillMdPath || !fs.existsSync(skillMdPath)) {
+    throw new Error(`Archivo SKILL.md no encontrado en ${found.path}`);
+  }
+
+  const parsed = parseSkillMd(skillMdPath) || { name: found.name, description: found.description, body: '' };
+  let newDesc = parsed.description;
+  let newBody = parsed.body;
+  const updatedFields = [];
+
+  if (options.description !== undefined || options.desc !== undefined) {
+    newDesc = (options.description || options.desc || '').trim();
+    updatedFields.push('description');
+  }
+
+  if (options.content !== undefined || options.instructions !== undefined) {
+    newBody = (options.content || options.instructions || '').trim();
+    updatedFields.push('content');
+  }
+
+  if (options.append) {
+    const toAppend = options.append.trim();
+    newBody = newBody ? `${newBody}\n\n${toAppend}` : toAppend;
+    updatedFields.push('append');
+  }
+
+  if (updatedFields.length === 0) {
+    return {
+      status: 'noop',
+      message: 'No se especificaron cambios para la skill. Usa --desc, --content o --append.',
+      skill: found,
+    };
+  }
+
+  const updatedMd = [
+    '---',
+    `name: ${parsed.name || found.name}`,
+    'description: >',
+    `  ${newDesc.replace(/\r?\n/g, ' ')}`,
+    '---',
+    '',
+    newBody.startsWith('#') ? newBody : `# ${parsed.name || found.name}\n\n${newBody}`,
+    ''
+  ].join('\n');
+  fs.writeFileSync(skillMdPath, updatedMd, 'utf8');
+
+  const effectiveWs = workspaceRoot || process.cwd();
+  if (vaultPath && fs.existsSync(vaultPath)) {
+    syncSkillsToVault(vaultPath, effectiveWs);
+    generateHub(vaultPath, effectiveWs);
+    buildContextManifest(vaultPath);
+  }
+
+  return {
+    status: 'ok',
+    action: 'updated',
+    name: found.name,
+    scope: found.scope,
+    path: found.path,
+    updatedFields,
+    message: `Skill '${found.name}' actualizada correctamente (${updatedFields.join(', ')}).`,
+  };
+}
+
+function deleteSkill(vaultPath, workspaceRoot, options = {}) {
+  let name = (options.name || '').trim();
+  if (!name) throw new Error('Especifica el nombre de la skill a eliminar.');
+
+  const all = listAllSkills(vaultPath, workspaceRoot);
+  const cleanQuery = name.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+  let found = all.find(s => s.name.toLowerCase() === name.toLowerCase());
+  if (!found) {
+    found = all.find(s => s.name.toLowerCase().replace(/[^a-z0-9_-]/g, '') === cleanQuery);
+  }
+
+  if (!found) {
+    throw new Error(`No se encontró ninguna skill llamada '${name}'.`);
+  }
+
+  try {
+    fs.rmSync(found.path, { recursive: true, force: true });
+  } catch (e) {
+    throw new Error(`Error al eliminar directorio ${found.path}: ${e.message}`);
+  }
+
+  if (found.vaultNote && fs.existsSync(found.vaultNote)) {
+    try {
+      fs.unlinkSync(found.vaultNote);
+    } catch (e) {}
+  }
+
+  const effectiveWs = workspaceRoot || process.cwd();
+  if (vaultPath && fs.existsSync(vaultPath)) {
+    syncSkillsToVault(vaultPath, effectiveWs);
+    generateHub(vaultPath, effectiveWs);
+    buildContextManifest(vaultPath);
+  }
+
+  return {
+    status: 'ok',
+    action: 'deleted',
+    name: found.name,
+    scope: found.scope,
+    path: found.path,
+    message: `Skill '${found.name}' eliminada correctamente.`,
+  };
+}
+
+function addSkillScript(vaultPath, workspaceRoot, options = {}) {
+  let skillName = (options.skillName || options.name || '').trim();
+  let scriptName = (options.scriptName || options.filename || '').trim();
+  let code = options.code || options.content || '';
+
+  if (!skillName || !scriptName) {
+    throw new Error('Especifica el nombre de la skill y el archivo del script (ej: skill script <skill> add <file> --code "...")');
+  }
+
+  const all = listAllSkills(vaultPath, workspaceRoot);
+  let found = all.find(s => s.name.toLowerCase() === skillName.toLowerCase());
+  if (!found) {
+    throw new Error(`No se encontró la skill '${skillName}'.`);
+  }
+
+  const scriptsDir = path.join(found.path, 'scripts');
+  if (!fs.existsSync(scriptsDir)) {
+    fs.mkdirSync(scriptsDir, { recursive: true });
+  }
+
+  const scriptPath = path.join(scriptsDir, scriptName);
+  fs.writeFileSync(scriptPath, code, 'utf8');
+  if (process.platform !== 'win32') {
+    try { fs.chmodSync(scriptPath, 0o755); } catch (e) {}
+  }
+
+  return {
+    status: 'ok',
+    action: 'script-added',
+    skillName: found.name,
+    scriptName,
+    path: scriptPath,
+    message: `Script '${scriptName}' agregado exitosamente a la skill '${found.name}'.`,
+  };
+}
+
+function listRules(vaultPath, workspaceRoot) {
+  const home = os.homedir();
+  const rules = [];
+
+  const gRuleDir = path.join(home, '.gemini', 'config', 'rules');
+  if (fs.existsSync(gRuleDir)) {
+    for (const f of fs.readdirSync(gRuleDir)) {
+      if (f.endsWith('.md')) {
+        rules.push({ name: f.replace(/\.md$/, ''), scope: 'global', path: path.join(gRuleDir, f) });
+      }
+    }
+  }
+
+  const effectiveWs = workspaceRoot || process.cwd();
+  if (effectiveWs) {
+    const wsRulesDir = path.join(effectiveWs, '.agents', 'rules');
+    if (fs.existsSync(wsRulesDir)) {
+      for (const f of fs.readdirSync(wsRulesDir)) {
+        if (f.endsWith('.md')) {
+          rules.push({ name: f.replace(/\.md$/, ''), scope: 'workspace', path: path.join(wsRulesDir, f) });
+        }
+      }
+    }
+  }
+
+  let dynamicLearningsCount = 0;
+  if (vaultPath) {
+    const uProfile = path.join(vaultPath, 'Antigravity', 'Alma', '00 Perfil de Usuario.md');
+    if (fs.existsSync(uProfile)) {
+      try {
+        const uTxt = fs.readFileSync(uProfile, 'utf8');
+        const m = uTxt.match(/##\s*4\.\s*Aprendizajes y Preferencias Dinámicas Acumuladas[^\r\n]*\r?\n([\s\S]*?)(?:---|$)/i);
+        if (m) {
+          const lines = m[1].split('\n').filter(l => l.trim().startsWith('-'));
+          dynamicLearningsCount = lines.length;
+        }
+      } catch (e) {}
+    }
+  }
+
+  return {
+    status: 'ok',
+    total: rules.length,
+    dynamicLearningsCount,
+    rules,
+  };
+}
+
+function viewRule(vaultPath, workspaceRoot, ruleName) {
+  if (!ruleName) throw new Error('Especifica el nombre de la regla a consultar.');
+  const { rules } = listRules(vaultPath, workspaceRoot);
+  const cleanQ = ruleName.toLowerCase().replace(/\.md$/, '');
+  const found = rules.find(r => r.name.toLowerCase() === cleanQ || r.name.toLowerCase().includes(cleanQ));
+
+  if (!found) {
+    throw new Error(`Regla no encontrada: '${ruleName}'`);
+  }
+
+  const content = fs.readFileSync(found.path, 'utf8');
+  return {
+    status: 'ok',
+    name: found.name,
+    scope: found.scope,
+    path: found.path,
+    content,
+    peek: content.slice(0, 1000) + (content.length > 1000 ? '\n\n*(Extracto recortado para optimizar tokens).*' : ''),
+  };
+}
+
+// Backward compatible saveSkill
+function saveSkill(vaultPath, skillData) {
+  return createSkill(vaultPath, process.cwd(), {
+    name: skillData.name,
+    description: skillData.description,
+    content: skillData.instructions,
+    scope: 'global',
+    overwrite: true,
+  });
 }
 
 // -------------------------------------------------------------
@@ -2363,6 +2854,14 @@ module.exports = {
   syncKnowledgeToVault,
   saveNewMemory,
   saveSkill,
+  createSkill,
+  editSkill,
+  getSkillDetails,
+  listAllSkills,
+  deleteSkill,
+  addSkillScript,
+  listRules,
+  viewRule,
   syncProject,
   syncProjectsIndex,
   getProjectsRegistry,

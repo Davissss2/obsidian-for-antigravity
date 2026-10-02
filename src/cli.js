@@ -233,9 +233,156 @@ async function main() {
       break;
     }
 
+    case 'skill':
     case 'skills': {
-      const result = syncEngine.catalogContext(vaultPath);
-      console.log(JSON.stringify(result.skills, null, 2));
+      const named = parseNamedArgs(args);
+      let sub = (args[0] || '').toLowerCase();
+      if (cmd === 'skills') {
+        if (!sub || sub.startsWith('--')) sub = 'list';
+        else if (['list', 'ls', 'search'].includes(sub)) sub = 'list';
+        else if (!['create', 'new', 'add', 'edit', 'update', 'modify', 'view', 'show', 'peek', 'get', 'read', 'delete', 'remove', 'rm', 'script'].includes(sub)) {
+          named.query = args[0];
+          sub = 'list';
+        }
+      }
+
+      if (!sub || sub === 'list' || sub === 'ls') {
+        const scope = named.scope || (args[1] && ['global', 'project', 'all'].includes(args[1].toLowerCase()) ? args[1].toLowerCase() : 'all');
+        const query = named.query || named.q || (args[1] && !['global', 'project', 'all'].includes(args[1].toLowerCase()) ? args[1] : '');
+        const list = syncEngine.listAllSkills(vaultPath, process.cwd(), { scope, query });
+        console.log(JSON.stringify(list, null, 2));
+        break;
+      }
+
+      if (sub === 'view' || sub === 'show' || sub === 'get' || sub === 'read' || sub === 'peek') {
+        const skillName = args[1];
+        if (!skillName) {
+          console.error(JSON.stringify({ error: 'Uso: node cli.js skill view <nombre> [--full|--scripts|--files]' }));
+          process.exit(1);
+        }
+        const isPeek = sub === 'peek' || named.peek || (!named.full && !named.raw);
+        const details = syncEngine.getSkillDetails(vaultPath, process.cwd(), skillName, {
+          peek: isPeek,
+          full: !!(named.full || named.raw),
+          scripts: !!(named.scripts || named.files),
+        });
+        if (details.error) {
+          console.error(JSON.stringify(details));
+          process.exit(1);
+        }
+        if (named.json) {
+          console.log(JSON.stringify(details, null, 2));
+        } else {
+          console.log(`[SKILL: ${details.name}] (Ámbito: ${details.scope})\nDescripción: ${details.description}\nUbicación: ${details.path}\n\n## Instrucciones:\n${details.instructions}`);
+        }
+        break;
+      }
+
+      if (sub === 'create' || sub === 'new' || sub === 'add') {
+        const skillName = args[1];
+        const desc = named.desc || named.description;
+        const content = named.content || named.instructions || args.slice(2).join(' ');
+        const scope = named.scope || 'global';
+        const wsPath = named.workspace || process.cwd();
+
+        if (!skillName) {
+          console.error(JSON.stringify({ error: 'Uso: node cli.js skill create <nombre> --desc "<descripcion>" [--content "<instrucciones>"] [--scope global|project]' }));
+          process.exit(1);
+        }
+        const res = syncEngine.createSkill(vaultPath, wsPath, {
+          name: skillName,
+          description: desc || `Skill ${skillName}`,
+          content: content || 'Instrucciones operativas para el agente.',
+          scope,
+          workspacePath: wsPath,
+          overwrite: !!named.overwrite,
+        });
+        console.log(JSON.stringify(res, null, 2));
+        break;
+      }
+
+      if (sub === 'edit' || sub === 'update' || sub === 'modify') {
+        const skillName = args[1];
+        if (!skillName) {
+          console.error(JSON.stringify({ error: 'Uso: node cli.js skill edit <nombre> [--desc "..."] [--content "..."] [--append "..."]' }));
+          process.exit(1);
+        }
+        const res = syncEngine.editSkill(vaultPath, process.cwd(), {
+          name: skillName,
+          description: named.desc || named.description,
+          content: named.content || named.instructions,
+          append: named.append || named.add,
+          scope: named.scope,
+        });
+        console.log(JSON.stringify(res, null, 2));
+        break;
+      }
+
+      if (sub === 'delete' || sub === 'remove' || sub === 'rm') {
+        const skillName = args[1];
+        if (!skillName) {
+          console.error(JSON.stringify({ error: 'Uso: node cli.js skill delete <nombre>' }));
+          process.exit(1);
+        }
+        const res = syncEngine.deleteSkill(vaultPath, process.cwd(), { name: skillName });
+        console.log(JSON.stringify(res, null, 2));
+        break;
+      }
+
+      if (sub === 'script') {
+        const skillName = args[1];
+        const scriptAction = (args[2] || '').toLowerCase();
+        const scriptFile = args[3];
+        const code = named.code || named.content || '';
+        if (scriptAction === 'add' && scriptFile && code) {
+          const res = syncEngine.addSkillScript(vaultPath, process.cwd(), { skillName, scriptName: scriptFile, code });
+          console.log(JSON.stringify(res, null, 2));
+          break;
+        }
+        console.error(JSON.stringify({ error: 'Uso: node cli.js skill script <skill> add <file> --code "..."' }));
+        process.exit(1);
+      }
+
+      console.error(JSON.stringify({ error: `Subcomando no reconocido: ${sub}` }));
+      process.exit(1);
+      break;
+    }
+
+    case 'rule':
+    case 'rules': {
+      const named = parseNamedArgs(args);
+      const sub = (args[0] || 'list').toLowerCase();
+      if (sub === 'list' || sub === 'ls') {
+        const res = syncEngine.listRules(vaultPath, process.cwd());
+        console.log(JSON.stringify(res, null, 2));
+        break;
+      }
+      if (sub === 'view' || sub === 'show' || sub === 'peek') {
+        const ruleName = args[1];
+        if (!ruleName) {
+          console.error(JSON.stringify({ error: 'Uso: node cli.js rule view <nombre-regla>' }));
+          process.exit(1);
+        }
+        const res = syncEngine.viewRule(vaultPath, process.cwd(), ruleName);
+        console.log(`[REGLA: ${res.name}] (${res.scope})\nRuta: ${res.path}\n\n${res.peek}`);
+        break;
+      }
+      if (sub === 'add' || sub === 'learn') {
+        const ruleText = args.slice(1).join(' ') || named.rule || named.text;
+        if (!ruleText) {
+          console.error(JSON.stringify({ error: 'Uso: node cli.js rule add "[<Proyecto>] <regla obligatoria>"' }));
+          process.exit(1);
+        }
+        const res = syncEngine.recordUserLearning(vaultPath, ruleText);
+        try {
+          const { installSkillAndRules } = require('./skill-installer');
+          installSkillAndRules(vaultPath);
+        } catch (e) {}
+        console.log(JSON.stringify({ status: 'ok', message: 'Regla registrada.', res }, null, 2));
+        break;
+      }
+      console.error(JSON.stringify({ error: `Subcomando de rule no reconocido: ${sub}` }));
+      process.exit(1);
       break;
     }
 

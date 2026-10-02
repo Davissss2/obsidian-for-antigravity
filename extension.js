@@ -900,6 +900,67 @@ function activate(context) {
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('antigravityObsidian.newSkill', async () => {
+      const activeVault = getActiveOrConfiguredVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
+      if (!activeVault || !activeVault.exists) {
+        vscode.window.showWarningMessage('No hay ninguna bóveda de Obsidian conectada.');
+        return;
+      }
+      const name = await vscode.window.showInputBox({
+        title: 'Crear Nueva Skill de IA',
+        prompt: 'Nombre de la skill (ej: docker-deploy, nextjs-expert)',
+        placeHolder: 'nombre-de-la-skill',
+      });
+      if (!name) return;
+
+      const desc = await vscode.window.showInputBox({
+        title: 'Descripción de la Skill',
+        prompt: '¿Qué hace esta skill y cuándo debe activarse?',
+        placeHolder: 'Guía y procedimientos para...',
+      });
+      if (!desc) return;
+
+      const scopeChoice = await vscode.window.showQuickPick([
+        { label: 'Global (~/.gemini/config/skills/)', value: 'global' },
+        { label: 'Proyecto (.agents/skills/)', value: 'project' },
+      ], { title: 'Ámbito de la Skill' });
+      if (!scopeChoice) return;
+
+      try {
+        const res = syncEngine.createSkill(activeVault.path, getWorkspaceRoot(), {
+          name,
+          description: desc,
+          content: `# ${name}\n\nInstrucciones operativas para el agente.`,
+          scope: scopeChoice.value,
+        });
+        if (currentWebviewView) {
+          currentWebviewView.webview.html = provider._getHtmlForWebview(currentWebviewView.webview);
+        }
+        vscode.window.showInformationMessage(`Skill "${res.name}" creada exitosamente.`);
+      } catch (e) {
+        vscode.window.showErrorMessage(e.message);
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('antigravityObsidian.listSkills', async () => {
+      const activeVault = getActiveOrConfiguredVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
+      if (!activeVault || !activeVault.exists) {
+        vscode.window.showWarningMessage('No hay ninguna bóveda de Obsidian conectada.');
+        return;
+      }
+      const idxFile = path.join(activeVault.path, 'Antigravity', 'Skills', '00 Indice de Skills.md');
+      if (fs.existsSync(idxFile)) {
+        const doc = await vscode.workspace.openTextDocument(idxFile);
+        await vscode.window.showTextDocument(doc, { preview: false });
+      } else {
+        vscode.window.showWarningMessage('El Índice de Skills aún no ha sido generado.');
+      }
+    })
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand('antigravityObsidian.showSoul', async () => {
       const activeVault = getActiveOrConfiguredVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
       if (!activeVault || !activeVault.exists) {
