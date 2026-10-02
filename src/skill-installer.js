@@ -197,6 +197,13 @@ function installSkillAndRules(targetVaultPath, options = {}) {
   ].join('\n');
   fs.writeFileSync(rulePath, ruleContent, 'utf8');
 
+  // 4b. Write Global GEMINI.md & AGENTS.md in ~/.gemini/config/ (universally loaded in ALL chats)
+  const geminiMdPath = path.join(configDir, 'GEMINI.md');
+  const agentsMdPath = path.join(configDir, 'AGENTS.md');
+  fs.writeFileSync(geminiMdPath, ruleContent, 'utf8');
+  fs.writeFileSync(agentsMdPath, ruleContent, 'utf8');
+
+
   // 5. Run Initial Sync if vault path exists
   let syncResult = null;
   if (vaultPath && fs.existsSync(vaultPath)) {

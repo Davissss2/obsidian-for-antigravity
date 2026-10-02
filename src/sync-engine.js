@@ -613,12 +613,92 @@ function getVaultStats(vaultPath) {
 // Sync All
 // -------------------------------------------------------------
 
+
+// -------------------------------------------------------------
+// Vault to Antigravity Knowledge Items Sync (Bidirectional)
+// -------------------------------------------------------------
+
+function syncVaultToKnowledge(vaultPath) {
+  const { knowledgeDir } = getAntigravityPaths();
+  if (!fs.existsSync(knowledgeDir)) {
+    fs.mkdirSync(knowledgeDir, { recursive: true });
+  }
+
+  const memoriaDir = path.join(vaultPath, 'Antigravity', 'Memoria');
+  const proyectosDir = path.join(vaultPath, 'Antigravity', 'Proyectos');
+
+  function sanitizeId(name) {
+    return name.toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9_-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+  }
+
+  function processFile(filePath) {
+    const content = fs.readFileSync(filePath, 'utf8');
+    const base = path.basename(filePath, '.md');
+    if (base.startsWith('00')) return;
+
+    const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    let title = base;
+    let summary = '';
+    let body = content;
+
+    if (fmMatch) {
+      body = content.slice(fmMatch[0].length).trim();
+      const lines = fmMatch[1].split('\n');
+      for (const l of lines) {
+        const tm = l.match(/^title:\s*"?([^"\r\n]+)"?$/);
+        if (tm && tm[1]) title = tm[1].trim();
+      }
+    }
+
+    const bqMatch = body.match(/>\s*\[!.*?\]\s*\*\*.*?\*\*\r?\n>\s*([^\r\n]+)/);
+    if (bqMatch && bqMatch[1]) {
+      summary = bqMatch[1].trim();
+    } else {
+      summary = body.replace(/#.*|\r?\n/g, ' ').slice(0, 220).trim() + '...';
+    }
+
+    const id = sanitizeId(title) || sanitizeId(base);
+    const targetDir = path.join(knowledgeDir, id);
+    const artifactsDir = path.join(targetDir, 'artifacts');
+
+    if (!fs.existsSync(artifactsDir)) fs.mkdirSync(artifactsDir, { recursive: true });
+
+    const meta = {
+      title,
+      summary,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      references: []
+    };
+
+    fs.writeFileSync(path.join(targetDir, 'metadata.json'), JSON.stringify(meta, null, 2), 'utf8');
+    fs.writeFileSync(path.join(artifactsDir, base + '.md'), content, 'utf8');
+  }
+
+  if (fs.existsSync(memoriaDir)) {
+    for (const f of fs.readdirSync(memoriaDir)) {
+      if (f.endsWith('.md')) processFile(path.join(memoriaDir, f));
+    }
+  }
+
+  if (fs.existsSync(proyectosDir)) {
+    for (const f of fs.readdirSync(proyectosDir)) {
+      if (f.endsWith('.md')) processFile(path.join(proyectosDir, f));
+    }
+  }
+}
+
 function syncAll(vaultPath, workspaceRoot) {
   ensureVaultStructure(vaultPath);
   const skills = syncSkillsToVault(vaultPath, workspaceRoot);
   const memories = syncKnowledgeToVault(vaultPath);
   const project = workspaceRoot ? syncProject(vaultPath, workspaceRoot) : null;
   const hub = generateHub(vaultPath, workspaceRoot);
+  syncVaultToKnowledge(vaultPath);
   const stats = getVaultStats(vaultPath);
 
   return {
@@ -631,6 +711,7 @@ function syncAll(vaultPath, workspaceRoot) {
 }
 
 module.exports = {
+  syncVaultToKnowledge,
   getAntigravityPaths,
   ensureVaultStructure,
   syncSkillsToVault,
