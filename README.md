@@ -1,99 +1,150 @@
-# 🧠 Obsidian for Antigravity
+<p align="center">
+  <img src="logo.png" width="160" alt="Obsidian for Antigravity Logo" style="border-radius: 24px; box-shadow: 0 10px 30px rgba(124, 58, 237, 0.4);" />
+</p>
+
+<h1 align="center">Obsidian for Antigravity</h1>
 
 <p align="center">
-  <img src="logo.png" width="180" alt="Obsidian for Antigravity Logo" style="border-radius: 20px; box-shadow: 0 8px 30px rgba(139, 92, 246, 0.4);" />
+  <strong>Autonomous Second Brain & Low-Context Persistent Memory for Antigravity AI</strong><br>
+  <em>Connect your local Obsidian vault to all Antigravity chats with intelligent low-context triage, selective solution retrieval, and automatic graph-linked persistence.</em>
 </p>
 
 <p align="center">
-  <strong>Segundo Cerebro y Memoria Autónoma para tu Asistente de IA en Antigravity.</strong><br>
-  La IA aprende de tus conversaciones, recuerda soluciones anteriores y registra arquitecturas y skills directamente en tu Vault local de Obsidian, conectándolo todo en tu Vista Gráfica (Graph View).
+  <a href="https://github.com/Davissss2/obsidian-for-antigravity"><img src="https://img.shields.io/badge/version-1.1.0-8b5cf6.svg?style=flat-square" alt="Version 1.1.0"></a>
+  <a href="https://open-vsx.org"><img src="https://img.shields.io/badge/Open%20VSX-available-blue.svg?style=flat-square" alt="Open VSX"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Proprietary-purple.svg?style=flat-square" alt="License"></a>
+  <a href="https://github.com/Davissss2"><img src="https://img.shields.io/badge/author-Davissss2-emerald.svg?style=flat-square" alt="Author Davissss2"></a>
+  <img src="https://img.shields.io/badge/platform-Windows%20|%20macOS%20|%20Linux-gray.svg?style=flat-square" alt="Platforms">
 </p>
 
 ---
 
-## 🌟 ¿Qué hace especial a Obsidian for Antigravity?
+## Overview / Descripción General
 
-1. **🤖 Inteligencia y Aprendizaje Autónomo**:
-   - **No necesitas decirle *"guarda esto"***: Cuando la IA resuelve un error difícil, diseña una arquitectura o descubre particularidades técnicas de tus proyectos, **lo sintetiza y guarda automáticamente** en `Antigravity/Memoria/`.
-   - **Recuperación Proactiva**: Antes de asumir cómo funciona un proyecto o resolver un problema desde cero, la IA consulta primero tu bóveda para ver si ya lo solucionó en el pasado.
+**Obsidian for Antigravity** bridges Google Antigravity with your local [Obsidian](https://obsidian.md) vault. It provides autonomous learning, persistent cross-chat memory, and an intelligent **Ultra-Low-Context Triage Engine** that saves tokens by preventing unnecessary full-document reading.
 
-2. **⚡ Inyección Automática en TODOS los Chats**:
-   - Al instalarse, la extensión registra automáticamente la regla global en `~/.gemini/config/rules/obsidian-brain.md` y la skill global en `~/.gemini/config/skills/antigravity-obsidian/`.
-   - Cualquier modelo de IA en cualquier conversación sabe de inmediato que dispone de tu Segundo Cerebro.
-
-3. **🔍 Zero-Configuración (Detección Automática)**:
-   - Lee automáticamente la configuración de Obsidian (`%APPDATA%\obsidian\obsidian.json` en Windows, macOS y Linux).
-   - Conecta con tu bóveda abierta en menos de 5 ms. Sin necesidad de tokens, APIs de pago ni servidores adicionales.
-
-4. **🗺️ Vista Gráfica e Interconexión con Wikilinks `[[...]]`**:
-   - Genera el mapa central **`00 Antigravity Hub.md`**.
-   - Cada solución, skill y proyecto se conecta bidireccionalmente, haciendo que tu **Graph View de Obsidian** cobre vida y crezca orgánicamente.
-
-5. **🔄 Sincronización Bidireccional de Skills**:
-   - Todas tus skills de Antigravity (`~/.gemini/config/skills/`) se convierten en fichas interactivas en Obsidian. Si creas o editas una nota en Obsidian, Antigravity asimila los cambios.
-
-6. **🌐 Deep-Links Nativos**:
-   - Abre notas o el Hub directamente en la aplicación de escritorio de Obsidian con un solo clic (`obsidian://open`).
+Instead of burning thousands of tokens re-reading old logs, your AI assistant autonomously distinguishes between **Skills** (procedural workflows) and **Memories** (past bugfixes & architecture facts) using compact triage (<80 tokens) and selective solution peek.
 
 ---
 
-## 📂 Estructura en tu Bóveda de Obsidian
+## Key Features
+
+### 1. Ultra-Low-Context Triage Engine
+- **Fast Decision Gate**: The AI checks if a technical question or bug was solved previously in <80 tokens via `context-manifest.json`.
+- **Zero Token Waste**: 80% of lookups resolve immediately using the 1-sentence executive summary without opening or reading full markdown files.
+
+### 2. Selective Technical Peek
+- **Noise-Free Extraction**: `peek` extracts strictly the root cause and applied code solution from any memory note.
+- **Context Economy**: Drops YAML frontmatter, giant graph footers, and decorative boilerplate, reducing token consumption by ~90%.
+
+### 3. Autonomous & Atomic Memory Recording
+- **Proactive Learning**: When the AI resolves a complex bug or defines a backend architecture, it records a technical memory without waiting for manual user prompts.
+- **One-Step Multi-Index Sync**: Automatically creates the note, updates `00 Indice de Memoria.md`, refreshes `00 Antigravity Hub.md`, re-indexes `context-manifest.json`, and registers a bidirectional Antigravity Knowledge Item.
+
+### 4. Zero-Config Local Vault Detection
+- Automatically detects active Obsidian vaults in Windows (`%APPDATA%\obsidian\obsidian.json`), macOS, and Linux in <5 ms.
+- Zero API tokens, zero paid services, and 100% offline local file synchronization.
+
+### 5. Interactive Graph View Integration
+- Generates a central Map of Content (**`00 Antigravity Hub.md`**).
+- Connects memories, skills, and projects bidirectionally with wikilinks (`[[...]]`), lighting up Obsidian's native **Graph View**.
+
+### 6. Native Sidebar Activity Bar Panel
+- Dedicated Antigravity IDE panel with live stats, search filters, one-click manual synchronization, and instant deep-links to the desktop Obsidian application (`obsidian://open`).
+
+---
+
+## Cognitive Decision Matrix: Skill vs Memory vs None
+
+To maximize reasoning efficiency and preserve the model's context window, the assistant adheres to this decision hierarchy:
+
+| Category | Primary Purpose | When to Consult | Where to Look | Token Impact |
+|---|---|---|---|---|
+| **SKILL** | **HOW to execute** (Workflows, APIs, procedural tools) | Specialized proprietary workflows (e.g., ERP integration, PrestaShop diagnostic) | Prompt `<skills>` section or `SKILL.md` | Minimal (Procedural) |
+| **MEMORY** | **WHAT happened before** (Past bugfixes, architectures, server configs) | Unknown errors, bugs, architecture questions, or repo history | Obsidian Vault via `triage` and `peek` | Ultra-Low (<80 tokens) |
+| **NONE** | General code edits & syntax | Greetings, general programming questions, or self-contained code | **Skip vault lookups completely** | **0 tokens (100% saved)** |
+
+---
+
+## Vault Directory Structure
+
+All files are structured cleanly inside your vault under the `Antigravity/` folder:
 
 ```text
-📁 Antigravity/
-├── 📄 00 Antigravity Hub.md        <-- Mapa central que ilumina el Grafo (MOC)
-├── 📁 Memoria/                      <-- Soluciones a bugs, arquitecturas y trucos
-│   ├── 00 Indice de Memoria.md
-│   ├── Arquitectura Antigravity Obsidian Bridge.md
-│   └── ...
-├── 📁 Skills/                       <-- Catálogo completo de skills sincronizadas
-│   ├── 00 Indice de Skills.md
-│   └── ...
-├── 📁 Proyectos/                    <-- Fichas técnicas de tus repositorios
-│   └── ...
-└── 📁 Sesiones/                     <-- Historial e hitos de trabajo
+📁 Obsidian Vault/
+└── 📁 Antigravity/
+    ├── 📄 00 Antigravity Hub.md        <-- Central Brain & Graph View MOC
+    ├── 📄 context-manifest.json         <-- High-speed indexed cache for low-context triage
+    ├── 📁 Memoria/                      <-- Recorded solutions, bugfixes, and architectures
+    │   ├── 📄 00 Indice de Memoria.md   <-- Central memory index
+    │   ├── 📄 Resolucion Bug SQLite WAL.md
+    │   └── ...
+    ├── 📁 Skills/                       <-- Synced global and project skills
+    │   ├── 📄 00 Indice de Skills.md    <-- Central skills catalog
+    │   └── ...
+    └── 📁 Proyectos/                    <-- Workspaces and repository profiles
+        └── ...
 ```
 
 ---
 
-## 🚀 Inicio Rápido
+## CLI & Agent Commands
 
-1. Abre **Antigravity IDE**.
-2. En la barra lateral izquierda (Activity Bar), haz clic en el icono **Obsidian for Antigravity**.
-3. Verás tu bóveda detectada al instante: `🟢 Online — Obsidian Vault`.
-4. Haz clic en **🔄 Sincronizar Bóveda Ahora**.
-5. Abre **Obsidian** y disfruta de tu Segundo Cerebro interconectado.
-
----
-
-## 🛠️ Comandos CLI de la Skill
-
-La IA ejecuta internamente estos comandos en cualquier chat sin necesidad de servidores MCP:
+The AI agent and developer can interact directly with the vault using the runner script:
 
 ```powershell
-# Estado del Vault
+# 1. Ultra-Low-Context Triage (<80 tokens)
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js triage "sqlite database locked"
+
+# 2. Extract technical solution without noise
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js peek "Resolucion Bug SQLite WAL"
+
+# 3. Fast atomic save (Zero emojis, technical format)
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js save --title "Plesk Nginx Proxy Timeout" --category "configuracion" --summary "Timeout 504 -> proxy_read_timeout 300s en directivas adicionales" --content "Causa: Scripts de larga duracion. Solucion: Directiva nginx proxy_read_timeout 300s aplicada."
+
+# 4. 1-Line overview catalog of all skills and memories
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js catalog
+
+# 5. List skills or memories
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js skills
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js memories
+
+# 6. Connection status and index statistics
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js status
 
-# Búsqueda proactiva de memorias
-node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js search "termino_clave"
-
-# Leer nota completa
-node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js read "NombreDeLaNota"
-
-# Guardar memoria manualmente o por la IA
-node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js save-memory --title "Solución SQLite WAL" --summary "Uso de timeout y WAL" --content "Detalles paso a paso..."
-
-# Abrir en la app de Obsidian
+# 7. Open note in Obsidian desktop app
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js open "Antigravity/00 Antigravity Hub"
 ```
 
 ---
 
-## 📦 Instalación
+## Installation
 
-El archivo empaquetado `.vsix` está listo para instalar en cualquier Antigravity IDE / VS Code:
+### From Open VSX Registry
+Search for **Obsidian for Antigravity** in the Extensions marketplace or install via CLI:
 ```bash
-code --install-extension obsidian-for-antigravity-1.0.0.vsix
+ovsx install Davissss2.obsidian-for-antigravity
 ```
 
-Desarrollado con ❤️ para la comunidad de Antigravity e investigadores de Inteligencia Artificial.
+### Manual VSIX Installation
+Download the packaged release from the repository and install it in Antigravity IDE / VS Code:
+```bash
+code --install-extension obsidian-for-antigravity-1.1.0.vsix
+```
+
+---
+
+## Author & Contributions
+
+Created with care by **[Davissss2 (David)](https://github.com/Davissss2)**.
+
+Contributions and enhancements are welcome exclusively via Pull Requests to the official repository:
+👉 **[https://github.com/Davissss2/obsidian-for-antigravity](https://github.com/Davissss2/obsidian-for-antigravity)**
+
+---
+
+## License
+
+Copyright (c) 2026 Davissss2. All rights reserved.
+
+Licensed under a proprietary source-available license. Personal and internal non-commercial use is permitted. Unauthorized public redistribution, commercial resale, sublicensing, or publishing competing forks is strictly prohibited. See [`LICENSE`](LICENSE) for complete legal terms.
