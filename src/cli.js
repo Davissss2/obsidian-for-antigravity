@@ -191,9 +191,35 @@ async function main() {
       break;
     }
 
+    case 'triage': {
+      const query = args.join(' ');
+      const result = syncEngine.triageContext(vaultPath, query);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+
+    case 'peek': {
+      const note = args.join(' ');
+      const result = syncEngine.peekMemory(vaultPath, note);
+      if (result.error) {
+        console.error(JSON.stringify(result));
+        process.exit(1);
+      }
+      console.log(`# ${result.title} [${result.category.toUpperCase()}]\n> **Resumen:** ${result.summary}\n\n### Solución:\n${result.solution}`);
+      break;
+    }
+
+    case 'manifest': {
+      const result = syncEngine.buildContextManifest(vaultPath);
+      console.log(JSON.stringify({ status: 'ok', stats: result.stats, updatedAt: result.updatedAt }, null, 2));
+      break;
+    }
+
     default:
       console.log(`
-Uso de Antigravity Obsidian CLI:
+Uso de Antigravity Obsidian CLI (Bajo Consumo de Contexto):
+  node cli.js triage "<query>"      (Triage ultra-compacto: Skill vs Memoria)
+  node cli.js peek "<nombre-nota>"  (Solución directa sin contaminar contexto)
   node cli.js status
   node cli.js sync
   node cli.js search <query>

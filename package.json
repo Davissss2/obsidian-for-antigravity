@@ -2,7 +2,7 @@
   "name": "obsidian-for-antigravity",
   "displayName": "Obsidian for Antigravity",
   "description": "Segundo Cerebro y memoria autónoma para Antigravity conectada con Obsidian. Almacena lecciones aprendidas, soluciones a errores, arquitecturas y skills en tu Vault local interconectado en tiempo real con vista gráfica.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publisher": "Davissss2",
   "repository": {
     "type": "git",

@@ -383,10 +383,48 @@ ${relatedLinks}
 
   fs.writeFileSync(obsFile, content, 'utf8');
 
-  // Also write to Knowledge Items if requested
+  // 1. Update 00 Indice de Memoria.md
+  try {
+    const indexFile = path.join(memoriaFolder, '00 Indice de Memoria.md');
+    const allFiles = fs.readdirSync(memoriaFolder).filter(f => f.endsWith('.md') && !f.startsWith('00'));
+    let indexMd = `---
+title: "Índice de Memoria de Antigravity"
+type: antigravity-index
+tags:
+  - antigravity/indice
+  - antigravity/memoria
+updated: ${now}
+---
+
+# 🧠 Banco de Memoria & Knowledge Items
+
+Total de memorias registradas: **${allFiles.length}**
+
+| Memoria / Proyecto | Categoría | Resumen | Enlace Obsidian |
+|---|---|---|---|
+`;
+    for (const f of allFiles) {
+      const fp = path.join(memoriaFolder, f);
+      const txt = fs.readFileSync(fp, 'utf8');
+      const catM = txt.match(/^category:\s*"?([^"\r\n]+)"?/m);
+      const cat = catM ? catM[1] : 'general';
+      const sumM = txt.match(/>\s*\[!(?:NOTE|ABSTRACT|INFO)\][^\r\n]*\r?\n>\s*([^\r\n]+)/i);
+      const sum = sumM ? sumM[1].slice(0, 100) : 'Sin resumen';
+      const baseName = f.replace(/\.md$/, '');
+      indexMd += `| **${baseName}** | \`${cat}\` | ${sum}... | [[${baseName}]] |\n`;
+    }
+    indexMd += `\n---\n*Volver al:* [[00 Antigravity Hub]]\n`;
+    fs.writeFileSync(indexFile, indexMd, 'utf8');
+  } catch (e) {}
+
+  // 2. Also write to Knowledge Items if requested
   try {
     const { knowledgeDir } = getAntigravityPaths();
-    const kiId = cleanTitle.toLowerCase().replace(/\s+/g, '-');
+    const kiId = cleanTitle.toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9_-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
     const kiDir = path.join(knowledgeDir, kiId);
     if (!fs.existsSync(kiDir)) {
       fs.mkdirSync(path.join(kiDir, 'artifacts'), { recursive: true });
@@ -396,11 +434,14 @@ ${relatedLinks}
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }, null, 2));
-      fs.writeFileSync(path.join(kiDir, 'artifacts', `${cleanTitle}.md`), memoryData.content || '');
+      fs.writeFileSync(path.join(kiDir, 'artifacts', `${cleanTitle}.md`), content || '');
     }
-  } catch (e) {
-    // Non-fatal
-  }
+  } catch (e) {}
+
+  // 3. Update Manifest Cache
+  try {
+    buildContextManifest(vaultPath);
+  } catch (e) {}
 
   return { title, path: obsFile, cleanTitle };
 }
@@ -692,6 +733,273 @@ function syncVaultToKnowledge(vaultPath) {
   }
 }
 
+// -------------------------------------------------------------
+// Context Manifest Cache & Ultra-Low-Context Triage / Peek
+// -------------------------------------------------------------
+
+function buildContextManifest(vaultPath) {
+  ensureVaultStructure(vaultPath);
+  const memDir = path.join(vaultPath, 'Antigravity', 'Memoria');
+  const skiDir = path.join(vaultPath, 'Antigravity', 'Skills');
+  const proDir = path.join(vaultPath, 'Antigravity', 'Proyectos');
+
+  const memories = [];
+  if (fs.existsSync(memDir)) {
+    for (const f of fs.readdirSync(memDir)) {
+      if (!f.endsWith('.md') || f.startsWith('00')) continue;
+      const fp = path.join(memDir, f);
+      try {
+        const txt = fs.readFileSync(fp, 'utf8');
+        const titleMatch = txt.match(/^title:\s*"([^"\r\n]+)"/m) || txt.match(/^#+\s*🧠?\s*(.+)$/m);
+        const title = titleMatch ? titleMatch[1].trim() : f.replace(/\.md$/, '');
+
+        const catMatch = txt.match(/^category:\s*"?([^"\r\n]+)"?/m);
+        const category = catMatch ? catMatch[1].trim() : 'general';
+
+        const sumMatch = txt.match(/>\s*\[!(?:NOTE|ABSTRACT|INFO)\][^\r\n]*\r?\n>\s*([^\r\n]+)/i);
+        let summary = sumMatch ? sumMatch[1].trim() : '';
+        if (!summary) {
+          summary = txt.replace(/---[\s\S]*?---/, '').replace(/#+[^\r\n]+/g, '').replace(/\r?\n/g, ' ').trim().slice(0, 140);
+        }
+
+        const tagsMatch = txt.match(/^tags:\s*\r?\n((?:\s*-\s*[^\r\n]+\r?\n)+)/m);
+        const tags = [];
+        if (tagsMatch) {
+          const lines = tagsMatch[1].split('\n');
+          for (const l of lines) {
+            const tm = l.match(/-\s*([^\r\n]+)/);
+            if (tm) tags.push(tm[1].trim().toLowerCase());
+          }
+        }
+
+        const stat = fs.statSync(fp);
+        memories.push({
+          title,
+          category,
+          summary: summary.slice(0, 160),
+          tags,
+          relPath: `Antigravity/Memoria/${f}`,
+          updated: stat.mtime.toISOString().split('T')[0],
+        });
+      } catch (e) {}
+    }
+  }
+
+  const skills = [];
+  if (fs.existsSync(skiDir)) {
+    for (const f of fs.readdirSync(skiDir)) {
+      if (!f.endsWith('.md') || f.startsWith('00')) continue;
+      const fp = path.join(skiDir, f);
+      try {
+        const txt = fs.readFileSync(fp, 'utf8');
+        const nameMatch = txt.match(/^title:\s*"Skill:\s*([^"\r\n]+)"/m) || txt.match(/^#+\s*⚡?\s*Skill:\s*\[\[([^\]]+)\]\]/m);
+        const name = nameMatch ? nameMatch[1].trim() : f.replace(/\.md$/, '').replace(/^\[Proyecto\]\s*/, '');
+
+        const scopeMatch = txt.match(/^scope:\s*(\w+)/m);
+        const scope = scopeMatch ? scopeMatch[1].trim() : 'global';
+
+        const descMatch = txt.match(/>\s*-\s*\*\*Descripción\*\*:\s*([^\r\n]+)/i);
+        const description = descMatch ? descMatch[1].trim() : '';
+
+        skills.push({
+          name,
+          scope,
+          description: description.slice(0, 160),
+          relPath: `Antigravity/Skills/${f}`,
+        });
+      } catch (e) {}
+    }
+  }
+
+  const projects = [];
+  if (fs.existsSync(proDir)) {
+    for (const f of fs.readdirSync(proDir)) {
+      if (!f.endsWith('.md') || f.startsWith('00')) continue;
+      projects.push(f.replace(/\.md$/, ''));
+    }
+  }
+
+  const manifest = {
+    updatedAt: new Date().toISOString(),
+    vaultName: path.basename(vaultPath),
+    stats: { memories: memories.length, skills: skills.length, projects: projects.length },
+    skills,
+    memories,
+    projects,
+  };
+
+  try {
+    const manifestFile = path.join(vaultPath, 'Antigravity', 'context-manifest.json');
+    fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2), 'utf8');
+  } catch (e) {}
+
+  return manifest;
+}
+
+function getContextManifest(vaultPath, forceRebuild = false) {
+  const manifestFile = path.join(vaultPath, 'Antigravity', 'context-manifest.json');
+  if (!forceRebuild && fs.existsSync(manifestFile)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+      const diffMs = Date.now() - new Date(data.updatedAt || 0).getTime();
+      if (diffMs < 7200000) return data;
+    } catch (e) {}
+  }
+  return buildContextManifest(vaultPath);
+}
+
+function triageContext(vaultPath, query) {
+  const STOPWORDS = new Set([
+    'de', 'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'y', 'o', 'en', 'a',
+    'con', 'por', 'para', 'del', 'al', 'que', 'es', 'son', 'fue', 'era', 'como', 'se',
+    'su', 'sus', 'mi', 'mis', 'tu', 'tus', 'the', 'and', 'in', 'on', 'for', 'with', 'to', 'at'
+  ]);
+
+  if (!query || query.trim() === '') {
+    return { hasAntecedents: false, recommendation: 'Consulta vacía. Procede normalmente.' };
+  }
+
+  const manifest = getContextManifest(vaultPath);
+  const keywords = query
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9_\-\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length >= 3 && !STOPWORDS.has(w));
+
+  if (keywords.length === 0) {
+    return { hasAntecedents: false, recommendation: 'Sin palabras clave relevantes. Procede normalmente.' };
+  }
+
+  let skillMatch = null;
+  let bestSkillScore = 0;
+
+  for (const s of manifest.skills) {
+    const sNameNorm = s.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const sDescNorm = (s.description || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    let score = 0;
+
+    for (const kw of keywords) {
+      if (sNameNorm.includes(kw)) score += 6;
+      else if (sDescNorm.includes(kw)) score += 2;
+    }
+
+    if (score > bestSkillScore && score >= 4) {
+      bestSkillScore = score;
+      skillMatch = {
+        name: s.name,
+        scope: s.scope,
+        summary: s.description || 'Procedimiento especializado',
+        advice: `Usa la Skill [[${s.name}]] para este flujo de trabajo. Lee su SKILL.md para instrucciones operativas.`,
+      };
+    }
+  }
+
+  const scoredMemories = [];
+  for (const m of manifest.memories) {
+    const tNorm = m.title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const sNorm = (m.summary || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const tagsNorm = (m.tags || []).join(' ').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    let score = 0;
+
+    for (const kw of keywords) {
+      if (tNorm.includes(kw)) score += 5;
+      if (tagsNorm.includes(kw)) score += 4;
+      if (sNorm.includes(kw)) score += 2;
+    }
+
+    if (score >= 4) {
+      scoredMemories.push({
+        title: m.title,
+        category: m.category,
+        summary: m.summary,
+        score,
+        relPath: m.relPath,
+      });
+    }
+  }
+
+  scoredMemories.sort((a, b) => b.score - a.score);
+  const topMemories = scoredMemories.slice(0, 2).map(({ title, category, summary, relPath }) => ({
+    title,
+    category,
+    summary,
+    relPath,
+  }));
+
+  const hasAntecedents = topMemories.length > 0 || !!skillMatch;
+
+  let recommendation = '';
+  if (topMemories.length > 0) {
+    recommendation = 'Antecedente encontrado: Usa directamente el resumen arriba indicado. Usa "peek" si necesitas ver el código exacto.';
+  } else if (skillMatch) {
+    recommendation = `Flujo técnico cubierto por la Skill [[${skillMatch.name}]]. Consulta sus instrucciones operativas.`;
+  } else {
+    recommendation = 'Sin antecedentes previos en el Vault. Procede con la solución sin consumir más contexto.';
+  }
+
+  return {
+    query,
+    hasAntecedents,
+    skillMatch,
+    memories: topMemories,
+    recommendation,
+  };
+}
+
+function peekMemory(vaultPath, noteName) {
+  if (!noteName) return { error: 'Especifica la nota a inspeccionar.' };
+
+  const cleanName = sanitizeFilename(noteName.endsWith('.md') ? noteName.slice(0, -3) : noteName);
+  let target = path.join(vaultPath, 'Antigravity', 'Memoria', cleanName + '.md');
+
+  if (!fs.existsSync(target)) {
+    function find(dir) {
+      if (!fs.existsSync(dir)) return null;
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const fp = path.join(dir, e.name);
+        if (e.isDirectory()) {
+          const r = find(fp);
+          if (r) return r;
+        } else if (e.name.toLowerCase() === (cleanName.toLowerCase() + '.md') || e.name.toLowerCase().includes(cleanName.toLowerCase())) {
+          return fp;
+        }
+      }
+      return null;
+    }
+    target = find(path.join(vaultPath, 'Antigravity'));
+  }
+
+  if (!target || !fs.existsSync(target)) {
+    return { error: `Nota no encontrada: ${noteName}` };
+  }
+
+  const raw = fs.readFileSync(target, 'utf8');
+  const catMatch = raw.match(/^category:\s*"?([^"\r\n]+)"?/m);
+  const category = catMatch ? catMatch[1].trim() : 'general';
+
+  const sumMatch = raw.match(/>\s*\[!(?:NOTE|ABSTRACT|INFO)\][^\r\n]*\r?\n>\s*([^\r\n]+)/i);
+  const summary = sumMatch ? sumMatch[1].trim() : '';
+
+  let body = raw.replace(/^---[\s\S]*?---\r?\n/, '');
+  body = body.replace(/---[\s\S]*?\*Conexiones del Grafo:\*[\s\S]*$/, '');
+  body = body.replace(/^#+\s*[^\r\n]+/gm, '').trim();
+
+  const detailsMatch = raw.match(/##\s*📝\s*Detalles y Solución\r?\n([\s\S]*?)(?:---|###\s*📄|$)/i);
+  let solutionText = detailsMatch ? detailsMatch[1].trim() : body;
+
+  if (solutionText.length > 1200) {
+    solutionText = solutionText.slice(0, 1200) + '\n\n*(Extracto resumido para ahorrar contexto).*';
+  }
+
+  return {
+    title: path.basename(target, '.md'),
+    category,
+    summary,
+    solution: solutionText || 'Sin detalles adicionales registrados.',
+  };
+}
+
 function syncAll(vaultPath, workspaceRoot) {
   ensureVaultStructure(vaultPath);
   const skills = syncSkillsToVault(vaultPath, workspaceRoot);
@@ -699,6 +1007,7 @@ function syncAll(vaultPath, workspaceRoot) {
   const project = workspaceRoot ? syncProject(vaultPath, workspaceRoot) : null;
   const hub = generateHub(vaultPath, workspaceRoot);
   syncVaultToKnowledge(vaultPath);
+  buildContextManifest(vaultPath);
   const stats = getVaultStats(vaultPath);
 
   return {
@@ -722,4 +1031,8 @@ module.exports = {
   generateHub,
   getVaultStats,
   syncAll,
+  buildContextManifest,
+  getContextManifest,
+  triageContext,
+  peekMemory,
 };

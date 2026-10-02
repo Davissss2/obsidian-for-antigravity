@@ -182,8 +182,9 @@ class ObsidianPanelProvider {
         }
 
         case 'updateAiConfig': {
-          const proactiveLookup = !!data.proactiveLookup;
-          const autoSave = !!data.autoSave;
+          const cfgData = message.data || {};
+          const proactiveLookup = !!cfgData.proactiveLookup;
+          const autoSave = !!cfgData.autoSave;
           if (currentVault && currentVault.path) {
             installSkillAndRules(currentVault.path, { proactiveLookup, autoSave });
             vscode.window.showInformationMessage('Configuración de IA y Segundo Cerebro actualizada.');

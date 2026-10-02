@@ -21,6 +21,28 @@ function getVaultPath() {
 // Tool definitions for MCP
 const TOOLS = [
   {
+    name: 'obsidian_triage',
+    description: 'Triage de ultra-bajo contexto (<100 tokens). Determina si existe una Skill o Memoria previa para una tarea o error sin gastar tokens.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Problema, término técnico, nombre de proyecto o error a consultar' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'obsidian_peek',
+    description: 'Extrae exclusivamente el resumen y la solución técnica de una nota de memoria, ahorrando el 90% del contexto vs lectura completa.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        noteName: { type: 'string', description: 'Título o nombre de la nota a inspeccionar' },
+      },
+      required: ['noteName'],
+    },
+  },
+  {
     name: 'obsidian_status',
     description: 'Obtiene el estado de conexión con Obsidian, ruta de la bóveda (vault) activa y estadísticas de memorias y skills sincronizadas.',
     inputSchema: {
@@ -114,6 +136,29 @@ async function executeTool(name, args) {
 
   try {
     switch (name) {
+      case 'obsidian_triage': {
+        const result = syncEngine.triageContext(vaultPath, args.query);
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          }],
+        };
+      }
+
+      case 'obsidian_peek': {
+        const result = syncEngine.peekMemory(vaultPath, args.noteName);
+        if (result.error) {
+          return { isError: true, content: [{ type: 'text', text: result.error }] };
+        }
+        return {
+          content: [{
+            type: 'text',
+            text: `# ${result.title} [${result.category.toUpperCase()}]\n> **Resumen:** ${result.summary}\n\n### Solución:\n${result.solution}`,
+          }],
+        };
+      }
+
       case 'obsidian_status': {
         const stats = syncEngine.getVaultStats(vaultPath);
         const vaultName = path.basename(vaultPath);
