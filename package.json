@@ -1,0 +1,115 @@
+{
+  "name": "obsidian-for-antigravity",
+  "displayName": "Obsidian for Antigravity",
+  "description": "Segundo Cerebro y memoria autónoma para Antigravity conectada con Obsidian. Almacena lecciones aprendidas, soluciones a errores, arquitecturas y skills en tu Vault local interconectado en tiempo real con vista gráfica.",
+  "version": "1.0.0",
+  "publisher": "Davissss2",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Davissss2/obsidian-for-antigravity"
+  },
+  "icon": "logo.png",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning",
+    "Snippets"
+  ],
+  "keywords": [
+    "obsidian",
+    "antigravity",
+    "second-brain",
+    "ai-memory",
+    "skills",
+    "knowledge-graph"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onView:antigravityObsidian.panel"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "antigravity-obsidian",
+          "title": "Obsidian for Antigravity",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "antigravity-obsidian": [
+        {
+          "type": "webview",
+          "id": "antigravityObsidian.panel",
+          "name": "Obsidian for Antigravity",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "antigravityObsidian.syncNow",
+        "title": "Obsidian: Sincronizar Todo Ahora",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "antigravityObsidian.openHub",
+        "title": "Obsidian: Abrir Hub en la App",
+        "icon": "$(book)"
+      },
+      {
+        "command": "antigravityObsidian.selectVault",
+        "title": "Obsidian: Seleccionar Bóveda Manualmente",
+        "icon": "$(folder)"
+      },
+      {
+        "command": "antigravityObsidian.newMemory",
+        "title": "Obsidian: Guardar Nueva Memoria",
+        "icon": "$(add)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "antigravityObsidian.syncNow",
+          "when": "view == antigravityObsidian.panel",
+          "group": "navigation@1"
+        },
+        {
+          "command": "antigravityObsidian.openHub",
+          "when": "view == antigravityObsidian.panel",
+          "group": "navigation@2"
+        },
+        {
+          "command": "antigravityObsidian.newMemory",
+          "when": "view == antigravityObsidian.panel",
+          "group": "navigation@3"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Obsidian for Antigravity",
+      "properties": {
+        "antigravityObsidian.vaultPath": {
+          "type": "string",
+          "default": "",
+          "description": "Ruta personalizada a la bóveda de Obsidian. Dejar vacío para autodetectar automáticamente."
+        },
+        "antigravityObsidian.autoSync": {
+          "type": "boolean",
+          "default": true,
+          "description": "Sincronizar automáticamente al iniciar y tras cambios relevantes."
+        },
+        "antigravityObsidian.apiToken": {
+          "type": "string",
+          "default": "",
+          "description": "Token Bearer opcional para el plugin Local REST API de Obsidian."
+        }
+      }
+    }
+  }
+}
