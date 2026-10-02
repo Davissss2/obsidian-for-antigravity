@@ -128,6 +128,7 @@ async function main() {
       break;
     }
 
+    case 'save':
     case 'save-memory': {
       const params = parseNamedArgs(args);
       if (!params.title || !params.content) {
@@ -215,17 +216,37 @@ async function main() {
       break;
     }
 
+    case 'catalog': {
+      const result = syncEngine.catalogContext(vaultPath);
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+
+    case 'skills': {
+      const result = syncEngine.catalogContext(vaultPath);
+      console.log(JSON.stringify(result.skills, null, 2));
+      break;
+    }
+
+    case 'memories': {
+      const result = syncEngine.catalogContext(vaultPath);
+      console.log(JSON.stringify(result.memories, null, 2));
+      break;
+    }
+
     default:
       console.log(`
-Uso de Antigravity Obsidian CLI (Bajo Consumo de Contexto):
+Uso de Antigravity Obsidian CLI (Zero Emojis, Bajo Contexto):
   node cli.js triage "<query>"      (Triage ultra-compacto: Skill vs Memoria)
-  node cli.js peek "<nombre-nota>"  (Solución directa sin contaminar contexto)
+  node cli.js peek "<nombre-nota>"  (Solucion directa sin contaminar contexto)
+  node cli.js save --title "..." --content "..." [--summary "..."] (Guardado atomico)
+  node cli.js catalog               (Resumen 1-linea de skills y memorias)
+  node cli.js skills                (Lista de skills activas con descripcion)
+  node cli.js memories              (Lista de memorias con resumen)
   node cli.js status
   node cli.js sync
   node cli.js search <query>
   node cli.js read <nombre-de-nota>
-  node cli.js save-memory --title "..." --content "..." [--summary "..."] [--tags "tag1,tag2"]
-  node cli.js save-skill --name "..." --instructions "..." [--description "..."]
   node cli.js open [nombre-de-nota]
       `);
       break;

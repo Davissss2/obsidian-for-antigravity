@@ -1000,6 +1000,14 @@ function peekMemory(vaultPath, noteName) {
   };
 }
 
+function catalogContext(vaultPath) {
+  const manifest = getContextManifest(vaultPath);
+  return {
+    skills: manifest.skills.map(s => ({ name: s.name, desc: s.description })),
+    memories: manifest.memories.slice(0, 10).map(m => ({ title: m.title, cat: m.category, desc: m.summary })),
+  };
+}
+
 function syncAll(vaultPath, workspaceRoot) {
   ensureVaultStructure(vaultPath);
   const skills = syncSkillsToVault(vaultPath, workspaceRoot);
@@ -1035,4 +1043,5 @@ module.exports = {
   getContextManifest,
   triageContext,
   peekMemory,
+  catalogContext,
 };

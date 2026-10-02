@@ -14,11 +14,9 @@ function getVaultPath() {
       }
     } catch (e) {}
   }
-  // Fallback to process.env.OBSIDIAN_VAULT_PATH
   if (process.env.OBSIDIAN_VAULT_PATH && fs.existsSync(process.env.OBSIDIAN_VAULT_PATH)) {
     return { path: process.env.OBSIDIAN_VAULT_PATH, name: path.basename(process.env.OBSIDIAN_VAULT_PATH) };
   }
-  // Fallback to obsidian.json
   const obsJson = path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'obsidian', 'obsidian.json');
   if (fs.existsSync(obsJson)) {
     try {
@@ -30,7 +28,6 @@ function getVaultPath() {
       }
     } catch (e) {}
   }
-  // Fallback to Documents/Obsidian Vault
   const docVault = path.join(os.homedir(), 'Documents', 'Obsidian Vault');
   if (fs.existsSync(docVault)) {
     return { path: docVault, name: 'Obsidian Vault' };
@@ -40,12 +37,19 @@ function getVaultPath() {
 
 const vault = getVaultPath();
 if (!vault) {
-  console.error(JSON.stringify({ error: 'No se detectó ninguna bóveda (vault) de Obsidian activa.' }));
+  console.error(JSON.stringify({ error: 'No se detectó ninguna bóveda de Obsidian activa.' }));
   process.exit(1);
 }
 
 function sanitize(n) {
   return (n || '').replace(/[\/:*?"<>|\\]/g, '-').trim();
+}
+
+function cleanText(t) {
+  return (t || '')
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function getAntigravityPaths() {
@@ -70,7 +74,7 @@ function ensureDirs(vaultPath) {
 }
 
 // -------------------------------------------------------------
-// Ultra-Low Context Index & Manifest Cache
+// Manifest Cache & Compact Index
 // -------------------------------------------------------------
 const MANIFEST_FILE = path.join(vault.path, 'Antigravity', 'context-manifest.json');
 
@@ -87,16 +91,16 @@ function buildManifest(vaultPath) {
       const fp = path.join(memDir, f);
       try {
         const txt = fs.readFileSync(fp, 'utf8');
-        const titleMatch = txt.match(/^title:\s*"([^"\r\n]+)"/m) || txt.match(/^#+\s*🧠?\s*(.+)$/m);
-        const title = titleMatch ? titleMatch[1].trim() : f.replace(/\.md$/, '');
+        const titleMatch = txt.match(/^title:\s*"([^"\r\n]+)"/m) || txt.match(/^#+\s*(.+)$/m);
+        const title = titleMatch ? cleanText(titleMatch[1]) : f.replace(/\.md$/, '');
 
         const catMatch = txt.match(/^category:\s*"?([^"\r\n]+)"?/m);
         const category = catMatch ? catMatch[1].trim() : 'general';
 
         const sumMatch = txt.match(/>\s*\[!(?:NOTE|ABSTRACT|INFO)\][^\r\n]*\r?\n>\s*([^\r\n]+)/i);
-        let summary = sumMatch ? sumMatch[1].trim() : '';
+        let summary = sumMatch ? cleanText(sumMatch[1]) : '';
         if (!summary) {
-          summary = txt.replace(/---[\s\S]*?---/, '').replace(/#+[^\r\n]+/g, '').replace(/\r?\n/g, ' ').trim().slice(0, 140);
+          summary = cleanText(txt.replace(/---[\s\S]*?---/, '').replace(/#+[^\r\n]+/g, '').replace(/\r?\n/g, ' ').slice(0, 120));
         }
 
         const tagsMatch = txt.match(/^tags:\s*\r?\n((?:\s*-\s*[^\r\n]+\r?\n)+)/m);
@@ -105,7 +109,7 @@ function buildManifest(vaultPath) {
           const lines = tagsMatch[1].split('\n');
           for (const l of lines) {
             const tm = l.match(/-\s*([^\r\n]+)/);
-            if (tm) tags.push(tm[1].trim().toLowerCase());
+            if (tm) tags.push(cleanText(tm[1]).toLowerCase());
           }
         }
 
@@ -113,7 +117,7 @@ function buildManifest(vaultPath) {
         memories.push({
           title,
           category,
-          summary: summary.slice(0, 160),
+          summary: summary.slice(0, 130),
           tags,
           relPath: `Antigravity/Memoria/${f}`,
           updated: stat.mtime.toISOString().split('T')[0],
@@ -129,19 +133,19 @@ function buildManifest(vaultPath) {
       const fp = path.join(skiDir, f);
       try {
         const txt = fs.readFileSync(fp, 'utf8');
-        const nameMatch = txt.match(/^title:\s*"Skill:\s*([^"\r\n]+)"/m) || txt.match(/^#+\s*⚡?\s*Skill:\s*\[\[([^\]]+)\]\]/m);
-        const name = nameMatch ? nameMatch[1].trim() : f.replace(/\.md$/, '').replace(/^\[Proyecto\]\s*/, '');
+        const nameMatch = txt.match(/^title:\s*"Skill:\s*([^"\r\n]+)"/m) || txt.match(/^#+\s*Skill:\s*\[\[([^\]]+)\]\]/m);
+        const name = nameMatch ? cleanText(nameMatch[1]) : f.replace(/\.md$/, '').replace(/^\[Proyecto\]\s*/, '');
 
         const scopeMatch = txt.match(/^scope:\s*(\w+)/m);
         const scope = scopeMatch ? scopeMatch[1].trim() : 'global';
 
         const descMatch = txt.match(/>\s*-\s*\*\*Descripción\*\*:\s*([^\r\n]+)/i);
-        const description = descMatch ? descMatch[1].trim() : '';
+        const description = descMatch ? cleanText(descMatch[1]) : '';
 
         skills.push({
           name,
           scope,
-          description: description.slice(0, 160),
+          description: description.slice(0, 130),
           relPath: `Antigravity/Skills/${f}`,
         });
       } catch (e) {}
@@ -176,7 +180,6 @@ function getManifest(vaultPath, forceRebuild = false) {
   if (!forceRebuild && fs.existsSync(MANIFEST_FILE)) {
     try {
       const data = JSON.parse(fs.readFileSync(MANIFEST_FILE, 'utf8'));
-      // Invalidate if older than 2 hours
       const diffMs = Date.now() - new Date(data.updatedAt || 0).getTime();
       if (diffMs < 7200000) return data;
     } catch (e) {}
@@ -185,7 +188,7 @@ function getManifest(vaultPath, forceRebuild = false) {
 }
 
 // -------------------------------------------------------------
-// Ultra-Low Context Triage Command
+// Ultra-Low Context Triage Command (<80 tokens)
 // -------------------------------------------------------------
 const STOPWORDS = new Set([
   'de', 'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'y', 'o', 'en', 'a',
@@ -204,21 +207,17 @@ function extractKeywords(str) {
 
 function runTriage(vaultPath, query) {
   if (!query || query.trim() === '') {
-    return {
-      hasAntecedents: false,
-      recommendation: 'Consulta vacía. Procede normalmente con tu tarea.',
-    };
+    return { hasAntecedents: false, recommendation: 'Consulta vacía. Procede normalmente.' };
   }
 
   const manifest = getManifest(vaultPath);
   const keywords = extractKeywords(query);
 
   if (keywords.length === 0) {
-    return {
-      hasAntecedents: false,
-      recommendation: 'Consulta sin palabras clave relevantes. Procede normalmente.',
-    };
+    return { hasAntecedents: false, recommendation: 'Sin palabras clave relevantes. Procede normalmente.' };
   }
+
+  const scriptExec = (process.argv[1] || 'obsidian.js').replace(/\\/g, '/');
 
   // 1. Check Skills (CÓMO HACER - Procedimientos y Herramientas)
   let skillMatch = null;
@@ -238,9 +237,8 @@ function runTriage(vaultPath, query) {
       bestSkillScore = score;
       skillMatch = {
         name: s.name,
-        scope: s.scope,
-        summary: s.description || 'Procedimiento especializado',
-        advice: `Usa la Skill [[${s.name}]] para este flujo de trabajo. Lee su SKILL.md en el prompt para las instrucciones operativas.`,
+        desc: s.description || 'Procedimiento especializado',
+        advice: `Usa la Skill [[${s.name}]]. Lee su SKILL.md en el prompt para instrucciones operativas.`,
       };
     }
   }
@@ -266,7 +264,7 @@ function runTriage(vaultPath, query) {
         category: m.category,
         summary: m.summary,
         score,
-        peekCmd: `node "${path.join(__dirname, 'obsidian.js').replace(/\\/g, '/')}" peek "${m.title}"`,
+        peekCmd: `node "${scriptExec}" peek "${m.title}"`,
       });
     }
   }
@@ -283,11 +281,11 @@ function runTriage(vaultPath, query) {
 
   let recommendation = '';
   if (topMemories.length > 0) {
-    recommendation = 'Antecedente encontrado: Usa directamente el resumen arriba indicado. Ejecuta "peek" SOLO si requieres código detallado o comandos paso a paso.';
+    recommendation = 'Antecedente encontrado: Aplica directamente el resumen indicado. Usa "peek" solo si requieres codigo exacto.';
   } else if (skillMatch) {
-    recommendation = `Flujo técnico cubierto por la Skill [[${skillMatch.name}]]. Consulta sus instrucciones operativas.`;
+    recommendation = `Procedimiento cubierto por la Skill [[${skillMatch.name}]].`;
   } else {
-    recommendation = 'Sin antecedentes previos en el Vault. Procede con la solución sin consumir más contexto.';
+    recommendation = 'Sin antecedentes en el Vault. Resuelve directamente sin gastar mas tokens.';
   }
 
   return {
@@ -300,18 +298,15 @@ function runTriage(vaultPath, query) {
 }
 
 // -------------------------------------------------------------
-// Ultra-Low Context Peek Command (Extracts only essential solution)
+// Ultra-Low Context Peek Command (Strict solution, zero fluff)
 // -------------------------------------------------------------
 function runPeek(vaultPath, noteName) {
-  if (!noteName) {
-    return { error: 'Especifica la nota a inspeccionar.' };
-  }
+  if (!noteName) return { error: 'Especifica la nota a inspeccionar.' };
 
   const cleanName = sanitize(noteName.endsWith('.md') ? noteName.slice(0, -3) : noteName);
   let target = path.join(vaultPath, 'Antigravity', 'Memoria', cleanName + '.md');
 
   if (!fs.existsSync(target)) {
-    // Scan recursively
     function find(dir) {
       if (!fs.existsSync(dir)) return null;
       for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -333,38 +328,34 @@ function runPeek(vaultPath, noteName) {
   }
 
   const raw = fs.readFileSync(target, 'utf8');
-
-  // Extract frontmatter meta
   const catMatch = raw.match(/^category:\s*"?([^"\r\n]+)"?/m);
   const category = catMatch ? catMatch[1].trim() : 'general';
 
   const sumMatch = raw.match(/>\s*\[!(?:NOTE|ABSTRACT|INFO)\][^\r\n]*\r?\n>\s*([^\r\n]+)/i);
-  const summary = sumMatch ? sumMatch[1].trim() : '';
+  const summary = sumMatch ? cleanText(sumMatch[1]) : '';
 
-  // Extract Solution body (strip frontmatter and strip footer wikilinks)
   let body = raw.replace(/^---[\s\S]*?---\r?\n/, '');
-  body = body.replace(/---[\s\S]*?\*Conexiones del Grafo:\*[\s\S]*$/, '');
+  body = body.replace(/---[\s\S]*?\*Conexiones.*\*[\s\S]*$/, '');
+  body = body.replace(/---[\s\S]*?\*Graph.*\*[\s\S]*$/, '');
   body = body.replace(/^#+\s*[^\r\n]+/gm, '').trim();
 
-  // If there are multiple documents appended, isolate the core technical details
-  const detailsMatch = raw.match(/##\s*📝\s*Detalles y Solución\r?\n([\s\S]*?)(?:---|###\s*📄|$)/i);
+  const detailsMatch = raw.match(/##\s*(?:Technical Solution|Solución Técnica|Detalles y Solución|Solución)\r?\n([\s\S]*?)(?:---|###\s*📄|$)/i);
   let solutionText = detailsMatch ? detailsMatch[1].trim() : body;
 
-  // Compact: Limit to max 1200 characters to prevent context bloat
-  if (solutionText.length > 1200) {
-    solutionText = solutionText.slice(0, 1200) + '\n\n*(Extracto resumido para ahorrar contexto. Usa "read" solo si necesitas el código completo).*';
+  if (solutionText.length > 1000) {
+    solutionText = solutionText.slice(0, 1000) + '\n\n*(Extracto tecnico recortado para optimizar tokens).*';
   }
 
   return {
     title: path.basename(target, '.md'),
     category,
     summary,
-    solution: solutionText || 'Sin detalles adicionales registrados.',
+    solution: cleanText(solutionText) || 'Sin detalles registrados.',
   };
 }
 
 // -------------------------------------------------------------
-// Save Memory & Auto-Update All Indexes Atomically
+// Save Memory & Auto-Update All Indexes Atomically (Zero Emojis)
 // -------------------------------------------------------------
 function runSaveMemory(vaultPath, argsList) {
   let title = 'Memoria ' + new Date().toISOString().slice(0, 10);
@@ -376,16 +367,16 @@ function runSaveMemory(vaultPath, argsList) {
 
   for (let i = 0; i < argsList.length; i++) {
     const a = argsList[i];
-    if (a === '--title' && argsList[i+1]) { title = argsList[i+1]; i++; }
+    if (a === '--title' && argsList[i+1]) { title = cleanText(argsList[i+1]); i++; }
     else if (a === '--content' && argsList[i+1]) { content = argsList[i+1]; i++; }
-    else if (a === '--summary' && argsList[i+1]) { summary = argsList[i+1]; i++; }
-    else if (a === '--category' && argsList[i+1]) { category = argsList[i+1]; i++; }
+    else if (a === '--summary' && argsList[i+1]) { summary = cleanText(argsList[i+1]); i++; }
+    else if (a === '--category' && argsList[i+1]) { category = cleanText(argsList[i+1]).toLowerCase(); i++; }
     else if (a === '--tags' && argsList[i+1]) {
-      tags = argsList[i+1].split(',').map(t => t.trim().toLowerCase());
+      tags = argsList[i+1].split(',').map(t => cleanText(t).toLowerCase());
       if (!tags.includes('antigravity/memoria')) tags.push('antigravity/memoria');
       i++;
     }
-    else if (a === '--project' && argsList[i+1]) { project = argsList[i+1]; i++; }
+    else if (a === '--project' && argsList[i+1]) { project = cleanText(argsList[i+1]); i++; }
   }
 
   ensureDirs(vaultPath);
@@ -396,9 +387,10 @@ function runSaveMemory(vaultPath, argsList) {
 
   let relatedLinks = '';
   if (project) {
-    relatedLinks = `\n### 📁 Proyecto: [[${project}]]\n`;
+    relatedLinks = `\n### Proyecto: [[${project}]]\n`;
   }
 
+  // Strict zero-emoji template
   const md = `---
 title: "${title}"
 type: antigravity-memory
@@ -409,28 +401,27 @@ created: ${now}
 updated: ${now}
 ---
 
-# 🧠 ${title}
+# ${title}
 
-> [!NOTE] **Memoria Registrada por Antigravity**
+> [!NOTE]
 > ${summary || title}
 
-## 📝 Detalles y Solución
+## Solucion Tecnica
 
 ${content || '*Sin contenido adicional registrado.*'}
-
 ${relatedLinks}
 ---
-*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Indice de Memoria]]
+*Conexiones:* [[00 Antigravity Hub]] | [[00 Indice de Memoria]]
 `;
 
   fs.writeFileSync(filePath, md, 'utf8');
 
-  // 1. Update 00 Indice de Memoria.md
+  // 1. Update 00 Indice de Memoria.md (Zero emojis)
   try {
     const indexFile = path.join(memFolder, '00 Indice de Memoria.md');
     const allFiles = fs.readdirSync(memFolder).filter(f => f.endsWith('.md') && !f.startsWith('00'));
     let indexMd = `---
-title: "Índice de Memoria de Antigravity"
+title: "Indice de Memoria de Antigravity"
 type: antigravity-index
 tags:
   - antigravity/indice
@@ -438,11 +429,11 @@ tags:
 updated: ${now}
 ---
 
-# 🧠 Banco de Memoria & Knowledge Items
+# Indice de Memoria & Knowledge Items
 
-Total de memorias registradas: **${allFiles.length}**
+Total memorias registradas: **${allFiles.length}**
 
-| Memoria / Proyecto | Categoría | Resumen | Enlace Obsidian |
+| Memoria / Proyecto | Categoria | Resumen Conciso | Enlace |
 |---|---|---|---|
 `;
     for (const f of allFiles) {
@@ -451,7 +442,7 @@ Total de memorias registradas: **${allFiles.length}**
       const catM = txt.match(/^category:\s*"?([^"\r\n]+)"?/m);
       const cat = catM ? catM[1] : 'general';
       const sumM = txt.match(/>\s*\[!(?:NOTE|ABSTRACT|INFO)\][^\r\n]*\r?\n>\s*([^\r\n]+)/i);
-      const sum = sumM ? sumM[1].slice(0, 100) : 'Sin resumen';
+      const sum = sumM ? cleanText(sumM[1]).slice(0, 100) : 'Sin resumen';
       const baseName = f.replace(/\.md$/, '');
       indexMd += `| **${baseName}** | \`${cat}\` | ${sum}... | [[${baseName}]] |\n`;
     }
@@ -479,7 +470,7 @@ Total de memorias registradas: **${allFiles.length}**
 
       fs.writeFileSync(path.join(kiDir, 'metadata.json'), JSON.stringify({
         title,
-        summary: summary || content.slice(0, 200),
+        summary: summary || content.slice(0, 160),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         references: []
@@ -497,6 +488,18 @@ Total de memorias registradas: **${allFiles.length}**
     indexed: true,
     knowledgeItem: true,
   };
+}
+
+// -------------------------------------------------------------
+// Catalog & Quick Overview (<100 tokens summary table)
+// -------------------------------------------------------------
+function runCatalog(vaultPath) {
+  const manifest = getManifest(vaultPath);
+  const result = {
+    skills: manifest.skills.map(s => ({ name: s.name, desc: s.description })),
+    memories: manifest.memories.slice(0, 8).map(m => ({ title: m.title, cat: m.category, summary: m.summary })),
+  };
+  return result;
 }
 
 // -------------------------------------------------------------
@@ -519,7 +522,35 @@ switch (cmd) {
       console.error(JSON.stringify(result));
       process.exit(1);
     }
-    console.log(`# ${result.title} [${result.category.toUpperCase()}]\n> **Resumen:** ${result.summary}\n\n### Solución / Detalles:\n${result.solution}`);
+    console.log(`[${result.category.toUpperCase()}] ${result.title}\nResumen: ${result.summary}\nSolucion:\n${result.solution}`);
+    break;
+  }
+
+  case 'save':
+  case 'save-memory': {
+    const res = runSaveMemory(vault.path, args);
+    console.log(JSON.stringify(res, null, 2));
+    break;
+  }
+
+  case 'catalog': {
+    const catalog = runCatalog(vault.path);
+    console.log(JSON.stringify(catalog, null, 2));
+    break;
+  }
+
+  case 'skills':
+  case 'list-skills': {
+    const manifest = getManifest(vault.path);
+    const compactSkills = manifest.skills.map(s => ({ name: s.name, desc: s.description }));
+    console.log(JSON.stringify(compactSkills, null, 2));
+    break;
+  }
+
+  case 'memories': {
+    const manifest = getManifest(vault.path);
+    const compactMem = manifest.memories.map(m => ({ title: m.title, cat: m.category, desc: m.summary }));
+    console.log(JSON.stringify(compactMem, null, 2));
     break;
   }
 
@@ -552,8 +583,7 @@ switch (cmd) {
           type: 'memoria',
           title: m.title,
           category: m.category,
-          summary: m.summary,
-          peekCmd: `node "${path.join(__dirname, 'obsidian.js').replace(/\\/g, '/')}" peek "${m.title}"`,
+          desc: m.summary,
         });
       }
     }
@@ -563,8 +593,7 @@ switch (cmd) {
         matches.push({
           type: 'skill',
           title: s.name,
-          scope: s.scope,
-          summary: s.description,
+          desc: s.description,
         });
       }
     }
@@ -594,18 +623,6 @@ switch (cmd) {
     break;
   }
 
-  case 'save-memory': {
-    const res = runSaveMemory(vault.path, args);
-    console.log(JSON.stringify(res, null, 2));
-    break;
-  }
-
-  case 'list-skills': {
-    const manifest = getManifest(vault.path);
-    console.log(JSON.stringify(manifest.skills, null, 2));
-    break;
-  }
-
   case 'open': {
     const note = args[0] || 'Antigravity/00 Antigravity Hub';
     const clean = note.endsWith('.md') ? note.slice(0, -3) : note;
@@ -619,16 +636,17 @@ switch (cmd) {
 
   default:
     console.log(`
-Uso de Obsidian for Antigravity Runner (Bajo Consumo de Contexto):
-  node obsidian.js triage "<query o contexto>"  (Recomendado: ultra-bajo contexto, detecta Skills vs Memoria)
-  node obsidian.js peek "<nota>"               (Extrae solo resumen y solución técnica sin ruido)
-  node obsidian.js save-memory --title "..." --content "..." [--summary "..."] [--category "..."] [--tags "..."]
-  node obsidian.js search "<query>"            (Búsqueda compacta)
-  node obsidian.js read "<nota>"               (Lectura completa sin filtros)
-  node obsidian.js list-skills                 (Catálogo de skills disponibles)
-  node obsidian.js status                      (Estado de conexión y estadísticas)
-  node obsidian.js manifest                    (Reconstruir caché de contexto)
-  node obsidian.js open [nota]                 (Abrir en Obsidian Desktop)
+Comandos de Obsidian for Antigravity (Zero Emojis, Ultra-Bajo Contexto):
+  node obsidian.js triage "<query>"     (Triage ultra-compacto: Skill vs Memoria vs Nada)
+  node obsidian.js peek "<nota>"        (Solucion tecnica directa sin metadatos)
+  node obsidian.js save --title "..." --summary "..." --content "..." (Guardado atomico)
+  node obsidian.js catalog              (Resumen 1-linea de skills y memorias)
+  node obsidian.js skills               (Lista rapida de skills con descripcion corta)
+  node obsidian.js memories             (Lista rapida de memorias con resumen corto)
+  node obsidian.js status               (Estado de conexion)
+  node obsidian.js search "<query>"     (Busqueda compacta)
+  node obsidian.js read "<nota>"        (Lectura completa de archivo)
+  node obsidian.js open [nota]          (Abrir en Obsidian Desktop)
     `);
     break;
 }
