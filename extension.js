@@ -263,6 +263,13 @@ class ObsidianPanelProvider {
           break;
         }
 
+        case 'openExternal': {
+          if (message.url) {
+            vscode.env.openExternal(vscode.Uri.parse(message.url));
+          }
+          break;
+        }
+
         case 'refresh': {
           updateView();
           break;
@@ -406,6 +413,26 @@ class ObsidianPanelProvider {
       <span>${vaultPath}</span>
     </div>
   </div>
+
+  ${!isConnected ? `
+  <div class="obsidian-install-banner" style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:12px;padding:14px;margin-bottom:12px;">
+    <div style="display:flex;align-items:center;gap:8px;font-weight:600;color:#f87171;margin-bottom:6px;">
+      ${SVGS.alert}
+      <span>Obsidian no detectado en tu sistema</span>
+    </div>
+    <div style="font-size:12px;line-height:1.5;color:var(--text-muted);margin-bottom:12px;">
+      Para habilitar el Segundo Cerebro de IA y memoria persistente, instala Obsidian en tu equipo o selecciona manualmente la carpeta de tu Bóveda.
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-action btn-gradient" id="btn-install-obsidian" style="flex:1;">
+        ${SVGS.globe} <span>Instalar Obsidian</span>
+      </button>
+      <button class="btn-action btn-outline" id="btn-select-vault-card" style="flex:1;">
+        ${SVGS.vault} <span>Seleccionar Bóveda...</span>
+      </button>
+    </div>
+  </div>
+  ` : ''}
 
   <!-- Stats Row -->
   <div class="stats-row">
@@ -762,13 +789,38 @@ function activate(context) {
     context.subscriptions.push({ dispose: () => clearInterval(periodicTimer) });
   }
 
-  // 4. First-launch welcoming notification
-  const initialized = context.globalState.get('obsidian_auto_initialized');
-  if (!initialized && vault && vault.exists) {
-    vscode.window.showInformationMessage(
-      `Obsidian for Antigravity: Configurado y conectado automáticamente (${vault.name}). Tu Segundo Cerebro de IA ya está activo en todos tus chats.`
-    );
-    context.globalState.update('obsidian_auto_initialized', true);
+  // 4. First-launch welcoming notification or Missing Obsidian Alert
+  const { isObsidianAppInstalled } = require('./src/vault-detector');
+  const obsidianAppInstalled = isObsidianAppInstalled();
+
+  if (!vault || !vault.exists || !obsidianAppInstalled) {
+    const isMissingApp = !obsidianAppInstalled;
+    const msg = isMissingApp
+      ? 'No se ha encontrado Obsidian instalado en tu sistema. Instala Obsidian para habilitar tu Segundo Cerebro con IA, o selecciona manualmente la carpeta de tu Bóveda.'
+      : 'No se ha encontrado ninguna Bóveda de Obsidian activa en tu sistema. Selecciona la carpeta de tu Bóveda o crea una para empezar.';
+
+    const optInstall = 'Instalar Obsidian';
+    const optSelect = 'Seleccionar Bóveda...';
+
+    vscode.window.showWarningMessage(msg, optInstall, optSelect).then(choice => {
+      if (choice === optInstall) {
+        vscode.env.openExternal(vscode.Uri.parse('https://obsidian.md/download'));
+      } else if (choice === optSelect) {
+        promptSelectVault(() => {
+          if (currentWebviewView) {
+            currentWebviewView.webview.html = provider._getHtmlForWebview(currentWebviewView.webview);
+          }
+        });
+      }
+    });
+  } else {
+    const initialized = context.globalState.get('obsidian_auto_initialized');
+    if (!initialized) {
+      vscode.window.showInformationMessage(
+        `Obsidian for Antigravity: Configurado y conectado automáticamente (${vault.name}). Tu Segundo Cerebro de IA ya está activo en todos tus chats.`
+      );
+      context.globalState.update('obsidian_auto_initialized', true);
+    }
   }
 
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -854,12 +906,16 @@ function activate(context) {
       const almaDir = path.join(activeVault.path, 'Antigravity', 'Alma');
       const soulPath = path.join(almaDir, '00 Soul de Antigravity.md');
       const userPath = path.join(almaDir, '00 Perfil de Usuario.md');
+      const personalityPath = fs.existsSync(path.join(almaDir, '00 AI Personality.md'))
+        ? path.join(almaDir, '00 AI Personality.md')
+        : path.join(almaDir, '00 Personalidad de la IA.md');
 
       const choice = await vscode.window.showQuickPick([
+        { label: '$(sparkle) Ver Personalidad de la IA', description: path.basename(personalityPath), path: personalityPath },
         { label: '$(account) Ver Perfil de Usuario', description: '00 Perfil de Usuario.md', path: userPath },
         { label: '$(circuit-board) Ver Soul de Antigravity', description: '00 Soul de Antigravity.md', path: soulPath },
         { label: '$(eye) Abrir en Panel Lateral', description: 'Webview', action: 'webview' },
-      ], { placeHolder: 'Selecciona qué vista de Soul o Perfil consultar' });
+      ], { placeHolder: 'Selecciona qué vista de Soul, Perfil o Personalidad consultar' });
 
       if (!choice) return;
       if (choice.action === 'webview') {
@@ -872,6 +928,107 @@ function activate(context) {
         await vscode.window.showTextDocument(doc, { preview: false });
       } else {
         vscode.window.showWarningMessage(`No se encontró el archivo: ${choice.description}`);
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('antigravityObsidian.configurePersonality', async () => {
+      const activeVault = getActiveOrConfiguredVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
+      if (!activeVault || !activeVault.exists) {
+        vscode.window.showWarningMessage('No hay ninguna bóveda de Obsidian conectada.');
+        return;
+      }
+      const current = syncEngine.getPersonality(activeVault.path);
+
+      const aiName = await vscode.window.showInputBox({
+        title: 'Calibrar Nombre del Agente IA',
+        prompt: '¿Cómo quieres que se llame tu agente de IA? (ej: Hermes, Jarvis, Antigravity)',
+        value: current.aiName || 'Hermes',
+      });
+      if (aiName === undefined) return;
+
+      const userCallsign = await vscode.window.showInputBox({
+        title: 'Calibrar Trato hacia Ti',
+        prompt: '¿Cómo quieres que el agente se dirija a ti? (ej: Davis, Jefe, Comandante, Socio)',
+        value: current.userCallsign || '',
+      });
+      if (userCallsign === undefined) return;
+
+      const personality = await vscode.window.showInputBox({
+        title: 'Calibrar Rasgos de Personalidad y Tono',
+        prompt: 'Describe los rasgos o estilo de comportamiento del agente',
+        value: current.personality || 'Elite senior software engineer, pragmático, quirúrgico, sin rodeos y cero emojis.',
+      });
+      if (personality === undefined) return;
+
+      const saved = syncEngine.savePersonality(activeVault.path, {
+        aiName: aiName.trim() || 'Hermes',
+        userCallsign: userCallsign.trim() || 'User',
+        personality: personality.trim(),
+        configured: true,
+      });
+
+      const config = vscode.workspace.getConfiguration('antigravityObsidian');
+      await config.update('aiName', saved.aiName, vscode.ConfigurationTarget.Global);
+      await config.update('userCallsign', saved.userCallsign, vscode.ConfigurationTarget.Global);
+      await config.update('personality', saved.personality, vscode.ConfigurationTarget.Global);
+      await config.update('personalityConfigured', true, vscode.ConfigurationTarget.Global);
+
+      installSkillAndRules(activeVault.path, {
+        aiName: saved.aiName,
+        userCallsign: saved.userCallsign,
+        personality: saved.personality,
+        personalityConfigured: true,
+      });
+
+      syncEngine.syncAll(activeVault.path, getWorkspaceRoot());
+
+      if (currentWebviewView) {
+        currentWebviewView.webview.html = provider._getHtmlForWebview(currentWebviewView.webview);
+      }
+
+      vscode.window.showInformationMessage(`Personalidad calibrada: "${saved.aiName}" te llamará "${saved.userCallsign}".`);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('antigravityObsidian.registerProject', async () => {
+      const activeVault = getActiveOrConfiguredVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
+      if (!activeVault || !activeVault.exists) {
+        vscode.window.showWarningMessage('No hay ninguna bóveda de Obsidian conectada.');
+        return;
+      }
+      const root = getWorkspaceRoot();
+      if (!root) {
+        vscode.window.showWarningMessage('No hay ningún espacio de trabajo (workspace) abierto en este momento.');
+        return;
+      }
+
+      const res = syncEngine.syncProject(activeVault.path, root);
+      syncEngine.syncVaultToKnowledge(activeVault.path);
+
+      if (currentWebviewView) {
+        currentWebviewView.webview.html = provider._getHtmlForWebview(currentWebviewView.webview);
+      }
+
+      vscode.window.showInformationMessage(`Proyecto "${res.projectName}" registrado en el Índice Unificado de Obsidian.`);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('antigravityObsidian.showProjects', async () => {
+      const activeVault = getActiveOrConfiguredVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
+      if (!activeVault || !activeVault.exists) {
+        vscode.window.showWarningMessage('No hay ninguna bóveda de Obsidian conectada.');
+        return;
+      }
+      const idxFile = path.join(activeVault.path, 'Antigravity', 'Proyectos', '00 Indice de Proyectos.md');
+      if (fs.existsSync(idxFile)) {
+        const doc = await vscode.workspace.openTextDocument(idxFile);
+        await vscode.window.showTextDocument(doc, { preview: false });
+      } else {
+        vscode.window.showWarningMessage('El Índice de Proyectos aún no ha sido generado.');
       }
     })
   );

@@ -245,9 +245,58 @@ function ensureOrCreateDefaultVault(configuredPath) {
   }
 }
 
+function isObsidianAppInstalled() {
+  const platform = process.platform;
+  const home = os.homedir();
+
+  // 1. Config file exists from a real Obsidian installation
+  const configCandidates = getObsidianConfigCandidates();
+  for (const c of configCandidates) {
+    if (fs.existsSync(c)) return true;
+  }
+
+  // 2. Platform specific executable checks
+  if (platform === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
+    const progFiles = process.env.ProgramFiles || 'C:\\Program Files';
+    const progFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+
+    if (
+      fs.existsSync(path.join(localAppData, 'Obsidian', 'Obsidian.exe')) ||
+      fs.existsSync(path.join(localAppData, 'Programs', 'Obsidian', 'Obsidian.exe')) ||
+      fs.existsSync(path.join(progFiles, 'Obsidian', 'Obsidian.exe')) ||
+      fs.existsSync(path.join(progFilesX86, 'Obsidian', 'Obsidian.exe'))
+    ) {
+      return true;
+    }
+  } else if (platform === 'darwin') {
+    if (
+      fs.existsSync('/Applications/Obsidian.app') ||
+      fs.existsSync(path.join(home, 'Applications', 'Obsidian.app'))
+    ) {
+      return true;
+    }
+  } else {
+    // Linux
+    const linuxPaths = [
+      '/usr/bin/obsidian',
+      '/usr/local/bin/obsidian',
+      '/snap/bin/obsidian',
+      path.join(home, '.local', 'bin', 'obsidian'),
+      '/var/lib/flatpak/app/md.obsidian.Obsidian',
+    ];
+    for (const lp of linuxPaths) {
+      if (fs.existsSync(lp)) return true;
+    }
+  }
+
+  return false;
+}
+
 module.exports = {
   getObsidianConfigPath,
   detectVaults,
   getActiveOrConfiguredVault,
   ensureOrCreateDefaultVault,
+  isObsidianAppInstalled,
 };

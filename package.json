@@ -2,7 +2,7 @@
   "name": "obsidian-for-antigravity",
   "displayName": "Obsidian for Antigravity",
   "description": "Autonomous Second Brain & persistent memory for Antigravity AI connected to Obsidian. Automatically stores bugfixes, architecture decisions, and skills in your local Vault with real-time Graph View.",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "publisher": "Davissss2",
   "author": {
     "name": "Davissss2",
@@ -83,8 +83,13 @@
       },
       {
         "command": "antigravityObsidian.showSoul",
-        "title": "Obsidian: View Soul & User Profile",
+        "title": "Obsidian: View Soul, Personality & Profile",
         "icon": "$(account)"
+      },
+      {
+        "command": "antigravityObsidian.configurePersonality",
+        "title": "Obsidian: Configure AI Agent Personality",
+        "icon": "$(gear)"
       },
       {
         "command": "antigravityObsidian.showStatus",
@@ -95,6 +100,16 @@
         "command": "antigravityObsidian.openGraph",
         "title": "Obsidian: Open Graph View in App",
         "icon": "$(graph)"
+      },
+      {
+        "command": "antigravityObsidian.registerProject",
+        "title": "Obsidian: Register Workspace Project in Unified Registry",
+        "icon": "$(file-submodule)"
+      },
+      {
+        "command": "antigravityObsidian.showProjects",
+        "title": "Obsidian: View Unified Projects Index",
+        "icon": "$(list-unordered)"
       },
       {
         "command": "antigravityObsidian.resetData",
@@ -157,6 +172,26 @@
           "type": "string",
           "default": "",
           "description": "Custom user name for the Hermes User Profile and rules. Leave empty to automatically detect."
+        },
+        "antigravityObsidian.aiName": {
+          "type": "string",
+          "default": "Hermes",
+          "description": "Custom name assigned to the Antigravity AI agent (e.g. Hermes, Jarvis, Antigravity)."
+        },
+        "antigravityObsidian.userCallsign": {
+          "type": "string",
+          "default": "",
+          "description": "How the AI should address you (e.g. your name, nickname, 'Jefe', 'Chief'). Leave empty for default user name."
+        },
+        "antigravityObsidian.personality": {
+          "type": "string",
+          "default": "",
+          "description": "Personality traits, demeanor, and tone for the AI agent."
+        },
+        "antigravityObsidian.personalityConfigured": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the AI personality and callsign have been configured."
         }
       }
     }

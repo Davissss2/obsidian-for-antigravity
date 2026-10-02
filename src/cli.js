@@ -237,6 +237,84 @@ async function main() {
       const result = syncEngine.catalogContext(vaultPath);
       console.log(JSON.stringify(result.skills, null, 2));
       break;
+    case 'project': {
+      const sub = (args[0] || 'list').toLowerCase();
+      const targetDir = args[1] ? path.resolve(args[1]) : process.cwd();
+
+      if (sub === 'register') {
+        const res = syncEngine.syncProject(vaultPath, targetDir);
+        syncEngine.syncVaultToKnowledge(vaultPath);
+        console.log(JSON.stringify({ status: 'ok', action: 'registered', project: res }, null, 2));
+        break;
+      }
+
+      if (sub === 'status') {
+        const res = syncEngine.isProjectRegistered(vaultPath, targetDir);
+        console.log(JSON.stringify({ status: 'ok', workspacePath: targetDir, ...res }, null, 2));
+        break;
+      }
+
+      const projects = syncEngine.getProjectsRegistry(vaultPath);
+      console.log(JSON.stringify({ status: 'ok', count: projects.length, projects }, null, 2));
+      break;
+    }
+
+    case 'personality': {
+      const named = parseNamedArgs(args);
+      let aiName = named['ai-name'];
+      let userCallsign = named['user-callsign'];
+      let personality = named['personality'];
+      let reset = named['reset'] !== undefined;
+
+      if (!aiName && !userCallsign && !personality && !reset && args.length > 0) {
+        if (args[0] === 'reset') reset = true;
+        else {
+          aiName = args[0];
+          if (args[1]) userCallsign = args[1];
+          if (args.length > 2) personality = args.slice(2).join(' ');
+        }
+      }
+
+      if (reset) {
+        const res = syncEngine.savePersonality(vaultPath, { configured: false });
+        try {
+          const { installSkillAndRules } = require('./skill-installer');
+          installSkillAndRules(vaultPath, { personalityConfigured: false });
+        } catch (e) {}
+        console.log(JSON.stringify({ status: 'ok', configured: false, message: 'Personalidad reiniciada.' }, null, 2));
+        break;
+      }
+
+      if (aiName || userCallsign || personality) {
+        const res = syncEngine.savePersonality(vaultPath, {
+          aiName,
+          userCallsign,
+          personality,
+          configured: true,
+        });
+        try {
+          const { installSkillAndRules } = require('./skill-installer');
+          installSkillAndRules(vaultPath, {
+            aiName: res.aiName,
+            userCallsign: res.userCallsign,
+            personality: res.personality,
+            personalityConfigured: true,
+          });
+        } catch (e) {}
+        console.log(JSON.stringify({
+          status: 'ok',
+          configured: true,
+          aiName: res.aiName,
+          userCallsign: res.userCallsign,
+          personality: res.personality,
+          message: 'Personalidad configurada correctamente.',
+        }, null, 2));
+        break;
+      }
+
+      const current = syncEngine.getPersonality(vaultPath);
+      console.log(JSON.stringify({ status: 'ok', ...current }, null, 2));
+      break;
     }
 
     case 'soul': {

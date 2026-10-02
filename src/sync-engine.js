@@ -122,6 +122,225 @@ function resolveLanguage(options = {}) {
   return 'es';
 }
 
+function resolvePersonality(vaultPath, explicitOptions = {}) {
+  let aiName = '';
+  let userCallsign = '';
+  let personality = '';
+  let configured = false;
+
+  if (explicitOptions.aiName && typeof explicitOptions.aiName === 'string' && explicitOptions.aiName.trim()) {
+    aiName = explicitOptions.aiName.trim();
+  }
+  if (explicitOptions.userCallsign && typeof explicitOptions.userCallsign === 'string' && explicitOptions.userCallsign.trim()) {
+    userCallsign = explicitOptions.userCallsign.trim();
+  }
+  if (explicitOptions.personality && typeof explicitOptions.personality === 'string' && explicitOptions.personality.trim()) {
+    personality = explicitOptions.personality.trim();
+  }
+  if (explicitOptions.personalityConfigured !== undefined) {
+    configured = !!explicitOptions.personalityConfigured;
+  }
+
+  const home = os.homedir();
+  const bridgeConfigPath = path.join(home, '.gemini', 'config', 'antigravity-obsidian.json');
+  if (fs.existsSync(bridgeConfigPath)) {
+    try {
+      const cfg = JSON.parse(fs.readFileSync(bridgeConfigPath, 'utf8'));
+      if (!aiName && cfg.aiName) aiName = cfg.aiName.trim();
+      if (!userCallsign && cfg.userCallsign) userCallsign = cfg.userCallsign.trim();
+      if (!personality && cfg.personality) personality = cfg.personality.trim();
+      if (explicitOptions.personalityConfigured === undefined && cfg.personalityConfigured !== undefined) {
+        configured = !!cfg.personalityConfigured;
+      }
+    } catch (e) {}
+  }
+
+  // Check vault note if still missing fields
+  if (vaultPath) {
+    const almaDir = path.join(vaultPath, 'Antigravity', 'Alma');
+    const pFile = path.join(almaDir, '00 Personalidad de la IA.md');
+    const pFileEn = path.join(almaDir, '00 AI Personality.md');
+    const targetFile = fs.existsSync(pFile) ? pFile : (fs.existsSync(pFileEn) ? pFileEn : null);
+    if (targetFile) {
+      try {
+        const content = fs.readFileSync(targetFile, 'utf8');
+        if (!aiName) {
+          const m = content.match(/^ai_name:\s*["']?([^"'\r\n]+)["']?/m);
+          if (m) aiName = m[1].trim();
+        }
+        if (!userCallsign) {
+          const m = content.match(/^user_callsign:\s*["']?([^"'\r\n]+)["']?/m);
+          if (m) userCallsign = m[1].trim();
+        }
+        if (!personality) {
+          const m = content.match(/##\s*1\.\s*(?:Arquetipo y Rasgos de Personalidad|Archetype & Personality Traits)[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
+          if (m && m[1].trim()) personality = m[1].trim();
+        }
+        if (explicitOptions.personalityConfigured === undefined && !configured) {
+          const mStatus = content.match(/^status:\s*["']?([^"'\r\n]+)["']?/m);
+          const mConfigured = content.match(/^configured:\s*(true|false)/m);
+          if (mConfigured && mConfigured[1] === 'true') configured = true;
+          else if (mStatus && mStatus[1].trim() === 'configured') configured = true;
+        }
+      } catch (e) {}
+    }
+  }
+
+  const lang = resolveLanguage(explicitOptions);
+  const isEn = (lang === 'en');
+  const defaultUserName = resolveUserName(vaultPath, explicitOptions.userName);
+
+  if (!aiName) aiName = 'Hermes';
+  if (!userCallsign) userCallsign = defaultUserName;
+  if (!personality) {
+    personality = isEn
+      ? 'Senior autonomous software engineer: surgical, pragmatic, direct, zero corporate fluff, and strictly ZERO emojis.'
+      : 'Ingeniero senior de élite, autónomo, pragmático y de precisión quirúrgica. Respuestas técnicas, directas, sin paja corporativa y estrictamente CERO emojis.';
+  }
+
+  return {
+    aiName,
+    userCallsign,
+    personality,
+    configured,
+  };
+}
+
+function ensurePersonality(vaultPath, options = {}) {
+  if (!vaultPath || !fs.existsSync(vaultPath)) return null;
+  ensureVaultStructure(vaultPath);
+
+  const almaDir = path.join(vaultPath, 'Antigravity', 'Alma');
+  if (!fs.existsSync(almaDir)) {
+    fs.mkdirSync(almaDir, { recursive: true });
+  }
+
+  const now = new Date().toISOString().split('T')[0];
+  const lang = resolveLanguage(options);
+  const isEn = (lang === 'en');
+  const pFileName = isEn ? '00 AI Personality.md' : '00 Personalidad de la IA.md';
+  const personalityPath = path.join(almaDir, pFileName);
+
+  const { aiName, userCallsign, personality, configured } = resolvePersonality(vaultPath, options);
+
+  const content = isEn
+    ? `---
+title: "AI Personality & Agent Identity"
+type: antigravity-personality
+tags:
+  - antigravity/personality
+  - antigravity/agent
+ai_name: "${aiName}"
+user_callsign: "${userCallsign}"
+configured: ${configured}
+status: "${configured ? 'configured' : 'pending_onboarding'}"
+language: en
+updated: ${now}
+---
+
+# Agent Personality & Identity — ${aiName}
+
+> [!NOTE] **Agent Identity & Communication Dynamics**
+> - **Agent Name**: \`${aiName}\`
+> - **User Callsign / Title**: \`${userCallsign}\`
+> - **Status**: \`${configured ? 'Configured (Active)' : 'Pending Calibration (Will ask during first chat interaction)'}\`
+
+## 1. Archetype & Personality Traits
+${personality}
+
+## 2. Communication Protocol
+- The agent embodies the identity of **${aiName}** in all interactions.
+- The agent always addresses the user as **${userCallsign}**.
+- Zero corporate fluff, no condescension, and strictly ZERO emojis.
+${configured ? '- **Persistence**: Personality is configured and locked. The AI will NEVER ask again how to behave in any chat unless explicitly requested by the user or via `/obsidian personality`.' : '- **Onboarding Active**: On first chat interaction, the AI will briefly ask the user for their desired AI name, callsign, and personality traits. Once answered, it saves permanently here and never asks again.'}
+
+---
+*Graph Connections:* [[00 Antigravity Hub]] | [[00 Soul de Antigravity]] | [[00 Perfil de Usuario]]
+`
+    : `---
+title: "Personalidad de la IA y Trato de Agente"
+type: antigravity-personality
+tags:
+  - antigravity/personalidad
+  - antigravity/agente
+ai_name: "${aiName}"
+user_callsign: "${userCallsign}"
+configured: ${configured}
+status: "${configured ? 'configured' : 'pending_onboarding'}"
+language: es
+updated: ${now}
+---
+
+# Personalidad e Identidad del Agente — ${aiName}
+
+> [!NOTE] **Identidad y Dinámica de Trato**
+> - **Nombre del Agente**: \`${aiName}\`
+> - **Trato hacia el usuario**: \`${userCallsign}\`
+> - **Estado de Calibración**: \`${configured ? 'Configurado (Activo)' : 'Pendiente de calibración (Se preguntará en el primer chat)'}\`
+
+## 1. Arquetipo y Rasgos de Personalidad
+${personality}
+
+## 2. Protocolo de Comunicación
+- El agente responderá asumiendo plenamente el nombre e identidad de **${aiName}**.
+- El agente se dirigirá siempre al usuario como **${userCallsign}**.
+- Comunicación técnica de alta densidad, cero rodeos corporativos y estrictamente CERO emojis.
+${configured ? '- **Permanencia**: La personalidad está fijada de forma permanente. La IA NUNCA volverá a preguntar cómo comportarse en ningún chat, a menos que el usuario lo solicite expresamente o use `/obsidian personality`.' : '- **Onboarding Activo**: En la primera interacción de un chat, la IA preguntará al usuario qué nombre asignarle, cómo dirigirse a él y qué comportamiento tener. Tras responder, quedará guardado permanentemente aquí y no volverá a preguntar jamás.'}
+
+---
+*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Soul de Antigravity]] | [[00 Perfil de Usuario]]
+`;
+
+  if (!fs.existsSync(personalityPath) || options.forceUpdate) {
+    fs.writeFileSync(personalityPath, content, 'utf8');
+  }
+
+  // Also maintain bridge config
+  const home = os.homedir();
+  const bridgeConfigPath = path.join(home, '.gemini', 'config', 'antigravity-obsidian.json');
+  if (fs.existsSync(bridgeConfigPath)) {
+    try {
+      const cfg = JSON.parse(fs.readFileSync(bridgeConfigPath, 'utf8'));
+      cfg.aiName = aiName;
+      cfg.userCallsign = userCallsign;
+      cfg.personality = personality;
+      cfg.personalityConfigured = configured;
+      cfg.lastUpdated = new Date().toISOString();
+      fs.writeFileSync(bridgeConfigPath, JSON.stringify(cfg, null, 2), 'utf8');
+    } catch (e) {}
+  }
+
+  return { personalityPath, aiName, userCallsign, personality, configured };
+}
+
+function savePersonality(vaultPath, data = {}, options = {}) {
+  if (!vaultPath || !fs.existsSync(vaultPath)) return null;
+  const merged = {
+    ...options,
+    ...data,
+    personalityConfigured: data.configured !== undefined ? !!data.configured : true,
+    forceUpdate: true,
+  };
+  return ensurePersonality(vaultPath, merged);
+}
+
+function getPersonality(vaultPath, options = {}) {
+  if (!vaultPath || !fs.existsSync(vaultPath)) return null;
+  const { aiName, userCallsign, personality, configured } = resolvePersonality(vaultPath, options);
+  const almaDir = path.join(vaultPath, 'Antigravity', 'Alma');
+  const lang = resolveLanguage(options);
+  const pFileName = (lang === 'en') ? '00 AI Personality.md' : '00 Personalidad de la IA.md';
+  const personalityPath = path.join(almaDir, pFileName);
+  return {
+    aiName,
+    userCallsign,
+    personality,
+    configured,
+    personalityPath,
+    exists: fs.existsSync(personalityPath),
+  };
+}
+
 function ensureSoulAndProfile(vaultPath, options = {}) {
   if (!vaultPath || !fs.existsSync(vaultPath)) return null;
   ensureVaultStructure(vaultPath);
@@ -130,6 +349,8 @@ function ensureSoulAndProfile(vaultPath, options = {}) {
   if (!fs.existsSync(almaDir)) {
     fs.mkdirSync(almaDir, { recursive: true });
   }
+
+  ensurePersonality(vaultPath, options);
 
   const now = new Date().toISOString().split('T')[0];
   const soulPath = path.join(almaDir, '00 Soul de Antigravity.md');
@@ -174,7 +395,7 @@ updated: ${now}
    - Every correction, directive, or preference expressed by the user is assimilated immediately into the User Profile to enhance all future sessions.
 
 ---
-*Graph Connections:* [[00 Antigravity Hub]] | [[00 Perfil de Usuario]]
+*Graph Connections:* [[00 Antigravity Hub]] | [[00 Perfil de Usuario]] | [[00 AI Personality]]
 `
     : `---
 title: "Soul de Antigravity (Hermes Core)"
@@ -210,7 +431,7 @@ updated: ${now}
    - Cada corrección, directriz o preferencia expresada por el usuario se asimila de inmediato en el Perfil de Usuario para mejorar el comportamiento en todos los chats siguientes.
 
 ---
-*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Perfil de Usuario]]
+*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Perfil de Usuario]] | [[00 Personalidad de la IA]]
 `;
 
   const userContent = isEn
@@ -253,7 +474,7 @@ updated: ${now}
 - \`[2026-10-02]\` URI dispatch prioritized via \`vscode.env.openExternal\` before invoking shell fallbacks.
 
 ---
-*Graph Connections:* [[00 Antigravity Hub]] | [[00 Soul de Antigravity]]
+*Graph Connections:* [[00 Antigravity Hub]] | [[00 Soul de Antigravity]] | [[00 AI Personality]]
 `
     : `---
 title: "Perfil y Estilo de Trabajo del Usuario"
@@ -294,7 +515,7 @@ updated: ${now}
 - \`[2026-10-02]\` Despacho de URIs con prioridad \`vscode.env.openExternal\` antes de invocar ejecutables de shell.
 
 ---
-*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Soul de Antigravity]]
+*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Soul de Antigravity]] | [[00 Personalidad de la IA]]
 `;
 
   if (!fs.existsSync(soulPath) || options.forceUpdate) {
@@ -916,26 +1137,333 @@ ${instructions}
 }
 
 // -------------------------------------------------------------
-// Sync Current Workspace Project
+// -------------------------------------------------------------
+// Unified Project Registry & Autonomous Workspace Detection
 // -------------------------------------------------------------
 
-function syncProject(vaultPath, workspaceRoot) {
-  if (!workspaceRoot || !fs.existsSync(workspaceRoot)) return null;
+function detectWorkspaceStack(workspaceRoot) {
+  const info = {
+    name: path.basename(workspaceRoot),
+    version: '1.0.0',
+    stack: 'General / No detectado',
+    description: '',
+    framework: '',
+    dependencies: [],
+  };
 
-  ensureVaultStructure(vaultPath);
-  const projectName = path.basename(workspaceRoot);
-  const projFolder = path.join(vaultPath, 'Antigravity', 'Proyectos');
-  const obsFile = path.join(projFolder, `${sanitizeFilename(projectName)}.md`);
-  const now = new Date().toISOString().split('T')[0];
+  if (!workspaceRoot || !fs.existsSync(workspaceRoot)) return info;
 
-  let packageInfo = '';
+  // 1. Check package.json (Node.js / JS / TS)
   const pkgPath = path.join(workspaceRoot, 'package.json');
   if (fs.existsSync(pkgPath)) {
     try {
       const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-      packageInfo = `\n### Stack Tecnológico (package.json)\n- **Versión**: \`${pkg.version || '1.0.0'}\`\n- **Dependencias**: ${Object.keys(pkg.dependencies || {}).map(d => `\`${d}\``).join(', ') || 'Ninguna'}\n- **DevDependencies**: ${Object.keys(pkg.devDependencies || {}).map(d => `\`${d}\``).join(', ') || 'Ninguna'}\n`;
+      if (pkg.name) info.name = pkg.name;
+      if (pkg.version) info.version = pkg.version;
+      if (pkg.description) info.description = pkg.description;
+
+      const deps = Object.keys(pkg.dependencies || {});
+      const devDeps = Object.keys(pkg.devDependencies || {});
+      info.dependencies = [...deps, ...devDeps];
+
+      if (pkg.engines && pkg.engines.vscode) {
+        info.framework = 'VS Code Extension';
+      } else if (deps.includes('next') || devDeps.includes('next')) {
+        info.framework = 'Next.js';
+      } else if (deps.includes('react') || devDeps.includes('react')) {
+        info.framework = 'React';
+      } else if (deps.includes('vue') || devDeps.includes('vue')) {
+        info.framework = 'Vue';
+      } else if (deps.includes('express') || devDeps.includes('express')) {
+        info.framework = 'Express';
+      } else if (deps.includes('fastify') || devDeps.includes('fastify')) {
+        info.framework = 'Fastify';
+      } else if (deps.includes('nest') || devDeps.includes('@nestjs/core')) {
+        info.framework = 'NestJS';
+      } else if (deps.includes('electron') || devDeps.includes('electron')) {
+        info.framework = 'Electron';
+      }
+
+      const tsConfig = path.join(workspaceRoot, 'tsconfig.json');
+      const lang = fs.existsSync(tsConfig) ? 'TypeScript' : 'JavaScript (Node.js)';
+      info.stack = info.framework ? `${info.framework} (${lang})` : lang;
     } catch (e) {}
   }
+
+  // 2. Check Python (pyproject.toml, requirements.txt, Pipfile)
+  const pyProject = path.join(workspaceRoot, 'pyproject.toml');
+  const reqTxt = path.join(workspaceRoot, 'requirements.txt');
+  if (fs.existsSync(pyProject) || fs.existsSync(reqTxt)) {
+    let pyFramework = '';
+    let content = '';
+    if (fs.existsSync(reqTxt)) {
+      try { content += fs.readFileSync(reqTxt, 'utf8').toLowerCase(); } catch (e) {}
+    }
+    if (fs.existsSync(pyProject)) {
+      try { content += fs.readFileSync(pyProject, 'utf8').toLowerCase(); } catch (e) {}
+    }
+    if (content.includes('fastapi')) pyFramework = 'FastAPI';
+    else if (content.includes('django')) pyFramework = 'Django';
+    else if (content.includes('flask')) pyFramework = 'Flask';
+
+    info.stack = pyFramework ? `Python (${pyFramework})` : 'Python';
+  }
+
+  // 3. Check Rust (Cargo.toml)
+  const cargoToml = path.join(workspaceRoot, 'Cargo.toml');
+  if (fs.existsSync(cargoToml)) {
+    info.stack = 'Rust (Cargo)';
+  }
+
+  // 4. Check PHP (composer.json)
+  const composerJson = path.join(workspaceRoot, 'composer.json');
+  if (fs.existsSync(composerJson)) {
+    try {
+      const comp = JSON.parse(fs.readFileSync(composerJson, 'utf8'));
+      if (comp.description && !info.description) info.description = comp.description;
+      const reqs = Object.keys(comp.require || {});
+      if (reqs.includes('laravel/framework')) info.stack = 'PHP (Laravel)';
+      else if (reqs.includes('symfony/framework-bundle')) info.stack = 'PHP (Symfony)';
+      else info.stack = 'PHP (Composer)';
+    } catch (e) {
+      info.stack = 'PHP';
+    }
+  }
+
+  // 5. Check Go (go.mod)
+  if (fs.existsSync(path.join(workspaceRoot, 'go.mod'))) {
+    info.stack = 'Go';
+  }
+
+  // 6. Check README.md for description fallback
+  if (!info.description) {
+    const readmePath = path.join(workspaceRoot, 'README.md');
+    if (fs.existsSync(readmePath)) {
+      try {
+        const readme = fs.readFileSync(readmePath, 'utf8');
+        const clean = readme.replace(/^#[^\r\n]*/gm, '').replace(/\[!.*?\][^\r\n]*/g, '').trim();
+        const firstPara = clean.split(/\r?\n\r?\n/)[0];
+        if (firstPara) {
+          info.description = firstPara.replace(/\r?\n/g, ' ').slice(0, 160).trim();
+        }
+      } catch (e) {}
+    }
+  }
+
+  if (!info.description) {
+    info.description = `Proyecto en desarrollo (${info.stack})`;
+  }
+
+  return info;
+}
+
+function findAssociatedSkill(projectName, workspaceRoot, vaultPath) {
+  const normName = (projectName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const pTokens = (projectName || '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(t => t.length >= 3 && !['for', 'the', 'app', 'ide', 'with', 'and'].includes(t));
+
+  function matchesSkill(skillName) {
+    if (!skillName) return false;
+    const clean = skillName.replace(/\.md$/, '').replace(/^\[Proyecto\]\s*/, '');
+    const normSkill = clean.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (normSkill.includes(normName) || normName.includes(normSkill)) return true;
+
+    const sTokens = clean.toLowerCase().split(/[^a-z0-9]+/).filter(t => t.length >= 3);
+    const common = pTokens.filter(t => sTokens.includes(t));
+    if (common.length >= 2 || (pTokens.length === 1 && common.length === 1)) {
+      return true;
+    }
+    return false;
+  }
+
+  // 1. Workspace skills
+  if (workspaceRoot) {
+    const wsSkills = path.join(workspaceRoot, '.agents', 'skills');
+    if (fs.existsSync(wsSkills)) {
+      try {
+        const list = fs.readdirSync(wsSkills, { withFileTypes: true });
+        for (const s of list) {
+          if (s.isDirectory() && matchesSkill(s.name)) {
+            return s.name;
+          }
+        }
+      } catch (e) {}
+    }
+  }
+
+  // 2. Global skills
+  const { skillsDir } = getAntigravityPaths();
+  if (fs.existsSync(skillsDir)) {
+    try {
+      const list = fs.readdirSync(skillsDir, { withFileTypes: true });
+      for (const s of list) {
+        if (!s.isDirectory()) continue;
+        if (matchesSkill(s.name)) {
+          return s.name;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 3. Vault skills
+  if (vaultPath) {
+    const vaultSkillsDir = path.join(vaultPath, 'Antigravity', 'Skills');
+    if (fs.existsSync(vaultSkillsDir)) {
+      try {
+        const list = fs.readdirSync(vaultSkillsDir);
+        for (const sf of list) {
+          if (!sf.endsWith('.md') || sf.startsWith('00')) continue;
+          const clean = sf.replace(/\.md$/, '').replace(/^\[Proyecto\]\s*/, '');
+          if (matchesSkill(clean)) {
+            return clean;
+          }
+        }
+      } catch (e) {}
+    }
+  }
+
+  return '—';
+}
+
+function syncProjectsIndex(vaultPath, options = {}) {
+  ensureVaultStructure(vaultPath);
+  const lang = resolveLanguage(options);
+  const isEn = (lang === 'en');
+  const projFolder = path.join(vaultPath, 'Antigravity', 'Proyectos');
+  const indexFile = path.join(projFolder, isEn ? '00 Projects Index.md' : '00 Indice de Proyectos.md');
+  const now = new Date().toISOString().split('T')[0];
+
+  const projects = [];
+
+  if (fs.existsSync(projFolder)) {
+    const files = fs.readdirSync(projFolder);
+    for (const f of files) {
+      if (!f.endsWith('.md') || f.startsWith('00')) continue;
+      const fp = path.join(projFolder, f);
+      try {
+        const content = fs.readFileSync(fp, 'utf8');
+        const baseName = f.replace(/\.md$/, '');
+        let name = baseName;
+        let localPath = '—';
+        let stack = '—';
+        let summary = '—';
+        let skill = '—';
+
+        const nameMatch = content.match(/>\s*-\s*\*\*Nombre\*\*:\s*`([^`]+)`/i) || content.match(/^title:\s*"Proyecto:\s*([^"\r\n]+)"/m);
+        if (nameMatch) name = nameMatch[1].trim();
+
+        const pathMatch = content.match(/>\s*-\s*\*\*Ruta local\*\*:\s*`([^`]+)`/i);
+        if (pathMatch) localPath = pathMatch[1].trim();
+
+        const stackMatch = content.match(/>\s*-\s*\*\*Stack\*\*:\s*([^\r\n]+)/i) || content.match(/###\s*Stack Tecnológico[^\r\n]*\r?\n([^\r\n#]+)/i);
+        if (stackMatch) stack = stackMatch[1].replace(/[`*]/g, '').trim();
+
+        const sumMatch = content.match(/>\s*-\s*\*\*Resumen\*\*:\s*([^\r\n]+)/i) || content.match(/>\s*\[!(?:INFO|ABSTRACT)\][^\r\n]*\r?\n>\s*([^\r\n]+)/i);
+        if (sumMatch) summary = sumMatch[1].trim();
+
+        const skillMatch = content.match(/>\s*-\s*\*\*Skill Asociada\*\*:\s*\[\[?([^\]\r\n]+)\]\]?/i) || content.match(/##\s*Skills de Proyecto[^\r\n]*\r?\n\[\[([^\]]+)\]\]/i);
+        if (skillMatch) skill = skillMatch[1].replace(/^\[\[|\]\]$/g, '').trim();
+
+        projects.push({
+          name,
+          localPath,
+          stack,
+          summary: summary.slice(0, 140),
+          skill: skill !== '—' ? `[[${skill}]]` : '—',
+          file: baseName,
+        });
+      } catch (e) {}
+    }
+  }
+
+  projects.sort((a, b) => a.name.localeCompare(b.name));
+
+  let tableRows = '';
+  if (projects.length === 0) {
+    tableRows = isEn
+      ? '| *No projects registered yet* | — | — | — | — | — |\n'
+      : '| *Aún no hay proyectos registrados* | — | — | — | — | — |\n';
+  } else {
+    for (const p of projects) {
+      tableRows += `| **${p.name}** | \`${p.localPath}\` | ${p.stack} | ${p.summary} | ${p.skill} | [[${p.file}]] |\n`;
+    }
+  }
+
+  const content = isEn
+    ? `---
+title: "Projects Index — Antigravity"
+type: antigravity-index
+tags:
+  - antigravity/proyectos
+  - antigravity/index
+created: ${now}
+updated: ${now}
+---
+
+# Unified Projects Index — Antigravity
+
+> [!INFO] **Consolidated Projects Registry**
+> High-density unified registry of all workspace projects tracked by Antigravity and Obsidian.
+> This single index prevents token waste across chat sessions by aggregating project metadata, paths, and skills.
+
+| Project | Local Path | Tech Stack | Summary | Associated Skill | Note |
+|---|---|---|---|---|---|
+${tableRows}
+---
+*Graph Connections:* [[00 Antigravity Hub]] | [[00 Indice de Memoria]]
+`
+    : `---
+title: "Índice de Proyectos — Antigravity"
+type: antigravity-index
+tags:
+  - antigravity/proyectos
+  - antigravity/index
+created: ${now}
+updated: ${now}
+---
+
+# Índice Unificado de Proyectos — Antigravity
+
+> [!INFO] **Registro Consolidado de Proyectos**
+> Registro unificado de alta densidad de todos los proyectos de workspace vinculados a Antigravity y Obsidian.
+> Este índice único evita el consumo excesivo de tokens al consolidar rutas, stack y skills asociadas en una sola memoria.
+
+| Proyecto | Ruta Local | Stack Tecnológico | Resumen | Skill Asociada | Ficha |
+|---|---|---|---|---|---|
+${tableRows}
+---
+*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Indice de Memoria]]
+`;
+
+  fs.writeFileSync(indexFile, content, 'utf8');
+  return { indexPath: indexFile, count: projects.length, projects };
+}
+
+function syncProject(vaultPath, workspaceRoot, options = {}) {
+  if (!workspaceRoot || !fs.existsSync(workspaceRoot)) return null;
+
+  ensureVaultStructure(vaultPath);
+  const detected = detectWorkspaceStack(workspaceRoot);
+  const projectName = detected.name || path.basename(workspaceRoot);
+  const projFolder = path.join(vaultPath, 'Antigravity', 'Proyectos');
+  const obsFile = path.join(projFolder, `${sanitizeFilename(projectName)}.md`);
+  const now = new Date().toISOString().split('T')[0];
+  const associatedSkill = findAssociatedSkill(projectName, workspaceRoot, vaultPath);
+
+  // Remove any legacy note for the same workspace path if name changed (e.g. obsi.md vs obsidian-for-antigravity.md)
+  try {
+    for (const f of fs.readdirSync(projFolder)) {
+      if (!f.endsWith('.md') || f.startsWith('00') || f === `${sanitizeFilename(projectName)}.md`) continue;
+      const oldFp = path.join(projFolder, f);
+      const oldTxt = fs.readFileSync(oldFp, 'utf8');
+      const mP = oldTxt.match(/>\s*-\s*\*\*Ruta local\*\*:\s*`([^`]+)`/i);
+      if (mP && path.resolve(mP[1]).toLowerCase() === path.resolve(workspaceRoot).toLowerCase()) {
+        try { fs.unlinkSync(oldFp); } catch (e) {}
+      }
+    }
+  } catch (e) {}
 
   let existingRules = '';
   let existingMemories = '';
@@ -958,6 +1486,9 @@ function syncProject(vaultPath, workspaceRoot) {
     } catch (e) {}
   }
 
+  const skillLink = associatedSkill !== '—' ? `[[${associatedSkill}]]` : '—';
+  const skillsSection = existingSkills || (associatedSkill !== '—' ? `- Skill vinculada: [[${associatedSkill}]]` : '<!-- Agrega skills específicas usando enlaces [[Skill]] -->');
+
   const content = `---
 title: "Proyecto: ${projectName}"
 type: antigravity-project
@@ -972,9 +1503,15 @@ updated: ${now}
 > [!INFO] **Ficha del Proyecto**
 > - **Nombre**: \`${projectName}\`
 > - **Ruta local**: \`${workspaceRoot}\`
+> - **Stack**: ${detected.stack}
+> - **Resumen**: ${detected.description}
+> - **Skill Asociada**: ${skillLink}
 > - **Última sincronización**: ${now}
 
-${packageInfo}
+### Detalles Técnicos Detectados
+- **Versión**: \`${detected.version}\`
+- **Framework / Core**: \`${detected.framework || detected.stack}\`
+- **Dependencias clave**: ${detected.dependencies.slice(0, 15).map(d => `\`${d}\``).join(', ') || 'Ninguna'}
 
 ## Reglas y Condiciones Obligatorias del Proyecto
 ${existingRules || '<!-- Reglas operativas y condiciones obligatorias para este proyecto (commits, empaquetado, workflows, etc.) -->'}
@@ -983,14 +1520,92 @@ ${existingRules || '<!-- Reglas operativas y condiciones obligatorias para este 
 ${existingMemories || '<!-- Agrega enlaces [[Nombre de la Memoria]] para conectar este proyecto con el grafo de Antigravity -->'}
 
 ## Skills de Proyecto
-${existingSkills || '<!-- Agrega skills específicas usando enlaces [[Skill]] -->'}
+${skillsSection}
 
 ---
-*Conexiones del Grafo:* [[00 Antigravity Hub]]
+*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Indice de Proyectos]]
 `;
 
   fs.writeFileSync(obsFile, content, 'utf8');
-  return { projectName, path: obsFile };
+
+  // Automatically update the unified projects index
+  syncProjectsIndex(vaultPath, options);
+
+  return {
+    projectName,
+    path: obsFile,
+    stack: detected.stack,
+    summary: detected.description,
+    skill: associatedSkill,
+  };
+}
+
+function getProjectsRegistry(vaultPath) {
+  const projFolder = path.join(vaultPath, 'Antigravity', 'Proyectos');
+  const list = [];
+  if (!fs.existsSync(projFolder)) return list;
+
+  const files = fs.readdirSync(projFolder);
+  for (const f of files) {
+    if (!f.endsWith('.md') || f.startsWith('00')) continue;
+    const fp = path.join(projFolder, f);
+    try {
+      const content = fs.readFileSync(fp, 'utf8');
+      const baseName = f.replace(/\.md$/, '');
+      let name = baseName;
+      let localPath = '';
+      let stack = '';
+      let summary = '';
+      let skill = '';
+
+      const nameMatch = content.match(/>\s*-\s*\*\*Nombre\*\*:\s*`([^`]+)`/i);
+      if (nameMatch) name = nameMatch[1].trim();
+
+      const pathMatch = content.match(/>\s*-\s*\*\*Ruta local\*\*:\s*`([^`]+)`/i);
+      if (pathMatch) localPath = pathMatch[1].trim();
+
+      const stackMatch = content.match(/>\s*-\s*\*\*Stack\*\*:\s*([^\r\n]+)/i);
+      if (stackMatch) stack = stackMatch[1].trim();
+
+      const sumMatch = content.match(/>\s*-\s*\*\*Resumen\*\*:\s*([^\r\n]+)/i);
+      if (sumMatch) summary = sumMatch[1].trim();
+
+      const skillMatch = content.match(/>\s*-\s*\*\*Skill Asociada\*\*:\s*\[\[?([^\]\r\n]+)\]\]?/i);
+      if (skillMatch) skill = skillMatch[1].replace(/^\[\[|\]\]$/g, '').trim();
+
+      list.push({
+        name,
+        localPath,
+        stack,
+        summary,
+        skill: skill || '—',
+        note: baseName,
+        relPath: `Antigravity/Proyectos/${f}`,
+      });
+    } catch (e) {}
+  }
+  return list;
+}
+
+function isProjectRegistered(vaultPath, workspaceRoot) {
+  if (!workspaceRoot) return { registered: false, project: null };
+  const projects = getProjectsRegistry(vaultPath);
+  const normTarget = path.resolve(workspaceRoot).toLowerCase().replace(/\\/g, '/');
+  const targetBase = path.basename(workspaceRoot).toLowerCase();
+
+  for (const p of projects) {
+    if (p.localPath && p.localPath !== '—') {
+      const normProj = path.resolve(p.localPath).toLowerCase().replace(/\\/g, '/');
+      if (normProj === normTarget) {
+        return { registered: true, project: p };
+      }
+    }
+    if (p.name.toLowerCase() === targetBase) {
+      return { registered: true, project: p };
+    }
+  }
+
+  return { registered: false, project: null };
 }
 
 // -------------------------------------------------------------
@@ -1003,6 +1618,7 @@ function generateHub(vaultPath, workspaceRoot, options = {}) {
   const now = new Date().toISOString().split('T')[0];
   const projectName = workspaceRoot ? path.basename(workspaceRoot) : null;
   const userName = resolveUserName(vaultPath, options.userName);
+  const { aiName, userCallsign } = resolvePersonality(vaultPath, options);
   const lang = resolveLanguage(options);
   const isEn = (lang === 'en');
 
@@ -1032,9 +1648,10 @@ All nodes in this vault are bidirectionally linked to light up your **Graph View
 
 ---
 
-## Soul & Profile (Hermes Core)
+## Soul, Personality & Profile (Hermes Core)
 Agent identity and working style of ${userName}:
 - [[00 Soul de Antigravity]] — Decisive archetype, non-negotiable principles, and autonomy
+- [[00 AI Personality]] — Agent name (${aiName}), callsign for you (${userCallsign}), and behavioral tone
 - [[00 Perfil de Usuario]] — Preferences, technical habits, and accumulated learnings
 
 ---
@@ -1086,9 +1703,10 @@ Todos los nodos de esta bóveda están enlazados bidireccionalmente para ilumina
 
 ---
 
-## Alma & Perfil (Hermes Core)
+## Alma, Personalidad & Perfil (Hermes Core)
 Identidad del agente y estilo de trabajo de ${userName}:
 - [[00 Soul de Antigravity]] — Arquetipo resolutivo, principios inquebrantables y autonomía
+- [[00 Personalidad de la IA]] — Nombre del agente (${aiName}), trato hacia ti (${userCallsign}) y rasgos de comportamiento
 - [[00 Perfil de Usuario]] — Preferencias, hábitos técnicos y aprendizajes acumulados
 
 ---
@@ -1126,7 +1744,7 @@ ${projectName ? `- Proyecto Actual: [[${projectName}]]` : '- *Abre un proyecto e
 
 function getVaultStats(vaultPath) {
   if (!vaultPath || !fs.existsSync(vaultPath)) {
-    return { memories: 0, skills: 0, projects: 0, sessions: 0, hubExists: false, soulActive: false };
+    return { memories: 0, skills: 0, projects: 0, sessions: 0, hubExists: false, soulActive: false, personalityActive: false, personalityConfigured: false, aiName: 'Hermes', userCallsign: '' };
   }
 
   const baseDir = path.join(vaultPath, 'Antigravity');
@@ -1135,6 +1753,9 @@ function getVaultStats(vaultPath) {
     return fs.readdirSync(dir).filter(f => f.endsWith('.md') && !f.startsWith('00 ')).length;
   };
 
+  const personalityInfo = resolvePersonality(vaultPath);
+  const personalityActive = fs.existsSync(path.join(baseDir, 'Alma', '00 Personalidad de la IA.md')) || fs.existsSync(path.join(baseDir, 'Alma', '00 AI Personality.md'));
+
   return {
     memories: countMd(path.join(baseDir, 'Memoria')),
     skills: countMd(path.join(baseDir, 'Skills')),
@@ -1142,6 +1763,11 @@ function getVaultStats(vaultPath) {
     sessions: countMd(path.join(baseDir, 'Sesiones')),
     hubExists: fs.existsSync(path.join(baseDir, '00 Antigravity Hub.md')),
     soulActive: fs.existsSync(path.join(baseDir, 'Alma', '00 Soul de Antigravity.md')),
+    personalityActive,
+    personalityConfigured: personalityInfo.configured,
+    aiName: personalityInfo.aiName,
+    userCallsign: personalityInfo.userCallsign,
+    personality: personalityInfo.personality,
   };
 }
 
@@ -1225,10 +1851,48 @@ function syncVaultToKnowledge(vaultPath) {
     }
   }
 
-  if (fs.existsSync(proyectosDir)) {
-    for (const f of fs.readdirSync(proyectosDir)) {
-      if (f.endsWith('.md')) processFile(path.join(proyectosDir, f));
+  // Clean legacy individual project knowledge items to avoid prompt token waste
+  try {
+    const items = fs.readdirSync(knowledgeDir, { withFileTypes: true });
+    for (const item of items) {
+      if (!item.isDirectory()) continue;
+      if (item.name.startsWith('proyecto-') && item.name !== 'proyectos-antigravity') {
+        const metaPath = path.join(knowledgeDir, item.name, 'metadata.json');
+        if (fs.existsSync(metaPath)) {
+          try {
+            const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+            if (meta.source === 'obsidian-vault' || (meta.title && meta.title.startsWith('Proyecto:'))) {
+              fs.rmSync(path.join(knowledgeDir, item.name), { recursive: true, force: true });
+            }
+          } catch (e) {}
+        }
+      }
     }
+  } catch (e) {}
+
+  // Export ONLY ONE single consolidated Knowledge Item for all projects: proyectos-antigravity
+  if (fs.existsSync(proyectosDir)) {
+    const indexResult = syncProjectsIndex(vaultPath);
+    const targetDir = path.join(knowledgeDir, 'proyectos-antigravity');
+    const artifactsDir = path.join(targetDir, 'artifacts');
+    if (!fs.existsSync(artifactsDir)) fs.mkdirSync(artifactsDir, { recursive: true });
+
+    let indexContent = '';
+    if (indexResult.indexPath && fs.existsSync(indexResult.indexPath)) {
+      indexContent = fs.readFileSync(indexResult.indexPath, 'utf8');
+    }
+
+    const meta = {
+      title: 'Proyectos Registrados — Antigravity',
+      summary: 'Registro consolidado de proyectos vinculados en Antigravity con ruta, stack tecnológico y skills asociadas.',
+      source: 'obsidian-vault',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      references: []
+    };
+
+    fs.writeFileSync(path.join(targetDir, 'metadata.json'), JSON.stringify(meta, null, 2), 'utf8');
+    fs.writeFileSync(path.join(artifactsDir, '00 Indice de Proyectos.md'), indexContent, 'utf8');
   }
 }
 
@@ -1659,6 +2323,10 @@ module.exports = {
   ensureVaultStructure,
   ensureSoulAndProfile,
   getSoulAndProfile,
+  resolvePersonality,
+  ensurePersonality,
+  getPersonality,
+  savePersonality,
   recordUserLearning,
   resolveUserName,
   resolveLanguage,
@@ -1667,6 +2335,9 @@ module.exports = {
   saveNewMemory,
   saveSkill,
   syncProject,
+  syncProjectsIndex,
+  getProjectsRegistry,
+  isProjectRegistered,
   generateHub,
   getVaultStats,
   syncAll,

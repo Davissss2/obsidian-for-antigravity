@@ -559,6 +559,20 @@
     });
   }
 
+  const btnInstallObsidian = document.getElementById('btn-install-obsidian');
+  if (btnInstallObsidian) {
+    btnInstallObsidian.addEventListener('click', () => {
+      vscode.postMessage({ type: 'openExternal', url: 'https://obsidian.md/download' });
+    });
+  }
+
+  const btnSelectCard = document.getElementById('btn-select-vault-card');
+  if (btnSelectCard) {
+    btnSelectCard.addEventListener('click', () => {
+      vscode.postMessage({ type: 'selectVault' });
+    });
+  }
+
   const btnReinstall = document.getElementById('btn-reinstall');
   if (btnReinstall) {
     btnReinstall.addEventListener('click', () => {

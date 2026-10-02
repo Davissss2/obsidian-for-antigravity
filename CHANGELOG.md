@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.0] - 2026-10-02
+
+### Added
+- **AI Agent Personality & Custom Identity Calibration**:
+  - Introduced dedicated AI Personality note (`00 Personalidad de la IA.md` / `00 AI Personality.md`) in `Antigravity/Alma/` alongside Soul and User Profile.
+  - Added full customization for Agent Name (e.g. Hermes, Jarvis) and User Callsign (e.g. Davissss2, Chief, Commander), with configurable tone and demeanor.
+  - Added VS Code command `antigravityObsidian.configurePersonality` with interactive input dialogs.
+  - Added slash command `/obsidian personality [args]` and CLI subcommand `node obsidian.js personality`.
+- **First-Chat Onboarding Protocol**:
+  - Autonomous calibration trigger: when `personalityConfigured` is false, the assistant greets the user on their first chat interaction to calibrate identity and behavior preferences.
+  - Upon user response, preferences are saved immediately and locked (`personalityConfigured: true`), ensuring the assistant never asks again across future sessions.
+- **Unified Consolidated Project Registry (Zero Token Waste)**:
+  - Eliminated token pollution from fragmented per-project Knowledge Items. All tracked projects are aggregated into a single high-density Knowledge Item (`proyectos-antigravity`) and master index note (`00 Indice de Proyectos.md` / `00 Projects Index.md`).
+  - Single compact table mapping Project Name, Local Path, Tech Stack, 1-Line Summary, Associated Skill, and Obsidian Note Link.
+  - Automated cleanup of legacy individual `proyecto-*` Knowledge Item folders to maintain a minimal token footprint in all chat sessions.
+- **Autonomous Workspace Project Detection & Stack Extraction**:
+  - Intelligent stack inspection supporting Node.js (`package.json`), Python (`pyproject.toml`, `requirements.txt`), Rust (`Cargo.toml`), PHP (`composer.json`), Go (`go.mod`), and `README.md`.
+  - Automatic detection of associated workspace and global skills (e.g. `antigravity-obsidian`, `control-integral-qr`, `tiendareco`).
+  - Automated project registration via `/obsidian project register [path]` and CLI `node obsidian.js project register`.
+- **Project Commands in Palette & Chat**:
+  - Registered `antigravityObsidian.registerProject` and `antigravityObsidian.showProjects` in VS Code Command Palette.
+  - Added `/obsidian project [register|list|status]` to Chat Slash Commands protocol.
+
+---
+
 ## [1.4.1] - 2026-10-02
 
 ### Added

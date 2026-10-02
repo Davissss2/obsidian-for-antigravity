@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Davissss2/obsidian-for-antigravity"><img src="https://img.shields.io/badge/version-1.4.1-8b5cf6.svg?style=flat-square" alt="Version 1.4.1"></a>
+  <a href="https://github.com/Davissss2/obsidian-for-antigravity"><img src="https://img.shields.io/badge/version-1.5.0-8b5cf6.svg?style=flat-square" alt="Version 1.5.0"></a>
   <a href="https://open-vsx.org"><img src="https://img.shields.io/badge/Open%20VSX-available-blue.svg?style=flat-square" alt="Open VSX"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-purple.svg?style=flat-square" alt="License"></a>
   <a href="https://github.com/Davissss2"><img src="https://img.shields.io/badge/author-Davissss2-emerald.svg?style=flat-square" alt="Author Davissss2"></a>
@@ -67,6 +67,24 @@ Instead of burning thousands of tokens re-reading old logs, your AI assistant au
 - Works seamlessly in English, Spanish, French, German, Chinese, and Japanese. The assistant dynamically adapts to the user's active language and IDE locale, generating native instructions with zero language mismatch.
 - Dynamic user name resolution across VS Code settings, bridge state, vault profile, Git config, and OS environment.
 
+### 11. AI Agent Personality & Custom Callsign
+- Dedicated personality note (`00 Personalidad de la IA.md` / `00 AI Personality.md`) in `Antigravity/Alma/`.
+- Customize your AI agent's name (e.g. Hermes, Jarvis) and how it addresses you (e.g. Davissss2, Chief, Commander), alongside custom tone and demeanor traits.
+- Calibrate interactively from Command Palette with `Obsidian: Configure AI Agent Personality` or `/obsidian personality`.
+
+### 12. First-Chat Onboarding Protocol
+- The AI autonomously checks if personality is configured. If unconfigured on chat #1, it introduces itself and asks for your preferred name and callsign.
+- Once saved, choices are permanently locked (`personalityConfigured = true`) and the assistant will never ask again.
+
+### 13. Consolidated Projects Registry (Zero Token Waste)
+- Replaced 20 fragmented memory files with a single unified Knowledge Item (`proyectos-antigravity`) and master note (`00 Indice de Proyectos.md`).
+- Ultra-dense table mapping Project Name, Local Path, Tech Stack, 1-Line Summary, and Associated Skill.
+- Prevents system prompt bloat while allowing instant deep-dive via note peek or linked skills.
+
+### 14. Autonomous Workspace Detection & Missing Obsidian Alert
+- Detects project stack automatically from `package.json`, `pyproject.toml`, `Cargo.toml`, `composer.json`, `go.mod`, and `README.md`.
+- If Obsidian or a vault is not detected on the machine, the extension displays a helpful onboarding banner with a one-click Obsidian download link and a folder picker.
+
 ---
 
 ## Cognitive Decision Matrix: Skill vs Memory vs None
@@ -90,14 +108,18 @@ All files are structured cleanly inside your vault under the `Antigravity/` fold
 └── 📁 Antigravity/
     ├── 📄 00 Antigravity Hub.md        <-- Central Brain & Graph View MOC
     ├── 📄 context-manifest.json         <-- High-speed indexed cache for low-context triage
+    ├── 📁 Alma/                         <-- Agent Soul, User Profile & AI Personality
+    │   ├── 📄 00 Soul de Antigravity.md
+    │   ├── 📄 00 Perfil de Usuario.md
+    │   └── 📄 00 Personalidad de la IA.md
     ├── 📁 Memoria/                      <-- Recorded solutions, bugfixes, and architectures
     │   ├── 📄 00 Indice de Memoria.md   <-- Central memory index
-    │   ├── 📄 SQLite WAL Concurrency Bugfix.md
     │   └── ...
     ├── 📁 Skills/                       <-- Synced global and project skills (deduplicated)
     │   ├── 📄 00 Indice de Skills.md    <-- Central skills catalog
     │   └── ...
-    └── 📁 Proyectos/                    <-- Workspaces and repository profiles
+    └── 📁 Proyectos/                    <-- Workspaces & Consolidated Registry
+        ├── 📄 00 Indice de Proyectos.md <-- Consolidated project table
         └── ...
 ```
 
@@ -108,29 +130,36 @@ All files are structured cleanly inside your vault under the `Antigravity/` fold
 The AI agent and developer can interact directly with the vault using the runner script:
 
 ```powershell
-# 1. Ultra-Low-Context Triage (<80 tokens)
+# 1. AI Personality & Callsign Configuration
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js personality --ai-name "Hermes" --user-callsign "Davissss2" --personality "Senior engineer, pragmatic, surgical, zero fluff"
+
+# 2. Unified Projects Registry & Autonomous Workspace Detection
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js project register "C:\Path\To\Project"
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js project list
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js project status
+
+# 3. Ultra-Low-Context Triage (<80 tokens)
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js triage "sqlite database locked"
 
-# 2. Extract technical solution without noise
+# 4. Extract technical solution without noise
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js peek "SQLite WAL Concurrency Bugfix"
 
-# 3. Fast atomic save (Zero emojis, technical format)
+# 5. Fast atomic save (Zero emojis, technical format)
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js save --title "Plesk Nginx Proxy Timeout" --category "configuracion" --summary "Timeout 504 -> proxy_read_timeout 300s applied" --content "Root cause: Long-running script. Solution: Directiva nginx proxy_read_timeout 300s."
 
-# 4. 1-Line overview catalog of all skills and memories
+# 6. Active Soul, User Profile & Personality
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js soul
+
+# 7. Learn new preference or habit
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js learn "Always package vsix and run tests"
+
+# 8. 1-Line overview catalog of all skills and memories
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js catalog
 
-# 5. List skills or memories
-node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js skills
-node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js memories
-
-# 6. Connection status and index statistics
+# 9. Connection status, stats and personality
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js status
 
-# 7. Wipe all data & start completely fresh
-node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js reset
-
-# 8. Open note in Obsidian desktop app
+# 10. Open note in Obsidian desktop app
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js open "Antigravity/00 Antigravity Hub"
 ```
 
@@ -147,7 +176,7 @@ ovsx install Davissss2.obsidian-for-antigravity
 ### Manual VSIX Installation
 Download the packaged release from the repository and install it in Antigravity IDE / VS Code:
 ```bash
-code --install-extension obsidian-for-antigravity-1.4.1.vsix
+code --install-extension obsidian-for-antigravity-1.5.0.vsix
 ```
 
 ---

@@ -56,6 +56,20 @@ function installSkillAndRules(targetVaultPath, options = {}) {
   const lang = syncEngine.resolveLanguage({ language: configuredLang });
   const isEn = (lang === 'en');
 
+  const personalityInfo = syncEngine.resolvePersonality(vaultPath, {
+    aiName: options.aiName !== undefined ? options.aiName : existingConfig.aiName,
+    userCallsign: options.userCallsign !== undefined ? options.userCallsign : existingConfig.userCallsign,
+    personality: options.personality !== undefined ? options.personality : existingConfig.personality,
+    personalityConfigured: options.personalityConfigured !== undefined ? options.personalityConfigured : existingConfig.personalityConfigured,
+    userName: configuredUser || userName,
+    language: configuredLang,
+  });
+
+  const aiName = personalityInfo.aiName;
+  const userCallsign = personalityInfo.userCallsign;
+  const personality = personalityInfo.personality;
+  const personalityConfigured = personalityInfo.configured;
+
   const bridgeConfig = {
     vaultPath,
     vaultName,
@@ -64,6 +78,10 @@ function installSkillAndRules(targetVaultPath, options = {}) {
     autoSave,
     language: configuredLang,
     userName: configuredUser || userName,
+    aiName,
+    userCallsign,
+    personality,
+    personalityConfigured,
     lastUpdated: new Date().toISOString(),
   };
   fs.writeFileSync(bridgeConfigPath, JSON.stringify(bridgeConfig, null, 2), 'utf8');
@@ -160,6 +178,8 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '| Slash Command | Equivalent CLI Execution | Description |',
         '|---|---|---|',
         '| `/obsidian` or `/obsidian status` | `node "' + normalizedScriptPath + '" status` | Check connection and stats |',
+        '| `/obsidian personality [args]` | `node "' + normalizedScriptPath + '" personality [args]` | View or configure AI agent personality, name & user callsign |',
+        '| `/obsidian project [register|list|status]` | `node "' + normalizedScriptPath + '" project [args]` | Manage unified projects registry & auto-detection |',
         '| `/obsidian save <title> [content]` | `node "' + normalizedScriptPath + '" save --title "<title>" --content "<content>"` | Save technical solution |',
         '| `/obsidian soul` | `node "' + normalizedScriptPath + '" soul` | View active Soul & User Profile |',
         '| `/obsidian learn <preference>` | `node "' + normalizedScriptPath + '" learn "<preference>"` | Learn new user workflow habit |',
@@ -177,6 +197,8 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '',
         '| Command | Description |',
         '|---|---|',
+        '| `node "' + normalizedScriptPath + '" personality [--ai-name <n>] [--user-callsign <c>] [--personality <p>]` | View or configure AI personality & callsign |',
+        '| `node "' + normalizedScriptPath + '" project [register|list|status] [path]` | Unified project registry & autonomous stack detection |',
         '| `node "' + normalizedScriptPath + '" triage "query"` | Ultra-compact smart triage (<80 tokens) |',
         '| `node "' + normalizedScriptPath + '" peek "Note"` | Direct technical solution without metadata overhead |',
         '| `node "' + normalizedScriptPath + '" save --title "..." ...` | Atomic save to vault and Knowledge Items |',
@@ -265,6 +287,8 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '| Comando Slash | Ejecucion CLI Equivalente | Descripcion |',
         '|---|---|---|',
         '| `/obsidian` o `/obsidian status` | `node "' + normalizedScriptPath + '" status` | Comprueba estado de conexion y conteos |',
+        '| `/obsidian personality [args]` | `node "' + normalizedScriptPath + '" personality [args]` | Consulta o configura personalidad, nombre de IA y trato |',
+        '| `/obsidian project [register|list|status]` | `node "' + normalizedScriptPath + '" project [args]` | Gestiona el registro unificado de proyectos y auto-deteccion |',
         '| `/obsidian save <titulo> [contenido]` | `node "' + normalizedScriptPath + '" save --title "<titulo>" --content "<contenido>"` | Guarda solucion tecnica |',
         '| `/obsidian soul` | `node "' + normalizedScriptPath + '" soul` | Muestra el Soul activo y Perfil de Usuario |',
         '| `/obsidian learn <preferencia>` | `node "' + normalizedScriptPath + '" learn "<preferencia>"` | Aprende un nuevo habito de trabajo |',
@@ -282,6 +306,8 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '',
         '| Comando | Descripcion |',
         '|---|---|',
+        '| `node "' + normalizedScriptPath + '" personality [--ai-name <n>] [--user-callsign <c>] [--personality <p>]` | Consulta o configura personalidad y trato |',
+        '| `node "' + normalizedScriptPath + '" project [register|list|status] [ruta]` | Registro unificado de proyectos y deteccion autonoma de stack |',
         '| `node "' + normalizedScriptPath + '" triage "query"` | Triage inteligente ultra-compacto (<80 tokens) |',
         '| `node "' + normalizedScriptPath + '" peek "Nota"` | Solucion tecnica directa sin metadatos |',
         '| `node "' + normalizedScriptPath + '" save --title "..." ...` | Guardado atomico en vault y Knowledge Items |',
@@ -298,12 +324,58 @@ function installSkillAndRules(targetVaultPath, options = {}) {
       ].join('\n');
   fs.writeFileSync(skillMdPath, skillMdContent, 'utf8');
 
-  // 4. Write Global Rule (Hermes Core: Soul + User Profile + Obsidian Brain)
+  // 4. Write Global Rule (Hermes Core: Soul + User Profile + Personality + Obsidian Brain)
   const rulePath = path.join(rulesDir, 'obsidian-brain.md');
+
+  const personalitySection = isEn
+    ? (personalityConfigured
+        ? [
+            '### 0. AGENT IDENTITY & PERSONALITY (Hermes Core - Active):',
+            '- **Agent Name:** ' + aiName + '. Always identify as ' + aiName + '.',
+            '- **Addressing the User:** Always address the user as **' + userCallsign + '**.',
+            '- **Active Demeanor & Traits:** ' + personality,
+            '- **Persistence:** Your personality and names are CONFIGURED and LOCKED. Strictly embody this persona. NEVER ask the user how to behave or introduce yourself as unconfigured again in any future chats unless the user explicitly requests changes or runs `/obsidian personality`.'
+          ].join('\n')
+        : [
+            '### 0. AGENT IDENTITY & PERSONALITY (Pending Initial Calibration):',
+            '- **Agent Name (Default):** ' + aiName,
+            '- **Addressing the User (Default):** ' + userCallsign,
+            '- **FIRST-CHAT ONBOARDING PROTOCOL (MANDATORY):**',
+            '  Because your personality and agent identity have not been calibrated yet, on your VERY FIRST interaction with the user in this chat, greet them directly and ask:',
+            '  "Hello, I am ' + aiName + ' with Obsidian Second Brain. Before we begin, let us calibrate my agent persona:',
+            '  1. What name would you like to assign me? (Default: ' + aiName + ')',
+            '  2. How would you like me to address you? (e.g., ' + userCallsign + ', Sir, Commander, Chief, etc.)',
+            '  3. What personality traits or behavioral style should I embody?"',
+            '  As soon as the user responds with their preference, IMMEDIATELY run:',
+            '  `node "' + normalizedScriptPath + '" personality --ai-name "<name>" --user-callsign "<callsign>" --personality "<description>"`',
+            '  Once executed, personality is locked (`personalityConfigured = true`) and you will NEVER ask again in any future chat.'
+          ].join('\n'))
+    : (personalityConfigured
+        ? [
+            '### 0. IDENTIDAD Y PERSONALIDAD DEL AGENTE (Hermes Core - Activo):',
+            '- **Nombre del Agente:** ' + aiName + '. Identificate siempre como ' + aiName + '.',
+            '- **Trato hacia el Usuario:** Dirigete siempre al usuario como **' + userCallsign + '**.',
+            '- **Comportamiento y Rasgos Activos:** ' + personality,
+            '- **Permanencia:** Tu identidad y trato estan CONFIGURADOS y FIJADOS. Encarna estrictamente esta personalidad. NUNCA vuelvas a preguntar al usuario como comportarte ni te presentes como no configurado en ningun chat futuro, a menos que el usuario lo solicite expresamente o use `/obsidian personality`.'
+          ].join('\n')
+        : [
+            '### 0. IDENTIDAD Y PERSONALIDAD DEL AGENTE (Pendiente de Calibracion Inicial):',
+            '- **Nombre del Agente (Por defecto):** ' + aiName,
+            '- **Trato hacia el Usuario (Por defecto):** ' + userCallsign,
+            '- **PROTOCOLO DE ONBOARDING DEL PRIMER CHAT (OBLIGATORIO):**',
+            '  Dado que tu personalidad y trato de agente aun no han sido calibrados, en tu PRIMERISIMA respuesta con el usuario en este chat, saludalo e invitalo directamente a calibrar tu identidad:',
+            '  "Buenas, soy ' + aiName + ' con Obsidian. Como es la primera vez que interactuamos o aun no hemos calibrado mi personalidad, dime:',
+            '  1. ¿Que nombre quieres asignarme? (por defecto: ' + aiName + ')',
+            '  2. ¿Como quieres que me dirija a ti? (ej: ' + userCallsign + ', Jefe, Comandante, Socio, etc.)',
+            '  3. ¿Que personalidad o estilo de comportamiento quieres que adopte?"',
+            '  En cuanto el usuario responda indicando sus preferencias, ejecuta INMEDIATAMENTE:',
+            '  `node "' + normalizedScriptPath + '" personality --ai-name "<nombre>" --user-callsign "<trato>" --personality "<rasgos>"`',
+            '  Una vez ejecutado, la personalidad queda guardada (`personalityConfigured = true`) y NUNCA MAS volveras a preguntarselo en ningun chat futuro.'
+          ].join('\n'));
 
   const hermesSection = isEn
     ? [
-        '### 0. AGENT SOUL & USER PROFILE (Hermes Core):',
+        '### 0b. AGENT SOUL & USER PROFILE (Hermes Core):',
         '- **Antigravity Soul:** You are an elite senior software engineer, autonomous, pragmatic, and surgically precise. Diagnose root causes, implement complete and verified solutions without asking permission for obvious steps or leaving placeholders.',
         '- **Work Profile of ' + userName + ':** Direct, technical communication. If the user addresses you in English or Antigravity IDE is in English, communicate in English. If the user writes in Spanish or another language, adapt dynamically to the user\'s active language. Zero corporate fluff, no obvious introductory pleasantries ("Sure!"), no condescension, no empty apologies, and ZERO EMOJIS at all times.',
         '- **Cross-Platform Rigor:** Tested, compatible solutions for Windows, Ubuntu (Linux), and macOS.',
@@ -311,7 +383,7 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '  `node "' + normalizedScriptPath + '" learn "[<ProjectName or Global>] <condition or workflow constraint>"`'
       ].join('\n')
     : [
-        '### 0. ALMA DEL AGENTE & PERFIL DEL USUARIO (Hermes Core):',
+        '### 0b. ALMA DEL AGENTE & PERFIL DEL USUARIO (Hermes Core):',
         '- **Soul de Antigravity:** Eres un ingeniero senior de elite, autonomo, pragmatico y de precision quirurgica. Diagnostica causas raiz, ejecuta soluciones terminadas y probadas sin pedir permiso para pasos obvios ni dejar placeholders.',
         '- **Perfil de Trabajo de ' + userName + ':** Comunicacion directa y tecnica. Si el usuario escribe en ingles o el entorno de Antigravity esta en ingles, responde en ingles; si escribe en espanol, responde en espanol (adaptabilidad dinamica al idioma del usuario). Sin introducciones obvias ("¡Por supuesto!"), sin condescendencia, sin disculpas vacias y CERO EMOJIS en absolutamente todo momento.',
         '- **Rigor Multiplataforma:** Soluciones probadas y compatibles para Windows, Ubuntu (Linux) y macOS.',
@@ -405,11 +477,31 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         ? '### 2. Knowledge Saving:\nSave notes in Obsidian when explicitly requested by the user or when solving a complex, non-trivial blocker.'
         : '### 2. Guardado de Conocimiento:\nGuarda notas en Obsidian cuando el usuario lo solicite explicitamente o cuando se resuelva un bloqueo complejo no trivial.');
 
+  const projectSection = isEn
+    ? [
+        '### 3. CONSOLIDATED PROJECT REGISTRY & AUTONOMOUS DETECTION:',
+        '- **Zero Token Waste Policy:** Do NOT create fragmented memory files for each project. All projects are consolidated into a single Knowledge Item (`proyectos-antigravity`) and master index (`00 Indice de Proyectos.md` / `00 Projects Index.md`).',
+        '- **Autonomous Workspace Verification:** When opening or operating in any workspace, check if it is registered in `proyectos-antigravity` or `00 Indice de Proyectos.md`.',
+        '- **Auto-Registration of Missing Projects:** If the current workspace is not yet registered, inspect its stack (`package.json`, `pyproject.toml`, `README.md`, etc.) and register it immediately by executing:',
+        '  `node "' + normalizedScriptPath + '" project register "<workspacePath>"`',
+        '- For deep project rules, notes, or skills, peek into `[[Proyecto: <Name>]]` or invoke the linked project skill on demand.'
+      ].join('\n')
+    : [
+        '### 3. REGISTRO UNIFICADO DE PROYECTOS Y DETECCION AUTONOMA:',
+        '- **Politica de Cero Desperdicio de Tokens:** Prohibido crear memorias fragmentadas individuales para cada proyecto. Todos los proyectos se consolidan en un unico Knowledge Item (`proyectos-antigravity`) e indice maestro (`00 Indice de Proyectos.md`).',
+        '- **Verificacion Autonoma de Workspace:** Al abrir o trabajar en cualquier workspace, comprueba si ya figura en `proyectos-antigravity` o en `00 Indice de Proyectos.md`.',
+        '- **Auto-Registro de Proyectos Nuevos:** Si el workspace actual no esta registrado, inspecciona su stack (`package.json`, `pyproject.toml`, `README.md`, etc.) y registralo de inmediato ejecutando:',
+        '  `node "' + normalizedScriptPath + '" project register "<rutaWorkspace>"`',
+        '- Para consultar reglas profundas, notas o skills especificas del proyecto, haz peek en `[[Proyecto: <Nombre>]]` o activa su skill vinculada bajo demanda.'
+      ].join('\n');
+
   const slashCommandsSection = isEn
     ? [
-        '### 4. CHAT SLASH COMMANDS PROTOCOL (/obsidian):',
+        '### 5. CHAT SLASH COMMANDS PROTOCOL (/obsidian):',
         'When the user sends a message starting with `/obsidian`, execute the corresponding CLI command IMMEDIATELY using `run_command` without asking for confirmation:',
         '- `/obsidian` or `/obsidian status`: Run `node "' + normalizedScriptPath + '" status` and report connection status and stats.',
+        '- `/obsidian personality [args]`: Run `node "' + normalizedScriptPath + '" personality [args]` to view or configure AI personality, agent name, and user callsign.',
+        '- `/obsidian project [register|list|status]`: Run `node "' + normalizedScriptPath + '" project [args]` to manage unified project registry and workspace detection.',
         '- `/obsidian save <title> [content]`: Run `node "' + normalizedScriptPath + '" save --title "<title>" --content "<content>"` and confirm save.',
         '- `/obsidian soul`: Run `node "' + normalizedScriptPath + '" soul` and summarize active Soul and User Profile.',
         '- `/obsidian learn <habit>`: Run `node "' + normalizedScriptPath + '" learn "<habit>"` to record the new workflow habit.',
@@ -422,9 +514,11 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '- `/obsidian help`: Show the quick reference of all `/obsidian` commands.'
       ].join('\n')
     : [
-        '### 4. PROTOCOLO DE COMANDOS SLASH (/obsidian):',
+        '### 5. PROTOCOLO DE COMANDOS SLASH (/obsidian):',
         'Cuando el usuario escriba un comando que empiece por `/obsidian`, ejecuta INMEDIATAMENTE el comando CLI correspondiente con `run_command` sin pedir confirmaciones adicionales:',
         '- `/obsidian` o `/obsidian status`: Ejecuta `node "' + normalizedScriptPath + '" status` y muestra el estado y estadisticas de la boveda.',
+        '- `/obsidian personality [args]`: Ejecuta `node "' + normalizedScriptPath + '" personality [args]` para ver o configurar la personalidad, nombre de IA y trato.',
+        '- `/obsidian project [register|list|status]`: Ejecuta `node "' + normalizedScriptPath + '" project [args]` para gestionar el registro unificado y deteccion de proyectos.',
         '- `/obsidian save <titulo> [contenido]`: Ejecuta `node "' + normalizedScriptPath + '" save --title "<titulo>" --content "<contenido>"` y confirma el guardado.',
         '- `/obsidian soul`: Ejecuta `node "' + normalizedScriptPath + '" soul` y resume el Soul activo y el Perfil del Usuario.',
         '- `/obsidian learn <habito>`: Ejecuta `node "' + normalizedScriptPath + '" learn "<habito>"` para registrar la nueva preferencia.',
@@ -451,8 +545,11 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '- Active skill across all chats: **`antigravity-obsidian`**.',
         '- Query mode: **Low-Context Smart Triage (Zero Token Waste)**.',
         '- Autonomous saving: **' + (autoSave ? 'ACTIVE (AUTOMATIC)' : 'On demand') + '**.',
+        '- Agent Name: **' + aiName + '** | User Callsign: **' + userCallsign + '** | Status: **' + (personalityConfigured ? 'CONFIGURED' : 'PENDING_ONBOARDING') + '**.',
         '',
         '## MANDATORY RULES FOR THE ASSISTANT:',
+        '',
+        personalitySection,
         '',
         hermesSection,
         '',
@@ -460,7 +557,9 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '',
         autoSaveSection,
         '',
-        '### 3. Graph Interconnection:',
+        projectSection,
+        '',
+        '### 4. Graph Interconnection:',
         '- All notes link to `[[00 Antigravity Hub]]`, `[[00 Soul de Antigravity]]`, and `[[00 Indice de Memoria]]` keeping the Graph View connected.',
         '',
         slashCommandsSection,
@@ -479,8 +578,11 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '- Skill activa en todos los chats: **`antigravity-obsidian`**.',
         '- Modo de consulta: **Triage Inteligente de Ultra-Bajo Contexto (Zero Token Waste)**.',
         '- Guardado autonomo: **' + (autoSave ? 'ACTIVADO (AUTOMATICO)' : 'Bajo peticion') + '**.',
+        '- Nombre del Agente: **' + aiName + '** | Trato hacia ti: **' + userCallsign + '** | Estado: **' + (personalityConfigured ? 'CONFIGURADO' : 'PENDIENTE_CALIBRACION') + '**.',
         '',
         '## REGLAS MANDATORIAS PARA EL ASISTENTE:',
+        '',
+        personalitySection,
         '',
         hermesSection,
         '',
@@ -488,7 +590,9 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '',
         autoSaveSection,
         '',
-        '### 3. Interconexion en Grafo:',
+        projectSection,
+        '',
+        '### 4. Interconexion en Grafo:',
         '- Todas las notas se vinculan a `[[00 Antigravity Hub]]`, `[[00 Soul de Antigravity]]` e `[[00 Indice de Memoria]]` manteniendo activo el Graph View.',
         '',
         slashCommandsSection,
@@ -517,6 +621,10 @@ function installSkillAndRules(targetVaultPath, options = {}) {
     rulePath,
     syncResult,
     userName,
+    aiName,
+    userCallsign,
+    personality,
+    personalityConfigured,
     language: lang,
   };
 }
