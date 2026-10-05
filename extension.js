@@ -83,6 +83,9 @@ const SVGS = {
   alert: `<svg class="svg-icon-sm" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
   history: `<svg class="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
   folder: `<svg class="svg-icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,
+  lock: `<svg class="svg-icon-sm" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
+  upload: `<svg class="svg-icon-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`,
+  download: `<svg class="svg-icon-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
 };
 
 function runObsidianCli(cliArgs, cwd) {
@@ -316,6 +319,30 @@ class ObsidianPanelProvider {
           break;
         }
 
+        case 'exportVault': {
+          vscode.commands.executeCommand('antigravityObsidian.exportVault');
+          break;
+        }
+
+        case 'importVault': {
+          vscode.commands.executeCommand('antigravityObsidian.importVault');
+          break;
+        }
+
+        case 'openNote': {
+          if (message.note && currentVault && currentVault.path) {
+            let noteRel = message.note;
+            if (!noteRel.endsWith('.md')) noteRel += '.md';
+            const fullPath = path.join(currentVault.path, noteRel);
+            if (fs.existsSync(fullPath)) {
+              vscode.workspace.openTextDocument(fullPath).then(doc => vscode.window.showTextDocument(doc, { preview: false }));
+            } else {
+              openInObsidianApp(currentVault.name, message.note.replace(/\.md$/, ''));
+            }
+          }
+          break;
+        }
+
         case 'openExternal': {
           if (message.url) {
             vscode.env.openExternal(vscode.Uri.parse(message.url));
@@ -345,9 +372,17 @@ class ObsidianPanelProvider {
     let stats = { memories: 0, skills: 0, projects: 0, sessions: 0, hubExists: false };
     let memoryList = [];
     let skillList = [];
+    let sessionList = [];
+    let projectList = [];
+    let graphData = { nodes: [], links: [] };
+    let isVaultGit = false;
 
     if (vault && vault.path && fs.existsSync(vault.path)) {
       stats = syncEngine.getVaultStats(vault.path);
+      sessionList = syncEngine.listSessions(vault.path, { limit: 40 });
+      projectList = syncEngine.listProjects(vault.path);
+      graphData = syncEngine.getGraphData(vault.path);
+      isVaultGit = fs.existsSync(path.join(vault.path, '.git'));
 
       // Read memory list
       const memFolder = path.join(vault.path, 'Antigravity', 'Memoria');
@@ -497,12 +532,12 @@ class ObsidianPanelProvider {
       <div class="stat-num">${stats.skills}</div>
       <div class="stat-meta">${SVGS.zap} <span data-i18n="skills">Skills</span></div>
     </div>
-    <div class="stat-box" id="stat-sessions" title="Bitácora de Sesiones">
-      <div class="stat-num">${stats.sessions || 0}</div>
+    <div class="stat-box" data-tab="sesiones" id="stat-sessions" title="Bitácora de Sesiones">
+      <div class="stat-num">${stats.sessions || sessionList.length || 0}</div>
       <div class="stat-meta">${SVGS.history} <span data-i18n="sessions">Sesiones</span></div>
     </div>
-    <div class="stat-box" id="stat-projects" title="Índice de Proyectos">
-      <div class="stat-num">${stats.projects || 0}</div>
+    <div class="stat-box" data-tab="proyectos" id="stat-projects" title="Índice de Proyectos">
+      <div class="stat-num">${stats.projects || projectList.length || 0}</div>
       <div class="stat-meta">${SVGS.folder} <span data-i18n="projects">Proyectos</span></div>
     </div>
   </div>
@@ -522,6 +557,20 @@ class ObsidianPanelProvider {
       ${SVGS.zap}
       <span class="tab-text" data-i18n="tab_skills">Skills</span>
       <span class="tab-badge">${skillList.length}</span>
+    </button>
+    <button class="tab-pill" data-tab="sesiones">
+      ${SVGS.history}
+      <span class="tab-text" data-i18n="tab_sessions">Sesiones</span>
+      <span class="tab-badge">${sessionList.length}</span>
+    </button>
+    <button class="tab-pill" data-tab="proyectos">
+      ${SVGS.folder}
+      <span class="tab-text" data-i18n="tab_projects">Proyectos</span>
+      <span class="tab-badge">${projectList.length}</span>
+    </button>
+    <button class="tab-pill" data-tab="grafo">
+      ${SVGS.network}
+      <span class="tab-text" data-i18n="tab_graph">Grafo</span>
     </button>
     <button class="tab-pill" data-tab="crear">
       ${SVGS.plus}
@@ -660,6 +709,119 @@ class ObsidianPanelProvider {
     </div>
   </div>
 
+  <!-- TAB: SESIONES -->
+  <div class="tab-pane" id="pane-sesiones">
+    <div class="search-wrapper">
+      <span class="search-icon-pos">${SVGS.search}</span>
+      <input type="text" class="search-input" id="search-sessions" data-i18n-ph="search_sessions" placeholder="Buscar en sesiones...">
+    </div>
+
+    <div style="display:flex;gap:6px;margin-bottom:10px;">
+      <button class="btn-action btn-gradient" id="btn-new-session-tab" style="flex:1;">
+        ${SVGS.history} <span data-i18n="btn_save_session">Guardar Checkpoint</span>
+      </button>
+      <button class="btn-action btn-outline btn-open-note" data-note="Antigravity/Sesiones/00 Indice de Sesiones.md" style="flex:1;">
+        ${SVGS.open} <span data-i18n="btn_open_index">Ver Índice</span>
+      </button>
+    </div>
+
+    <div class="cards-scroll-container" id="sessions-list">
+      ${sessionList.length === 0 ? `<div style="color:var(--text-muted);text-align:center;padding:20px;" data-i18n="no_sessions">Sin sesiones registradas aún</div>` : ''}
+      ${sessionList.map(s => `
+        <div class="note-item" data-title="${s.title}" data-project="${s.project}">
+          <div class="note-top">
+            <span class="note-name">${s.title}</span>
+            <span class="tag-badge">${s.project}</span>
+          </div>
+          <div class="note-snippet">${s.summary}</div>
+          <div class="note-foot">
+            <span class="note-date">${s.date}</span>
+            <div style="display:flex;gap:6px;">
+              <button class="btn-open-link btn-copy-wikilink" data-title="${s.title}">
+                ${SVGS.copy} <span data-i18n="btn_copy">Copiar</span>
+              </button>
+              <button class="btn-open-link btn-open-note" data-note="${s.relPath}">
+                ${SVGS.open} <span data-i18n="btn_open">Abrir</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  </div>
+
+  <!-- TAB: PROYECTOS -->
+  <div class="tab-pane" id="pane-proyectos">
+    <div class="search-wrapper">
+      <span class="search-icon-pos">${SVGS.search}</span>
+      <input type="text" class="search-input" id="search-projects" data-i18n-ph="search_projects" placeholder="Buscar proyectos...">
+    </div>
+
+    <div style="display:flex;gap:6px;margin-bottom:10px;">
+      <button class="btn-action btn-gradient" id="btn-scan-project-tab" style="flex:1;">
+        ${SVGS.search} <span data-i18n="btn_scan_project">Escanear Workspace</span>
+      </button>
+      <button class="btn-action btn-outline btn-open-note" data-note="Antigravity/Proyectos/00 Indice de Proyectos.md" style="flex:1;">
+        ${SVGS.open} <span data-i18n="btn_open_index">Ver Índice</span>
+      </button>
+    </div>
+
+    <div class="cards-scroll-container" id="projects-list">
+      ${projectList.length === 0 ? `<div style="color:var(--text-muted);text-align:center;padding:20px;" data-i18n="no_projects">Sin proyectos registrados aún</div>` : ''}
+      ${projectList.map(p => `
+        <div class="note-item" data-title="${p.name}" data-stack="${p.stack}">
+          <div class="note-top">
+            <span class="note-name">${p.name}</span>
+            <span class="tag-badge project-badge">${p.stack}</span>
+          </div>
+          <div class="note-snippet">${p.summary}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px;margin:6px 0;font-size:10px;">
+            ${p.skill ? `<span class="tag-badge skill-global">Skill: ${p.skill}</span>` : ''}
+            ${p.totalTasks > 0 ? `<span class="tag-badge" style="background:rgba(59,130,246,0.15);color:#60a5fa;">Backlog: ${p.completedTasks}/${p.totalTasks}</span>` : ''}
+            ${p.antipatternsCount > 0 ? `<span class="tag-badge" style="background:rgba(239,68,68,0.15);color:#f87171;">${p.antipatternsCount} trampas</span>` : ''}
+          </div>
+          <div class="note-foot">
+            <span class="note-date">${p.date}</span>
+            <div style="display:flex;gap:6px;">
+              <button class="btn-open-link btn-copy-wikilink" data-title="Proyecto: ${p.name}">
+                ${SVGS.copy} <span data-i18n="btn_copy">Copiar</span>
+              </button>
+              <button class="btn-open-link btn-open-note" data-note="${p.relPath}">
+                ${SVGS.open} <span data-i18n="btn_open">Ficha</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  </div>
+
+  <!-- TAB: GRAFO INTERACTIVO -->
+  <div class="tab-pane" id="pane-grafo">
+    <div class="graph-controls-bar">
+      <input type="text" class="search-input" id="search-graph-nodes" data-i18n-ph="search_graph" placeholder="Buscar nodo en el grafo..." style="flex:1;">
+      <button class="btn-open-link" id="btn-reset-graph" title="Centrar grafo">${SVGS.sync} Reset</button>
+      <button class="btn-open-link btn-open-note" data-note="Antigravity/00 Antigravity Hub.md" title="Abrir en Obsidian">${SVGS.open}</button>
+    </div>
+
+    <div class="graph-legend">
+      <span class="legend-dot dot-hub"></span><span>Hub</span>
+      <span class="legend-dot dot-soul"></span><span>Alma</span>
+      <span class="legend-dot dot-skill"></span><span>Skills</span>
+      <span class="legend-dot dot-memory"></span><span>Memoria</span>
+      <span class="legend-dot dot-project"></span><span>Proyectos</span>
+      <span class="legend-dot dot-session"></span><span>Sesiones</span>
+    </div>
+
+    <div class="graph-canvas-container" id="graph-container">
+      <canvas id="graph-canvas"></canvas>
+      <div id="graph-tooltip" class="graph-tooltip"></div>
+    </div>
+    <div style="font-size:10px;color:var(--text-dim);text-align:center;margin-top:6px;" data-i18n="graph_instructions">
+      Arrastra nodos o el fondo | Rueda para zoom | Clic en un nodo para abrir la nota
+    </div>
+  </div>
+
   <!-- TAB 4: NUEVA MEMORIA -->
   <div class="tab-pane" id="pane-crear">
     <div class="form-panel">
@@ -768,6 +930,34 @@ class ObsidianPanelProvider {
         Vuelve a comprobar que ~/.gemini/config/skills/ tenga la skill lista para todos los chats.
       </div>
     </div>
+    <!-- Encrypted Backup & Git Integration -->
+    <div class="settings-section">
+      <div class="settings-section-title">
+        ${SVGS.lock} <span data-i18n="settings_backup_title">Copia de Seguridad y Migración Cifrada:</span>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;line-height:1.5;" data-i18n="settings_backup_desc">
+        Exporta todas las notas de Antigravity en un único archivo <code>.agvault</code> cifrado con AES-256-GCM y clave derivada con PBKDF2 bajo tu contraseña. Puedes restaurarlo en cualquier equipo o espacio de trabajo.
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-action btn-gradient" id="btn-export-vault" style="flex:1;">
+          ${SVGS.download} <span data-i18n="btn_export_vault">Exportar Cifrado</span>
+        </button>
+        <button class="btn-action btn-outline" id="btn-import-vault" style="flex:1;">
+          ${SVGS.upload} <span data-i18n="btn_import_vault">Importar Respaldo</span>
+        </button>
+      </div>
+
+      <div class="git-status-box" style="margin-top:12px;padding:10px;background:rgba(255,255,255,0.02);border:1px solid var(--card-border);border-radius:8px;">
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:${isVaultGit ? '#34d399' : 'var(--text-muted)'};">
+          ${SVGS.network}
+          <span>${isVaultGit ? 'Git Auto-Commit: Activo en Vault' : 'Git en Vault: No inicializado (opcional)'}</span>
+        </div>
+        <div style="font-size:10px;color:var(--text-dim);margin-top:4px;">
+          ${isVaultGit ? 'Cada guardado importante genera un commit automático de historial en el repositorio Git de la bóveda.' : 'Si inicializas un repositorio git en tu Vault, las notas mantendrán historial de versiones automático.'}
+        </div>
+      </div>
+    </div>
+
     <div class="danger-zone">
       <div class="danger-title">${SVGS.alert} <span data-i18n="settings_danger_title">Zona de Peligro / Empezar de Cero</span></div>
       <div class="danger-desc" data-i18n="settings_danger_desc">
@@ -782,6 +972,9 @@ class ObsidianPanelProvider {
   <!-- Toast Bar -->
   <div class="toast-bar" id="toast"></div>
 
+  <script>
+    window.INITIAL_GRAPH_DATA = ${JSON.stringify(graphData)};
+  </script>
   <script src="${scriptUri}"></script>
 </body>
 </html>`;
@@ -857,6 +1050,53 @@ function activate(context) {
     }, 180000);
     context.subscriptions.push({ dispose: () => clearInterval(periodicTimer) });
   }
+
+  // 3b. Continuous workspace session tracking & passive auto-checkpointing
+  const sessionModifiedFiles = new Set();
+  let lastAutoCheckpointTime = Date.now();
+
+  context.subscriptions.push(
+    vscode.workspace.onDidSaveTextDocument((doc) => {
+      const root = getWorkspaceRoot();
+      if (!root || !doc || !doc.uri) return;
+      const fp = doc.uri.fsPath;
+      if (fp.startsWith(root) && !fp.includes('node_modules') && !fp.includes('.git') && !fp.includes('.agents')) {
+        sessionModifiedFiles.add(path.relative(root, fp));
+      }
+    })
+  );
+
+  const performAutoCheckpoint = () => {
+    if (sessionModifiedFiles.size >= 2 && (Date.now() - lastAutoCheckpointTime > 600000)) {
+      const activeVault = getActiveOrConfiguredVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
+      const root = getWorkspaceRoot();
+      if (activeVault && activeVault.exists && root) {
+        const pName = path.basename(root);
+        const filesList = Array.from(sessionModifiedFiles);
+        try {
+          syncEngine.saveSessionCheckpoint(activeVault.path, {
+            project: pName,
+            summary: `Auto-checkpoint: ${filesList.length} archivos modificados en ${pName}`,
+            content: `Archivos editados en la sesión:\n- ${filesList.join('\n- ')}\n\nRegistro automático continuo del estado de trabajo.`,
+          });
+          syncEngine.gitCommitVault(activeVault.path, `Auto-checkpoint: ${pName} (${filesList.length} archivos)`);
+          sessionModifiedFiles.clear();
+          lastAutoCheckpointTime = Date.now();
+          if (currentWebviewView) {
+            currentWebviewView.webview.html = provider._getHtmlForWebview(currentWebviewView.webview);
+          }
+        } catch (e) {}
+      }
+    }
+  };
+
+  context.subscriptions.push(
+    vscode.window.onDidChangeWindowState((state) => {
+      if (!state.focused) {
+        performAutoCheckpoint();
+      }
+    })
+  );
 
   // 4. Status Bar and notification (Zero config, immediate out-of-the-box readiness)
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -1181,11 +1421,14 @@ function activate(context) {
         cancellable: false
       }, async () => {
         try {
-          const res = await runObsidianCli(`project scan "${root}"`, root);
+          // Direct in-process scan (fast, zero child_process latency)
+          const res = syncEngine.syncProject(activeVault.path, root);
+          syncEngine.syncProjectsIndex(activeVault.path);
+          syncEngine.syncVaultToKnowledge(activeVault.path);
           if (currentWebviewView) {
             currentWebviewView.webview.html = provider._getHtmlForWebview(currentWebviewView.webview);
           }
-          const pName = (res && res.project) || path.basename(root);
+          const pName = (res && res.projectName) || path.basename(root);
           vscode.window.showInformationMessage(`Blueprint y arquitectura viva de "${pName}" actualizados en Obsidian.`);
         } catch (e) {
           vscode.window.showErrorMessage('Error al escanear arquitectura: ' + (e.message || JSON.stringify(e)));
@@ -1218,15 +1461,96 @@ function activate(context) {
       });
 
       try {
-        const cleanSum = summary.replace(/"/g, '\\"');
-        const cleanContent = (content || '').replace(/"/g, '\\"');
-        await runObsidianCli(`session save --project "${pName}" --summary "${cleanSum}" --content "${cleanContent}"`, root);
+        // Direct in-process checkpoint saving and Git commit
+        const res = syncEngine.saveSessionCheckpoint(activeVault.path, {
+          project: pName,
+          summary: summary.trim(),
+          content: content ? content.trim() : '',
+        });
+        syncEngine.gitCommitVault(activeVault.path, `Sesión: ${summary.trim()}`);
         if (currentWebviewView) {
           currentWebviewView.webview.html = provider._getHtmlForWebview(currentWebviewView.webview);
         }
         vscode.window.showInformationMessage(`Checkpoint de sesión guardado en Obsidian: "${pName}".`);
       } catch (e) {
         vscode.window.showErrorMessage('Error al guardar checkpoint de sesión: ' + (e.message || JSON.stringify(e)));
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('antigravityObsidian.exportVault', async () => {
+      const activeVault = getActiveOrConfiguredVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
+      if (!activeVault || !activeVault.exists) {
+        vscode.window.showWarningMessage('No hay ninguna bóveda de Obsidian conectada.');
+        return;
+      }
+      const pwd = await vscode.window.showInputBox({
+        title: 'Exportar Vault Cifrado (.agvault)',
+        prompt: 'Introduce una contraseña para cifrar el archivo con AES-256-GCM',
+        password: true,
+      });
+      if (!pwd) return;
+
+      const confirmPwd = await vscode.window.showInputBox({
+        title: 'Confirmar Contraseña',
+        prompt: 'Repite la contraseña',
+        password: true,
+      });
+      if (pwd !== confirmPwd) {
+        vscode.window.showErrorMessage('Las contraseñas no coinciden.');
+        return;
+      }
+
+      const defaultFileName = `antigravity-vault-${new Date().toISOString().split('T')[0]}.agvault`;
+      const saveUri = await vscode.window.showSaveDialog({
+        defaultUri: vscode.Uri.file(defaultFileName),
+        filters: { 'Antigravity Vault Cifrado': ['agvault', 'json'] },
+        title: 'Guardar Archivo de Respaldo Cifrado',
+      });
+      if (!saveUri) return;
+
+      try {
+        const jsonStr = syncEngine.exportVaultEncrypted(activeVault.path, pwd);
+        fs.writeFileSync(saveUri.fsPath, jsonStr, 'utf8');
+        vscode.window.showInformationMessage(`Vault cifrado exportado exitosamente a: ${path.basename(saveUri.fsPath)}`);
+      } catch (err) {
+        vscode.window.showErrorMessage('Error al exportar vault: ' + err.message);
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('antigravityObsidian.importVault', async () => {
+      const activeVault = getActiveOrConfiguredVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
+      if (!activeVault || !activeVault.exists) {
+        vscode.window.showWarningMessage('No hay ninguna bóveda de Obsidian conectada.');
+        return;
+      }
+      const openUris = await vscode.window.showOpenDialog({
+        canSelectMany: false,
+        filters: { 'Antigravity Vault Cifrado': ['agvault', 'json'] },
+        title: 'Seleccionar Archivo .agvault para Restaurar',
+      });
+      if (!openUris || openUris.length === 0) return;
+
+      const pwd = await vscode.window.showInputBox({
+        title: 'Descifrar e Importar Vault',
+        prompt: 'Introduce la contraseña con la que se cifró el archivo',
+        password: true,
+      });
+      if (!pwd) return;
+
+      try {
+        const encJson = fs.readFileSync(openUris[0].fsPath, 'utf8');
+        const res = syncEngine.importVaultEncrypted(activeVault.path, pwd, encJson);
+        syncEngine.syncAll(activeVault.path, getWorkspaceRoot());
+        if (currentWebviewView) {
+          currentWebviewView.webview.html = provider._getHtmlForWebview(currentWebviewView.webview);
+        }
+        vscode.window.showInformationMessage(`Vault restaurado: ${res.restoredFiles} notas recuperadas exitosamente.`);
+      } catch (err) {
+        vscode.window.showErrorMessage('Error al restaurar vault: ' + err.message);
       }
     })
   );

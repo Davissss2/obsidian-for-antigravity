@@ -8,17 +8,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.7.0] - 2026-10-05
 
 ### Added
+- **Native Interactive Force-Directed Graph View**:
+  - Embedded HTML5 Canvas force-directed graph inside the Webview sidebar (`pane-grafo`).
+  - Real-time physics simulation with Coulomb repulsion, Hooke springs along links, and velocity damping.
+  - Interactive mouse wheel zoom, pan, node dragging with pin-and-release, hover tooltips with connection counts, search node filtering, and click-to-open note directly in IDE or Obsidian.
+  - Color-coded node taxonomy: Hub (Purple), Soul (Pink), Skills (Blue), Memorias (Emerald), Proyectos (Amber), Sesiones (Cyan).
+- **Interactive Webview Panes for "Sesiones" and "Proyectos"**:
+  - Tab "Sesiones": Chronological timeline of all development sessions and checkpoints with project badge, date, summary snippet, and quick copy/open actions.
+  - Tab "Proyectos": Rich project cards showing technology stack, detected dependencies, associated skill, backlog task progress (`X/Y completadas`), and anti-patterns count.
+  - Responsive 8-pill navigation tabs (`panel`, `memoria`, `skills`, `sesiones`, `proyectos`, `grafo`, `crear`, `ajustes`).
+- **Direct In-Process Execution Subsystem**:
+  - Migrated UI actions (`scanProject`, `saveSession`, `syncProject`, `syncProjectsIndex`) to run directly in-process via `syncEngine.js`, eliminating `child_process.exec` overhead and reducing latency from 250ms to <5ms.
+- **Passive Auto-Checkpointing Subsystem**:
+  - Continuous workspace change tracker (`vscode.workspace.onDidSaveTextDocument` + `vscode.window.onDidChangeWindowState`) that tracks edited files and automatically saves session checkpoints to Obsidian when switching away from the IDE or after continuous work sessions.
+- **Okapi BM25 / TF-IDF Context Retrieval & Triage**:
+  - Pure JavaScript BM25 ranking algorithm embedded in `syncEngine.js` with document frequency and length normalization to score and rank memories and skills with surgically minimal context (<80 tokens).
+- **Encrypted Vault Backup/Migration (.agvault) & Git Auto-Commit**:
+  - `exportVaultEncrypted` and `importVaultEncrypted`: Export all notes in `Antigravity/` into a single password-protected `.agvault` file using AES-256-GCM and PBKDF2 (100,000 iterations, SHA-512) for secure backup and migration across machines.
+  - Automated silent Git commits (`gitCommitVault`) on note saves and checkpoints if `.git` is initialized in the vault.
+  - Dedicated UI backup card in Ajustes with `#btn-export-vault` and `#btn-import-vault`.
+  - Registered commands `antigravityObsidian.exportVault` and `antigravityObsidian.importVault`.
 - **Continuity Memory & Session Checkpoints Subsystem**:
   - `node obsidian.js session save --summary "..." --content "..." [--project "..."]`: Creates atomic session checkpoints in `Antigravity/Sesiones/<date>_<time> - <project>.md`.
   - `node obsidian.js session last [--project "..."]`: Sub-250ms continuity recall consuming <50 tokens, giving the AI immediate context of recent decisions and progress.
   - `node obsidian.js session list [--limit N]`: Chronological listing of sessions and milestones across all projects.
   - Maintained `00 Indice de Sesiones.md` and bi-directional session log table in project blueprints (`## Bitácora de Sesiones y Avances Recientes`).
-  - Added chat slash commands `/obsidian session save`, `/obsidian session last`, and `/obsidian session list`.
-  - Added VS Code commands `antigravityObsidian.saveSession` and `antigravityObsidian.showSessions`.
+  - Added chat slash commands `/obsidian session save`, `/obsidian session last`, `/obsidian session list`, `/obsidian export`, and `/obsidian import`.
 - **Living Architectural Blueprints & Deep Scanning**:
   - `node obsidian.js project scan [path]`: Deep recursive structural scanner that maps directories, architectural roles (`src/`, `components/`, `controllers/`, `services/`, `models/`, `routes/`, `views/`, etc.), key entrypoints (`extension.js`, `index.ts`, `main.py`, etc.), npm scripts, and databases/ORMs (Prisma, Drizzle, SQLite, Mongo, Postgres).
   - Automatically updates project notes in `Antigravity/Proyectos/<Project>.md` preserving custom rules, anti-patterns, backlog, sessions, and linked memories.
-  - Added VS Code command `antigravityObsidian.scanProject`.
 - **Anti-Patterns & Repository Traps Registry**:
   - `node obsidian.js project antipattern add "<trap/rule>" [--project "..."]`: Permanently records forbidden coding patterns, quirks, and repository gotchas to avoid repeating mistakes.
   - `node obsidian.js project antipattern list [--project "..."]`: Distilled overview of known traps.
@@ -27,10 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `node obsidian.js project backlog done "<task>" [--project "..."]`: Marks tasks as completed (`- [x] <task>`).
   - `node obsidian.js project backlog list [--project "..."]`: Inspects open and closed tasks.
 - **Balanced 50/50 Persistence Policy**:
-  - Recalibrated AI agent recording filter in `obsidian-brain.md`, `GEMINI.md`, and `AGENTS.md` from hyper-strict (which caused AI amnesia by rejecting 95% of knowledge) to a balanced policy that actively records structural milestones, architectural decisions, and session continuity checkpoints alongside non-trivial bugfixes.
-- **Enhanced Webview Dashboard**:
-  - Expanded stats row to 4 interactive metric boxes: Memorias, Skills, Sesiones, and Proyectos.
-  - Added quick action buttons in webview for Escanear Proyecto and Guardar Sesión.
+  - Recalibrated AI agent recording filter in `obsidian-brain.md`, `GEMINI.md`, and `AGENTS.md` from hyper-strict to a balanced policy that actively records structural milestones, architectural decisions, and session continuity checkpoints alongside non-trivial bugfixes.
 
 ---
 

@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Davissss2/obsidian-for-antigravity"><img src="https://img.shields.io/badge/version-1.6.0-8b5cf6.svg?style=flat-square" alt="Version 1.6.0"></a>
+  <a href="https://github.com/Davissss2/obsidian-for-antigravity"><img src="https://img.shields.io/badge/version-1.7.0-8b5cf6.svg?style=flat-square" alt="Version 1.7.0"></a>
   <a href="https://open-vsx.org"><img src="https://img.shields.io/badge/Open%20VSX-available-blue.svg?style=flat-square" alt="Open VSX"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-purple.svg?style=flat-square" alt="License"></a>
   <a href="https://github.com/Davissss2"><img src="https://img.shields.io/badge/author-Davissss2-emerald.svg?style=flat-square" alt="Author Davissss2"></a>
@@ -89,6 +89,29 @@ Instead of burning thousands of tokens re-reading old logs, your AI assistant au
 - Create, inspect, edit, and delete Antigravity Skills and Rules with single CLI commands without browsing code or hand-crafting YAML frontmatter.
 - Direct helper scripts injection (`skill script <skill> add <file> --code "..."`) and instant rule registration across global (`~/.gemini/config/`) and project (`.agents/`) scopes.
 - Bidirectional vault synchronization into `Antigravity/Skills/` and automatic catalog indexing.
+
+### 16. Embedded Interactive Force-Directed Graph View
+- Embedded HTML5 Canvas force-directed graph running directly inside the sidebar Webview (`pane-grafo`).
+- Real-time physics simulation with Coulomb node repulsion, Hooke springs along wikilinks, and velocity damping.
+- Interactive mouse wheel zoom, pan, node dragging with pin-and-release, hover tooltips with connection counts, search node filtering, and click-to-open note directly in IDE or Obsidian.
+- Color-coded node taxonomy: Hub (Purple), Soul (Pink), Skills (Blue), Memorias (Emerald), Proyectos (Amber), Sesiones (Cyan).
+
+### 17. Interactive Webview Panes for "Sesiones" and "Proyectos"
+- Dedicated sidebar tab "Sesiones": Chronological timeline of all development sessions and checkpoints with project badge, date, summary snippet, and quick copy/open actions.
+- Dedicated sidebar tab "Proyectos": Rich project cards showing technology stack, detected dependencies, associated skill, backlog task progress (`X/Y completadas`), and anti-patterns count.
+- Responsive 8-pill navigation tabs (`panel`, `memoria`, `skills`, `sesiones`, `proyectos`, `grafo`, `crear`, `ajustes`).
+
+### 18. Encrypted Vault Backup/Migration (.agvault) & Git Auto-Commit
+- Export all notes in `Antigravity/` into a single password-protected `.agvault` file using AES-256-GCM and PBKDF2 (100,000 iterations, SHA-512) for secure backup and migration across machines.
+- Automated silent Git commits on note saves and checkpoints if `.git` is initialized in the vault.
+- One-click Encrypted Export and Import buttons right in the Webview Settings pane.
+
+### 19. Okapi BM25 Ranking Algorithm
+- Pure JavaScript BM25 ranking algorithm embedded in `syncEngine.js` with document frequency and length normalization to score and rank memories and skills with surgically minimal context (<80 tokens).
+
+### 20. Passive Auto-Checkpointing & In-Process Speedup
+- Continuous workspace change tracker (`vscode.workspace.onDidSaveTextDocument` + `vscode.window.onDidChangeWindowState`) that tracks edited files and automatically saves session checkpoints to Obsidian when switching away from the IDE or after continuous work sessions.
+- In-process execution of all UI operations in <5ms, completely eliminating child_process overhead.
 
 ---
 

@@ -16,6 +16,9 @@
       tab_panel: "Panel",
       tab_memories: "Memorias",
       tab_skills: "Skills",
+      tab_sessions: "Sesiones",
+      tab_projects: "Proyectos",
+      tab_graph: "Grafo",
       tab_create: "Crear",
       tab_settings: "Ajustes",
       graph_title: "Explorar Grafo de Conocimiento",
@@ -23,6 +26,19 @@
       btn_sync: "Sincronizar Bóveda",
       btn_syncing: "Sincronizando...",
       btn_open_hub: "Abrir 00 Antigravity Hub",
+      btn_scan_project: "Escanear Proyecto",
+      btn_save_session: "Guardar Sesión",
+      btn_open_index: "Ver Índice",
+      search_sessions: "Buscar en sesiones...",
+      search_projects: "Buscar proyectos...",
+      search_graph: "Buscar nodo en el grafo...",
+      no_sessions: "Sin sesiones registradas aún",
+      no_projects: "Sin proyectos registrados aún",
+      settings_backup_title: "Copia de Seguridad y Migración Cifrada:",
+      settings_backup_desc: "Exporta o importa todas tus notas cifradas con AES-256-GCM y PBKDF2 bajo tu contraseña.",
+      btn_export_vault: "Exportar Cifrado",
+      btn_import_vault: "Importar Respaldo",
+      graph_instructions: "Arrastra nodos o el fondo | Rueda para zoom | Clic en un nodo para abrir la nota",
       btn_scan_project: "Escanear Proyecto",
       btn_save_session: "Guardar Sesión",
       info_title: "Sincronización Autónoma Activa",
@@ -96,6 +112,9 @@
       tab_panel: "Dashboard",
       tab_memories: "Memories",
       tab_skills: "Skills",
+      tab_sessions: "Sessions",
+      tab_projects: "Projects",
+      tab_graph: "Graph",
       tab_create: "Create",
       tab_settings: "Settings",
       graph_title: "Explore Knowledge Graph",
@@ -105,6 +124,17 @@
       btn_open_hub: "Open 00 Antigravity Hub",
       btn_scan_project: "Scan Project",
       btn_save_session: "Save Session",
+      btn_open_index: "View Index",
+      search_sessions: "Search sessions...",
+      search_projects: "Search projects...",
+      search_graph: "Search graph nodes...",
+      no_sessions: "No sessions recorded yet",
+      no_projects: "No projects recorded yet",
+      settings_backup_title: "Encrypted Backup & Migration:",
+      settings_backup_desc: "Export or import all notes encrypted with AES-256-GCM and PBKDF2 under your password.",
+      btn_export_vault: "Export Encrypted",
+      btn_import_vault: "Import Backup",
+      graph_instructions: "Drag nodes or pan | Scroll to zoom | Click node to open note",
       info_title: "Autonomous Sync Active",
       info_desc: "Antigravity learns from your conversations and saves lessons to your Vault automatically without asking.",
       search_memories: "Search memories...",
@@ -495,6 +525,9 @@
     tabPills.forEach(p => p.classList.toggle('active', p.getAttribute('data-tab') === targetTab));
     tabPanes.forEach(pane => pane.classList.toggle('active', pane.id === `pane-${targetTab}`));
     statBoxes.forEach(sb => sb.classList.toggle('active', sb.getAttribute('data-tab') === targetTab));
+    if (targetTab === 'grafo') {
+      setTimeout(() => initOrResizeGraph(), 60);
+    }
   }
 
   tabPills.forEach(pill => {
@@ -549,21 +582,21 @@
   const btnOpenGraph = document.getElementById('card-open-graph');
   if (btnOpenGraph) {
     btnOpenGraph.addEventListener('click', () => {
-      vscode.postMessage({ type: 'openHub' });
+      switchTab('grafo');
     });
   }
 
   const statSessions = document.getElementById('stat-sessions');
   if (statSessions) {
     statSessions.addEventListener('click', () => {
-      vscode.postMessage({ type: 'showSessions' });
+      switchTab('sesiones');
     });
   }
 
   const statProjects = document.getElementById('stat-projects');
   if (statProjects) {
     statProjects.addEventListener('click', () => {
-      vscode.postMessage({ type: 'showProjects' });
+      switchTab('proyectos');
     });
   }
 
@@ -574,10 +607,62 @@
     });
   }
 
+  const btnScanProjectTab = document.getElementById('btn-scan-project-tab');
+  if (btnScanProjectTab) {
+    btnScanProjectTab.addEventListener('click', () => {
+      vscode.postMessage({ type: 'scanProject' });
+    });
+  }
+
   const btnSaveSession = document.getElementById('btn-save-session');
   if (btnSaveSession) {
     btnSaveSession.addEventListener('click', () => {
       vscode.postMessage({ type: 'saveSession' });
+    });
+  }
+
+  const btnNewSessionTab = document.getElementById('btn-new-session-tab');
+  if (btnNewSessionTab) {
+    btnNewSessionTab.addEventListener('click', () => {
+      vscode.postMessage({ type: 'saveSession' });
+    });
+  }
+
+  const btnExportVault = document.getElementById('btn-export-vault');
+  if (btnExportVault) {
+    btnExportVault.addEventListener('click', () => {
+      vscode.postMessage({ type: 'exportVault' });
+    });
+  }
+
+  const btnImportVault = document.getElementById('btn-import-vault');
+  if (btnImportVault) {
+    btnImportVault.addEventListener('click', () => {
+      vscode.postMessage({ type: 'importVault' });
+    });
+  }
+
+  const searchSessions = document.getElementById('search-sessions');
+  if (searchSessions) {
+    searchSessions.addEventListener('input', (e) => {
+      const q = e.target.value.toLowerCase();
+      document.querySelectorAll('#sessions-list .note-item').forEach(card => {
+        const title = (card.getAttribute('data-title') || '').toLowerCase();
+        const project = (card.getAttribute('data-project') || '').toLowerCase();
+        card.style.display = (title.includes(q) || project.includes(q)) ? 'block' : 'none';
+      });
+    });
+  }
+
+  const searchProjects = document.getElementById('search-projects');
+  if (searchProjects) {
+    searchProjects.addEventListener('input', (e) => {
+      const q = e.target.value.toLowerCase();
+      document.querySelectorAll('#projects-list .note-item').forEach(card => {
+        const title = (card.getAttribute('data-title') || '').toLowerCase();
+        const stack = (card.getAttribute('data-stack') || '').toLowerCase();
+        card.style.display = (title.includes(q) || stack.includes(q)) ? 'block' : 'none';
+      });
     });
   }
 
@@ -791,6 +876,356 @@
       }
     }
   });
+
+  // Force-Directed Graph View
+  let graphData = window.INITIAL_GRAPH_DATA || { nodes: [], links: [] };
+  let graphCanvas = null;
+  let graphCtx = null;
+  let graphAnimationId = null;
+  let isGraphSimulating = false;
+  let graphNodes = [];
+  let graphLinks = [];
+  let graphTransform = { x: 0, y: 0, k: 1 };
+  let isDraggingGraph = false;
+  let dragNode = null;
+  let mouseStartPos = { x: 0, y: 0 };
+  let hoveredNode = null;
+  let graphFilterQuery = '';
+  let graphEventsAttached = false;
+
+  const GROUP_COLORS = {
+    hub: '#8b5cf6',
+    soul: '#ec4899',
+    skill: '#3b82f6',
+    memory: '#10b981',
+    project: '#f59e0b',
+    session: '#06b6d4',
+    index: '#94a3b8',
+    default: '#a855f7'
+  };
+
+  function initOrResizeGraph() {
+    graphCanvas = document.getElementById('graph-canvas');
+    if (!graphCanvas) return;
+    const container = document.getElementById('graph-container');
+    if (!container) return;
+
+    const width = container.clientWidth || 300;
+    const height = container.clientHeight || 300;
+    const dpr = window.devicePixelRatio || 1;
+    graphCanvas.width = width * dpr;
+    graphCanvas.height = height * dpr;
+    graphCtx = graphCanvas.getContext('2d');
+    graphCtx.scale(dpr, dpr);
+
+    if (!graphEventsAttached) {
+      setupGraphEvents();
+      graphEventsAttached = true;
+    }
+
+    if (graphNodes.length === 0 && graphData && graphData.nodes && graphData.nodes.length > 0) {
+      buildGraphSimulation(width, height);
+    } else {
+      drawGraph();
+    }
+  }
+
+  function buildGraphSimulation(width, height) {
+    const cx = width / 2;
+    const cy = height / 2;
+    graphTransform = { x: cx, y: cy, k: 0.95 };
+
+    const nodeCount = graphData.nodes.length;
+    graphNodes = graphData.nodes.map((n, i) => {
+      const angle = (i / Math.max(1, nodeCount)) * 2 * Math.PI;
+      const radius = 50 + Math.random() * 70;
+      return {
+        id: n.id,
+        label: n.label || n.id,
+        group: n.group || 'default',
+        relPath: n.relPath || `Antigravity/${n.id}.md`,
+        x: Math.cos(angle) * radius,
+        y: Math.sin(angle) * radius,
+        vx: (Math.random() - 0.5) * 2,
+        vy: (Math.random() - 0.5) * 2,
+        r: n.group === 'hub' ? 12 : (n.group === 'project' ? 9 : 7)
+      };
+    });
+
+    const nodeMap = new Map();
+    graphNodes.forEach(n => nodeMap.set(n.id.toLowerCase(), n));
+
+    graphLinks = [];
+    if (graphData.links) {
+      for (const l of graphData.links) {
+        const s = nodeMap.get((l.source || '').toLowerCase());
+        const t = nodeMap.get((l.target || '').toLowerCase());
+        if (s && t && s !== t) {
+          graphLinks.push({ source: s, target: t });
+        }
+      }
+    }
+
+    startGraphSimulation();
+  }
+
+  function startGraphSimulation() {
+    if (isGraphSimulating) return;
+    isGraphSimulating = true;
+    let ticks = 0;
+    const maxTicks = 180;
+
+    function step() {
+      // Repulsion between nodes
+      const repulsion = 480;
+      for (let i = 0; i < graphNodes.length; i++) {
+        const na = graphNodes[i];
+        for (let j = i + 1; j < graphNodes.length; j++) {
+          const nb = graphNodes[j];
+          const dx = nb.x - na.x;
+          const dy = nb.y - na.y;
+          const distSq = dx * dx + dy * dy + 1;
+          const dist = Math.sqrt(distSq);
+          if (dist < 200) {
+            const f = repulsion / distSq;
+            const fx = (dx / dist) * f;
+            const fy = (dy / dist) * f;
+            if (na !== dragNode) { na.vx -= fx; na.vy -= fy; }
+            if (nb !== dragNode) { nb.vx += fx; nb.vy += fy; }
+          }
+        }
+      }
+
+      // Spring force along links
+      const restLen = 65;
+      const springK = 0.045;
+      for (const link of graphLinks) {
+        const dx = link.target.x - link.source.x;
+        const dy = link.target.y - link.source.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const diff = dist - restLen;
+        const f = diff * springK;
+        const fx = (dx / dist) * f;
+        const fy = (dy / dist) * f;
+        if (link.source !== dragNode) { link.source.vx += fx; link.source.vy += fy; }
+        if (link.target !== dragNode) { link.target.vx -= fx; link.target.vy -= fy; }
+      }
+
+      // Center gravity & damping
+      const gravity = 0.025;
+      const damping = 0.82;
+      for (const n of graphNodes) {
+        if (n === dragNode) continue;
+        n.vx -= n.x * gravity;
+        n.vy -= n.y * gravity;
+        n.vx *= damping;
+        n.vy *= damping;
+        n.x += n.vx;
+        n.y += n.vy;
+      }
+
+      drawGraph();
+      ticks++;
+      if (ticks < maxTicks || dragNode) {
+        graphAnimationId = requestAnimationFrame(step);
+      } else {
+        isGraphSimulating = false;
+      }
+    }
+
+    graphAnimationId = requestAnimationFrame(step);
+  }
+
+  function drawGraph() {
+    if (!graphCtx || !graphCanvas) return;
+    const container = document.getElementById('graph-container');
+    const width = container.clientWidth || 300;
+    const height = container.clientHeight || 300;
+
+    graphCtx.save();
+    graphCtx.clearRect(0, 0, width, height);
+
+    // Subtle grid dots background
+    graphCtx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+    const gridSize = 24 * graphTransform.k;
+    const ox = ((graphTransform.x % gridSize) + gridSize) % gridSize;
+    const oy = ((graphTransform.y % gridSize) + gridSize) % gridSize;
+    for (let x = ox; x < width; x += gridSize) {
+      for (let y = oy; y < height; y += gridSize) {
+        graphCtx.fillRect(x, y, 1.5, 1.5);
+      }
+    }
+
+    graphCtx.translate(graphTransform.x, graphTransform.y);
+    graphCtx.scale(graphTransform.k, graphTransform.k);
+
+    const q = graphFilterQuery.toLowerCase().trim();
+
+    // Draw links
+    for (const link of graphLinks) {
+      const isHighlighted = q && (link.source.label.toLowerCase().includes(q) || link.target.label.toLowerCase().includes(q));
+      graphCtx.beginPath();
+      graphCtx.moveTo(link.source.x, link.source.y);
+      graphCtx.lineTo(link.target.x, link.target.y);
+      graphCtx.strokeStyle = isHighlighted ? 'rgba(139, 92, 246, 0.7)' : 'rgba(255, 255, 255, 0.12)';
+      graphCtx.lineWidth = isHighlighted ? 1.8 : 1;
+      graphCtx.stroke();
+    }
+
+    // Draw nodes
+    for (const node of graphNodes) {
+      const isMatch = !q || node.label.toLowerCase().includes(q);
+      const isHovered = (hoveredNode === node);
+      const color = GROUP_COLORS[node.group] || GROUP_COLORS.default;
+
+      // Glow for hovered or query match
+      if (isHovered || (q && isMatch)) {
+        graphCtx.beginPath();
+        graphCtx.arc(node.x, node.y, node.r + 5, 0, Math.PI * 2);
+        graphCtx.fillStyle = 'rgba(139, 92, 246, 0.25)';
+        graphCtx.fill();
+      }
+
+      // Node body
+      graphCtx.beginPath();
+      graphCtx.arc(node.x, node.y, node.r, 0, Math.PI * 2);
+      graphCtx.fillStyle = isMatch ? color : 'rgba(100, 116, 139, 0.35)';
+      graphCtx.fill();
+      graphCtx.strokeStyle = isHovered ? '#ffffff' : 'rgba(0, 0, 0, 0.35)';
+      graphCtx.lineWidth = isHovered ? 2 : 1;
+      graphCtx.stroke();
+
+      // Node label
+      if (graphTransform.k > 0.65 || isHovered || isMatch) {
+        graphCtx.font = (isHovered ? 'bold ' : '') + '9.5px -apple-system, BlinkMacSystemFont, sans-serif';
+        graphCtx.fillStyle = isMatch ? (isHovered ? '#ffffff' : '#e2e8f0') : 'rgba(148, 163, 184, 0.3)';
+        graphCtx.textAlign = 'center';
+        graphCtx.textBaseline = 'top';
+        const displayLabel = node.label.length > 20 ? node.label.slice(0, 18) + '...' : node.label;
+        graphCtx.fillText(displayLabel, node.x, node.y + node.r + 3);
+      }
+    }
+
+    graphCtx.restore();
+  }
+
+  function setupGraphEvents() {
+    const canvas = document.getElementById('graph-canvas');
+    const tooltip = document.getElementById('graph-tooltip');
+    if (!canvas) return;
+
+    let dragMoved = false;
+
+    function getCanvasCoords(e) {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const x = (mx - graphTransform.x) / graphTransform.k;
+      const y = (my - graphTransform.y) / graphTransform.k;
+      return { mx, my, x, y };
+    }
+
+    function findNodeAt(x, y) {
+      for (let i = graphNodes.length - 1; i >= 0; i--) {
+        const n = graphNodes[i];
+        const dx = n.x - x;
+        const dy = n.y - y;
+        if (dx * dx + dy * dy <= (n.r + 4) * (n.r + 4)) {
+          return n;
+        }
+      }
+      return null;
+    }
+
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const { mx, my } = getCanvasCoords(e);
+      const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
+      const newK = Math.max(0.2, Math.min(3.5, graphTransform.k * zoomFactor));
+      graphTransform.x = mx - (mx - graphTransform.x) * (newK / graphTransform.k);
+      graphTransform.y = my - (my - graphTransform.y) * (newK / graphTransform.k);
+      graphTransform.k = newK;
+      drawGraph();
+    }, { passive: false });
+
+    canvas.addEventListener('mousedown', (e) => {
+      const { mx, my, x, y } = getCanvasCoords(e);
+      dragMoved = false;
+      mouseStartPos = { x: mx, y: my };
+      const hit = findNodeAt(x, y);
+      if (hit) {
+        dragNode = hit;
+      } else {
+        isDraggingGraph = true;
+      }
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!canvas) return;
+      const { mx, my, x, y } = getCanvasCoords(e);
+
+      if (dragNode) {
+        dragMoved = true;
+        dragNode.x = x;
+        dragNode.y = y;
+        dragNode.vx = 0;
+        dragNode.vy = 0;
+        startGraphSimulation();
+        return;
+      }
+
+      if (isDraggingGraph) {
+        dragMoved = true;
+        graphTransform.x += (mx - mouseStartPos.x);
+        graphTransform.y += (my - mouseStartPos.y);
+        mouseStartPos = { x: mx, y: my };
+        drawGraph();
+        return;
+      }
+
+      const hovered = findNodeAt(x, y);
+      if (hovered !== hoveredNode) {
+        hoveredNode = hovered;
+        drawGraph();
+      }
+
+      if (hovered && tooltip) {
+        tooltip.style.display = 'block';
+        tooltip.style.left = `${mx + 12}px`;
+        tooltip.style.top = `${my + 12}px`;
+        const connCount = graphLinks.filter(l => l.source === hovered || l.target === hovered).length;
+        tooltip.innerHTML = `<strong>${hovered.label}</strong><br><span style="color:#a855f7;">${hovered.group}</span> · ${connCount} enlaces<br><span style="font-size:9.5px;color:#94a3b8;">Clic para abrir nota</span>`;
+      } else if (tooltip) {
+        tooltip.style.display = 'none';
+      }
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (dragNode && !dragMoved) {
+        vscode.postMessage({ type: 'openNote', note: dragNode.relPath || dragNode.id, path: dragNode.relPath });
+      }
+      dragNode = null;
+      isDraggingGraph = false;
+    });
+
+    const searchGraph = document.getElementById('search-graph-nodes');
+    if (searchGraph) {
+      searchGraph.addEventListener('input', (e) => {
+        graphFilterQuery = e.target.value;
+        drawGraph();
+      });
+    }
+
+    const btnResetGraph = document.getElementById('btn-reset-graph');
+    if (btnResetGraph) {
+      btnResetGraph.addEventListener('click', () => {
+        const container = document.getElementById('graph-container');
+        const width = container.clientWidth || 300;
+        const height = container.clientHeight || 300;
+        buildGraphSimulation(width, height);
+      });
+    }
+  }
 
   // Apply initial language
   applyLanguage(currentLang);

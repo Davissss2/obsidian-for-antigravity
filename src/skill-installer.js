@@ -643,6 +643,8 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '- `/obsidian catalog`: Run `node "' + normalizedScriptPath + '" catalog` and present the compact overview.',
         '- `/obsidian skills`: Run `node "' + normalizedScriptPath + '" skills` to list available skills.',
         '- `/obsidian memories`: Run `node "' + normalizedScriptPath + '" memories` to list recorded memories.',
+        '- `/obsidian export [file]`: Run `node "' + normalizedScriptPath + '" export --password "<pwd>" --output "<file>"` to export password-encrypted vault backup.',
+        '- `/obsidian import <file>`: Run `node "' + normalizedScriptPath + '" import --password "<pwd>" --file "<file>"` to decrypt and restore vault backup.',
         '- `/obsidian open [note]`: Run `node "' + normalizedScriptPath + '" open [note]` to open in Obsidian Desktop.',
         '- `/obsidian help`: Show the quick reference of all `/obsidian` commands.'
       ].join('\n')
@@ -671,6 +673,8 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '- `/obsidian catalog`: Ejecuta `node "' + normalizedScriptPath + '" catalog` y presenta el resumen compacto.',
         '- `/obsidian skills`: Ejecuta `node "' + normalizedScriptPath + '" skills` para listar las skills disponibles.',
         '- `/obsidian memories`: Ejecuta `node "' + normalizedScriptPath + '" memories` para listar las memorias registradas.',
+        '- `/obsidian export [archivo]`: Ejecuta `node "' + normalizedScriptPath + '" export --password "<pwd>" --output "<archivo>"` para exportar respaldo cifrado con contrasena.',
+        '- `/obsidian import <archivo>`: Ejecuta `node "' + normalizedScriptPath + '" import --password "<pwd>" --file "<archivo>"` para descifrar y restaurar notas en el Vault.',
         '- `/obsidian open [nota]`: Ejecuta `node "' + normalizedScriptPath + '" open [nota]` para abrir en Obsidian Desktop.',
         '- `/obsidian help`: Muestra la guia rapida de todos los comandos `/obsidian`.'
       ].join('\n');

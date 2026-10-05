@@ -1,6 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
+const { exec } = require('child_process');
 
 /**
  * Antigravity <-> Obsidian Sync Engine
@@ -2520,13 +2522,23 @@ function buildContextManifest(vaultPath) {
     }
   }
 
+  const sesDir = path.join(vaultPath, 'Antigravity', 'Sesiones');
+  const sessions = [];
+  if (fs.existsSync(sesDir)) {
+    for (const f of fs.readdirSync(sesDir)) {
+      if (!f.endsWith('.md') || f.startsWith('00')) continue;
+      sessions.push(f.replace(/\.md$/, ''));
+    }
+  }
+
   const manifest = {
     updatedAt: new Date().toISOString(),
     vaultName: path.basename(vaultPath),
-    stats: { memories: memories.length, skills: skills.length, projects: projects.length },
+    stats: { memories: memories.length, skills: skills.length, projects: projects.length, sessions: sessions.length },
     skills,
     memories,
     projects,
+    sessions,
   };
 
   try {
@@ -2549,90 +2561,115 @@ function getContextManifest(vaultPath, forceRebuild = false) {
   return buildContextManifest(vaultPath);
 }
 
-function triageContext(vaultPath, query) {
+function tokenize(text) {
+  if (!text) return [];
   const STOPWORDS = new Set([
     'de', 'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'y', 'o', 'en', 'a',
     'con', 'por', 'para', 'del', 'al', 'que', 'es', 'son', 'fue', 'era', 'como', 'se',
-    'su', 'sus', 'mi', 'mis', 'tu', 'tus', 'the', 'and', 'in', 'on', 'for', 'with', 'to', 'at'
+    'su', 'sus', 'mi', 'mis', 'tu', 'tus', 'the', 'and', 'in', 'on', 'for', 'with', 'to', 'at', 'is', 'it'
   ]);
+  return text
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9_\-\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length >= 2 && !STOPWORDS.has(w));
+}
 
+function computeBM25(corpus, queryTokens, k1 = 1.2, b = 0.75) {
+  const N = corpus.length;
+  if (N === 0 || queryTokens.length === 0) return [];
+
+  let totalLen = 0;
+  const docTokensList = corpus.map(doc => {
+    const text = `${doc.title || doc.name || ''} ${(doc.tags || []).join(' ')} ${doc.summary || ''} ${doc.description || ''}`;
+    const tokens = tokenize(text);
+    totalLen += tokens.length;
+    return tokens;
+  });
+  const avgdl = totalLen / N || 1;
+
+  const df = {};
+  for (const q of queryTokens) {
+    let count = 0;
+    for (const tokens of docTokensList) {
+      if (tokens.includes(q)) count++;
+    }
+    df[q] = count;
+  }
+
+  return corpus.map((doc, idx) => {
+    const tokens = docTokensList[idx];
+    const docLen = tokens.length;
+    const tf = {};
+    for (const t of tokens) {
+      tf[t] = (tf[t] || 0) + 1;
+    }
+
+    let score = 0;
+    for (const q of queryTokens) {
+      if (df[q] > 0 && tf[q]) {
+        const idf = Math.log(1 + (N - df[q] + 0.5) / (df[q] + 0.5));
+        const num = tf[q] * (k1 + 1);
+        const denom = tf[q] + k1 * (1 - b + b * (docLen / avgdl));
+        score += idf * (num / denom);
+      }
+    }
+
+    // Exact title/name boost
+    const titleNorm = (doc.title || doc.name || '').toLowerCase();
+    for (const q of queryTokens) {
+      if (titleNorm.includes(q)) score += 3.5;
+    }
+
+    return { ...doc, score };
+  });
+}
+
+function triageContext(vaultPath, query) {
   if (!query || query.trim() === '') {
     return { hasAntecedents: false, recommendation: 'Consulta vacía. Procede normalmente.' };
   }
 
   const manifest = getContextManifest(vaultPath);
-  const keywords = query
-    .toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9_\-\s]/g, ' ')
-    .split(/\s+/)
-    .filter(w => w.length >= 3 && !STOPWORDS.has(w));
+  const queryTokens = tokenize(query);
 
-  if (keywords.length === 0) {
+  if (queryTokens.length === 0) {
     return { hasAntecedents: false, recommendation: 'Sin palabras clave relevantes. Procede normalmente.' };
   }
 
+  // 1. BM25 on Skills
   let skillMatch = null;
-  let bestSkillScore = 0;
-
-  for (const s of manifest.skills) {
-    const sNameNorm = s.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const sDescNorm = (s.description || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    let score = 0;
-
-    for (const kw of keywords) {
-      if (sNameNorm.includes(kw)) score += 6;
-      else if (sDescNorm.includes(kw)) score += 2;
-    }
-
-    if (score > bestSkillScore && score >= 4) {
-      bestSkillScore = score;
-      skillMatch = {
-        name: s.name,
-        scope: s.scope,
-        summary: s.description || 'Procedimiento especializado',
-        advice: `Usa la Skill [[${s.name}]] para este flujo de trabajo. Lee su SKILL.md para instrucciones operativas.`,
-      };
-    }
+  const scoredSkills = computeBM25(manifest.skills || [], queryTokens);
+  scoredSkills.sort((a, b) => b.score - a.score);
+  if (scoredSkills.length > 0 && scoredSkills[0].score >= 2.0) {
+    const best = scoredSkills[0];
+    skillMatch = {
+      name: best.name,
+      scope: best.scope,
+      summary: best.description || 'Procedimiento especializado',
+      advice: `Usa la Skill [[${best.name}]] para este flujo de trabajo. Lee su SKILL.md para instrucciones operativas.`,
+      score: best.score,
+    };
   }
 
-  const scoredMemories = [];
-  for (const m of manifest.memories) {
-    const tNorm = m.title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const sNorm = (m.summary || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const tagsNorm = (m.tags || []).join(' ').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    let score = 0;
-
-    for (const kw of keywords) {
-      if (tNorm.includes(kw)) score += 5;
-      if (tagsNorm.includes(kw)) score += 4;
-      if (sNorm.includes(kw)) score += 2;
-    }
-
-    if (score >= 4) {
-      scoredMemories.push({
-        title: m.title,
-        category: m.category,
-        summary: m.summary,
-        score,
-        relPath: m.relPath,
-      });
-    }
-  }
-
+  // 2. BM25 on Memories
+  const scoredMemories = computeBM25(manifest.memories || [], queryTokens);
   scoredMemories.sort((a, b) => b.score - a.score);
-  const topMemories = scoredMemories.slice(0, 2).map(({ title, category, summary, relPath }) => ({
+  const relevantMemories = scoredMemories.filter(m => m.score >= 1.5);
+  const topMemories = relevantMemories.slice(0, 2).map(({ title, category, summary, relPath, score }) => ({
     title,
     category,
     summary,
     relPath,
+    score,
   }));
 
   const hasAntecedents = topMemories.length > 0 || !!skillMatch;
 
   let recommendation = '';
   if (topMemories.length > 0) {
-    recommendation = 'Antecedente encontrado: Usa directamente el resumen arriba indicado. Usa "peek" si necesitas ver el código exacto.';
+    recommendation = 'Antecedente encontrado con ranking BM25: Usa directamente el resumen arriba indicado. Usa "peek" si necesitas ver el código exacto.';
   } else if (skillMatch) {
     recommendation = `Flujo técnico cubierto por la Skill [[${skillMatch.name}]]. Consulta sus instrucciones operativas.`;
   } else {
@@ -2855,6 +2892,536 @@ Total de memorias registradas: **0**
   };
 }
 
+// -------------------------------------------------------------
+// Sessions & Checkpoints Subsystem
+// -------------------------------------------------------------
+
+function syncSessionsIndex(vaultPath) {
+  const sesFolder = path.join(vaultPath, 'Antigravity', 'Sesiones');
+  if (!fs.existsSync(sesFolder)) return { count: 0, sessions: [] };
+
+  const files = fs.readdirSync(sesFolder).filter(f => f.endsWith('.md') && !f.startsWith('00'));
+  const list = [];
+  for (const f of files) {
+    try {
+      const fp = path.join(sesFolder, f);
+      const c = fs.readFileSync(fp, 'utf8');
+      const base = f.replace(/\.md$/, '');
+      let title = base;
+      let proj = 'General';
+      let date = '';
+      let time = '';
+      let summary = '';
+
+      const mTitle = c.match(/^title:\s*["']?([^"'\r\n]+)["']?/m);
+      if (mTitle) title = mTitle[1].trim();
+      const mP = c.match(/^project:\s*["']?([^"'\r\n]+)["']?/m);
+      if (mP) proj = mP[1].trim();
+      const mD = c.match(/^date:\s*["']?([^"'\r\n]+)["']?/m);
+      if (mD) date = mD[1].trim();
+      const mT = c.match(/^time:\s*["']?([^"'\r\n]+)["']?/m);
+      if (mT) time = mT[1].trim();
+      const mSum = c.match(/>\s*\[!NOTE\]\s*\*\*Resumen[^\r\n]*\*\*\r?\n>\s*([^\r\n]+)/i)
+        || c.match(/^summary:\s*["']?([^"'\r\n]+)["']?/m);
+      if (mSum) summary = mSum[1].trim();
+
+      const stat = fs.statSync(fp);
+      list.push({
+        file: f,
+        base,
+        title,
+        project: proj,
+        date: date || stat.mtime.toISOString().split('T')[0],
+        time: time || '—',
+        summary: summary || 'Sin resumen',
+        mtime: stat.mtimeMs,
+      });
+    } catch (e) {}
+  }
+
+  list.sort((a, b) => b.mtime - a.mtime);
+
+  let rows = '';
+  if (list.length === 0) {
+    rows = '| *Aún no hay sesiones registradas* | — | — | — | — |\n';
+  } else {
+    for (const s of list) {
+      rows += `| ${s.date} | ${s.time} | [[Proyecto: ${s.project}]] | ${s.summary.replace(/\|/g, '-')} | [[${s.base}]] |\n`;
+    }
+  }
+
+  const now = new Date().toISOString().split('T')[0];
+  const idxContent = `---
+title: "Índice de Sesiones y Checkpoints — Antigravity"
+type: antigravity-index
+tags:
+  - antigravity/sesiones
+  - antigravity/index
+created: ${now}
+updated: ${now}
+---
+
+# Índice de Sesiones y Checkpoints — Antigravity
+
+> [!INFO] **Bitácora de Continuidad de Trabajo**
+> Registro cronológico de hitos, decisiones de arquitectura y sesiones de trabajo para mantener la continuidad entre conversaciones.
+
+Total sesiones registradas: **${list.length}**
+
+| Fecha | Hora | Proyecto | Resumen | Sesión |
+|---|---|---|---|---|
+${rows}
+---
+*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Indice de Proyectos]]
+`;
+
+  const idxFile = path.join(sesFolder, '00 Indice de Sesiones.md');
+  fs.writeFileSync(idxFile, idxContent, 'utf8');
+  return { count: list.length, sessions: list };
+}
+
+function saveSessionCheckpoint(vaultPath, options = {}) {
+  const baseDir = path.join(vaultPath, 'Antigravity');
+  const sesFolder = path.join(baseDir, 'Sesiones');
+  const projFolder = path.join(baseDir, 'Proyectos');
+  if (!fs.existsSync(sesFolder)) fs.mkdirSync(sesFolder, { recursive: true });
+
+  const pName = options.project || 'General';
+  let summary = options.summary || '';
+  let content = options.content || '';
+  const safeProject = sanitizeFilename(pName);
+
+  if (!summary && content) summary = content.slice(0, 140);
+  if (!summary) summary = `Sesión de trabajo ${pName}`;
+
+  const now = new Date();
+  const dateStr = now.toISOString().split('T')[0];
+  const hours = String(now.getHours()).padStart(2, '0');
+  const mins = String(now.getMinutes()).padStart(2, '0');
+  const timeStr = `${hours}${mins}`;
+  const sessionBase = `${dateStr}_${timeStr} - ${safeProject}`;
+  const sessionFile = path.join(sesFolder, `${sessionBase}.md`);
+
+  const tags = ['antigravity/sesion'];
+  if (options.tags && Array.isArray(options.tags)) {
+    for (const t of options.tags) if (!tags.includes(t)) tags.push(t);
+  }
+
+  const sessionMd = `---
+title: "Sesión: ${pName} (${dateStr} ${hours}:${mins})"
+type: antigravity-session
+project: "${pName}"
+tags:
+${tags.map(t => `  - ${t}`).join('\n')}
+date: ${dateStr}
+time: "${hours}:${mins}"
+summary: "${summary.replace(/"/g, '\\"')}"
+---
+
+# Sesión: ${pName} — ${dateStr} ${hours}:${mins}
+
+> [!NOTE] **Resumen de la Sesión**
+> ${summary}
+
+## Trabajo Realizado y Decisiones Técnicas
+${content || '*Sin detalles adicionales.*'}
+
+---
+*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[Proyecto: ${pName}]] | [[00 Indice de Sesiones]]
+`;
+
+  fs.writeFileSync(sessionFile, sessionMd, 'utf8');
+  syncSessionsIndex(vaultPath);
+
+  // Append row to project note
+  const projNote = path.join(projFolder, `${safeProject}.md`);
+  if (fs.existsSync(projNote)) {
+    try {
+      let pContent = fs.readFileSync(projNote, 'utf8');
+      const row = `| ${dateStr} ${hours}:${mins} | ${summary.replace(/\|/g, '-')} | [[${sessionBase}]] |\n`;
+      if (pContent.includes('## Bitácora de Sesiones y Avances Recientes')) {
+        pContent = pContent.replace(/(## Bitácora de Sesiones y Avances Recientes[^\r\n]*\r?\n)(\| Fecha[^\r\n]*\r?\n\|---[^\r\n]*\r?\n)([\s\S]*?)(\r?\n##|$)/, (m, h, tableH, body, nextH) => {
+          const cleanBody = body.replace(/\|\s*\*Sin sesiones registradas aún\*[^\r\n]*\r?\n/g, '').trim();
+          const existingRows = cleanBody ? cleanBody.split(/\r?\n/).slice(0, 14).join('\n') + '\n' : '';
+          return `${h}${tableH}${row}${existingRows}${nextH}`;
+        });
+        fs.writeFileSync(projNote, pContent, 'utf8');
+      }
+    } catch (e) {}
+  }
+
+  if (options.autoCommit) {
+    gitCommitVault(vaultPath, `Sesión ${pName}: ${summary}`);
+  }
+
+  return {
+    status: 'ok',
+    action: 'session_saved',
+    project: pName,
+    summary,
+    sessionFile,
+    note: sessionBase,
+  };
+}
+
+function getLastSession(vaultPath, projectName = null) {
+  const { sessions } = syncSessionsIndex(vaultPath);
+  if (!sessions || sessions.length === 0) return null;
+  if (!projectName) return sessions[0];
+  const filtered = sessions.filter(s => s.project.toLowerCase() === projectName.toLowerCase());
+  return filtered.length > 0 ? filtered[0] : sessions[0];
+}
+
+function listSessions(vaultPath, options = {}) {
+  const { sessions } = syncSessionsIndex(vaultPath);
+  const limit = options.limit || 20;
+  if (options.project) {
+    return sessions.filter(s => s.project.toLowerCase() === options.project.toLowerCase()).slice(0, limit);
+  }
+  return sessions.slice(0, limit);
+}
+
+// -------------------------------------------------------------
+// Backlog & Anti-Patterns Subsystem
+// -------------------------------------------------------------
+
+function getProjectNotePath(vaultPath, projectName) {
+  const projFolder = path.join(vaultPath, 'Antigravity', 'Proyectos');
+  return path.join(projFolder, `${sanitizeFilename(projectName)}.md`);
+}
+
+function addProjectAntipattern(vaultPath, projectName, ruleText) {
+  const noteFile = getProjectNotePath(vaultPath, projectName);
+  if (!fs.existsSync(noteFile)) return { error: `Proyecto no encontrado: ${projectName}` };
+  let content = fs.readFileSync(noteFile, 'utf8');
+  const line = `- **PROHIBIDO:** ${ruleText.trim()}`;
+  if (content.includes('## Anti-Patrones y Trampas Prohibidas')) {
+    content = content.replace(/(## Anti-Patrones y Trampas Prohibidas[^\r\n]*\r?\n)([\s\S]*?)(\r?\n##|$)/, (m, h, body, nextH) => {
+      const cleanBody = body.replace(/<!-- Trampas técnicas[^\r\n]*-->/g, '').trim();
+      const updated = cleanBody ? `${cleanBody}\n${line}` : line;
+      return `${h}${updated}\n${nextH}`;
+    });
+  } else {
+    content += `\n\n## Anti-Patrones y Trampas Prohibidas\n${line}\n`;
+  }
+  fs.writeFileSync(noteFile, content, 'utf8');
+  return { status: 'ok', project: projectName, rule: ruleText };
+}
+
+function listProjectAntipatterns(vaultPath, projectName) {
+  const noteFile = getProjectNotePath(vaultPath, projectName);
+  if (!fs.existsSync(noteFile)) return [];
+  const content = fs.readFileSync(noteFile, 'utf8');
+  const match = content.match(/## Anti-Patrones y Trampas Prohibidas[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
+  if (!match) return [];
+  return match[1].split(/\r?\n/)
+    .filter(l => l.trim().startsWith('-'))
+    .map(l => l.replace(/^-\s*(\*\*[^*]+\*\*:)?/, '').trim());
+}
+
+function addProjectTask(vaultPath, projectName, taskText) {
+  const noteFile = getProjectNotePath(vaultPath, projectName);
+  if (!fs.existsSync(noteFile)) return { error: `Proyecto no encontrado: ${projectName}` };
+  let content = fs.readFileSync(noteFile, 'utf8');
+  const line = `- [ ] ${taskText.trim()}`;
+  if (content.includes('## Backlog y Tareas Pendientes')) {
+    content = content.replace(/(## Backlog y Tareas Pendientes[^\r\n]*\r?\n)([\s\S]*?)(\r?\n##|$)/, (m, h, body, nextH) => {
+      const cleanBody = body.replace(/<!-- Tareas pendientes[^\r\n]*-->/g, '').trim();
+      const updated = cleanBody ? `${cleanBody}\n${line}` : line;
+      return `${h}${updated}\n${nextH}`;
+    });
+  } else {
+    content += `\n\n## Backlog y Tareas Pendientes\n${line}\n`;
+  }
+  fs.writeFileSync(noteFile, content, 'utf8');
+  return { status: 'ok', project: projectName, task: taskText };
+}
+
+function completeProjectTask(vaultPath, projectName, taskQuery) {
+  const noteFile = getProjectNotePath(vaultPath, projectName);
+  if (!fs.existsSync(noteFile)) return { error: `Proyecto no encontrado: ${projectName}` };
+  let content = fs.readFileSync(noteFile, 'utf8');
+  const reg = new RegExp(`- \\[ \\] ([^\\r\\n]*${taskQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^\\r\\n]*)`, 'i');
+  if (reg.test(content)) {
+    content = content.replace(reg, '- [x] $1 (Completada)');
+    fs.writeFileSync(noteFile, content, 'utf8');
+    return { status: 'ok', completed: true, project: projectName };
+  }
+  return { status: 'not_found', project: projectName };
+}
+
+function listProjectTasks(vaultPath, projectName) {
+  const noteFile = getProjectNotePath(vaultPath, projectName);
+  if (!fs.existsSync(noteFile)) return [];
+  const content = fs.readFileSync(noteFile, 'utf8');
+  const match = content.match(/## Backlog y Tareas Pendientes[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
+  if (!match) return [];
+  return match[1].split(/\r?\n/)
+    .filter(l => l.trim().startsWith('- ['))
+    .map(l => {
+      const done = l.includes('- [x]');
+      const text = l.replace(/^-\s*\[[ x]\]\s*/, '').trim();
+      return { text, done };
+    });
+}
+
+// -------------------------------------------------------------
+// Encrypted Backup & Migration Subsystem
+// -------------------------------------------------------------
+
+function exportVaultEncrypted(vaultPath, password) {
+  if (!password || typeof password !== 'string' || password.length < 4) {
+    throw new Error('La contraseña debe tener al menos 4 caracteres.');
+  }
+  const baseDir = path.join(vaultPath, 'Antigravity');
+  if (!fs.existsSync(baseDir)) {
+    throw new Error('No existe la carpeta Antigravity en el Vault.');
+  }
+
+  const files = {};
+  function walk(dir, relPrefix = 'Antigravity') {
+    if (!fs.existsSync(dir)) return;
+    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, ent.name);
+      const rel = path.join(relPrefix, ent.name).replace(/\\/g, '/');
+      if (ent.isDirectory()) {
+        walk(full, rel);
+      } else if (ent.isFile() && ent.name.endsWith('.md')) {
+        try {
+          files[rel] = fs.readFileSync(full, 'utf8');
+        } catch (e) {}
+      }
+    }
+  }
+  walk(baseDir);
+
+  const payload = JSON.stringify({
+    version: '1.0',
+    exportedAt: new Date().toISOString(),
+    vaultName: path.basename(vaultPath),
+    totalFiles: Object.keys(files).length,
+    files,
+  });
+
+  const salt = crypto.randomBytes(16);
+  const iv = crypto.randomBytes(12);
+  const key = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = Buffer.concat([cipher.update(payload, 'utf8'), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+
+  return JSON.stringify({
+    format: 'antigravity-vault-backup',
+    version: '1.0',
+    salt: salt.toString('hex'),
+    iv: iv.toString('hex'),
+    authTag: authTag.toString('hex'),
+    ciphertext: encrypted.toString('hex'),
+  }, null, 2);
+}
+
+function importVaultEncrypted(vaultPath, password, encryptedJsonString) {
+  if (!password) throw new Error('Contraseña requerida para descifrar.');
+  let parsed;
+  try {
+    parsed = typeof encryptedJsonString === 'string' ? JSON.parse(encryptedJsonString) : encryptedJsonString;
+  } catch (e) {
+    throw new Error('El archivo de respaldo no tiene un formato JSON válido.');
+  }
+
+  if (parsed.format !== 'antigravity-vault-backup' || !parsed.salt || !parsed.iv || !parsed.authTag || !parsed.ciphertext) {
+    throw new Error('El archivo no es un respaldo cifrado de Antigravity válido.');
+  }
+
+  const salt = Buffer.from(parsed.salt, 'hex');
+  const iv = Buffer.from(parsed.iv, 'hex');
+  const authTag = Buffer.from(parsed.authTag, 'hex');
+  const ciphertext = Buffer.from(parsed.ciphertext, 'hex');
+
+  const key = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(authTag);
+
+  let decrypted;
+  try {
+    decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+  } catch (e) {
+    throw new Error('Contraseña incorrecta o archivo de respaldo alterado/dañado.');
+  }
+
+  const data = JSON.parse(decrypted);
+  if (!data.files) throw new Error('El respaldo no contiene archivos.');
+
+  ensureVaultStructure(vaultPath);
+  let importedCount = 0;
+  for (const [relPath, fileContent] of Object.entries(data.files)) {
+    const targetFile = path.join(vaultPath, relPath);
+    const parentDir = path.dirname(targetFile);
+    if (!fs.existsSync(parentDir)) fs.mkdirSync(parentDir, { recursive: true });
+    fs.writeFileSync(targetFile, fileContent, 'utf8');
+    importedCount++;
+  }
+
+  syncAll(vaultPath, null);
+  return {
+    status: 'ok',
+    importedFiles: importedCount,
+    exportedAt: data.exportedAt,
+    originalVault: data.vaultName,
+  };
+}
+
+// -------------------------------------------------------------
+// Git Integration & Graph Data Subsystems
+// -------------------------------------------------------------
+
+function gitCommitVault(vaultPath, message) {
+  return new Promise((resolve) => {
+    if (!vaultPath || !fs.existsSync(path.join(vaultPath, '.git'))) {
+      return resolve({ gitActive: false });
+    }
+    const cleanMsg = (message || 'Sincronización Antigravity').replace(/"/g, '\\"');
+    const cmd = `git add Antigravity && git commit -m "Antigravity: ${cleanMsg}"`;
+    exec(cmd, { cwd: vaultPath }, (err, stdout, stderr) => {
+      if (err) {
+        return resolve({ gitActive: true, committed: false, error: stderr || err.message });
+      }
+      resolve({ gitActive: true, committed: true, output: stdout ? stdout.trim() : '' });
+    });
+  });
+}
+
+function listProjects(vaultPath) {
+  const projFolder = path.join(vaultPath, 'Antigravity', 'Proyectos');
+  const results = [];
+  if (!fs.existsSync(projFolder)) return results;
+  const files = fs.readdirSync(projFolder);
+  for (const f of files) {
+    if (!f.endsWith('.md') || f.startsWith('00')) continue;
+    const fp = path.join(projFolder, f);
+    try {
+      const content = fs.readFileSync(fp, 'utf8');
+      const baseName = f.replace(/\.md$/, '');
+      let name = baseName;
+      let localPath = '—';
+      let stack = '—';
+      let summary = '—';
+      let skill = '—';
+
+      const nameMatch = content.match(/>\s*-\s*\*\*Nombre\*\*:\s*`([^`]+)`/i) || content.match(/^title:\s*"Proyecto:\s*([^"\r\n]+)"/m);
+      if (nameMatch) name = nameMatch[1].trim();
+
+      const pathMatch = content.match(/>\s*-\s*\*\*Ruta local\*\*:\s*`([^`]+)`/i);
+      if (pathMatch) localPath = pathMatch[1].trim();
+
+      const stackMatch = content.match(/>\s*-\s*\*\*Stack\*\*:\s*([^\r\n]+)/i) || content.match(/###\s*Stack Tecnológico[^\r\n]*\r?\n([^\r\n#]+)/i);
+      if (stackMatch) stack = stackMatch[1].replace(/[`*]/g, '').trim();
+
+      const sumMatch = content.match(/>\s*-\s*\*\*Resumen\*\*:\s*([^\r\n]+)/i) || content.match(/>\s*\[!(?:INFO|ABSTRACT)\][^\r\n]*\r?\n>\s*([^\r\n]+)/i);
+      if (sumMatch) summary = sumMatch[1].trim();
+
+      const skillMatch = content.match(/>\s*-\s*\*\*Skill Asociada\*\*:\s*\[\[?([^\]\r\n]+)\]\]?/i) || content.match(/##\s*Skills de Proyecto[^\r\n]*\r?\n\[\[([^\]]+)\]\]/i);
+      if (skillMatch) skill = skillMatch[1].replace(/^\[\[|\]\]$/g, '').trim();
+
+      const taskMatches = content.match(/- \[[ xX]\]/g) || [];
+      const pendingTasks = (content.match(/- \[ \]/g) || []).length;
+      const completedTasks = (content.match(/- \[[xX]\]/g) || []).length;
+
+      const antipatternsMatch = content.match(/##\s*Antipatrones y Trampas Prohibidas[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
+      let antipatternsCount = 0;
+      if (antipatternsMatch) {
+        antipatternsCount = (antipatternsMatch[1].match(/- \*\*ADVERTENCIA\*\*/gi) || []).length;
+      }
+
+      const fileStat = fs.statSync(fp);
+      const dateStr = fileStat.mtime.toISOString().split('T')[0];
+
+      results.push({
+        name,
+        localPath,
+        stack,
+        summary: summary.slice(0, 160),
+        skill: skill !== '—' ? skill : null,
+        file: baseName,
+        relPath: `Antigravity/Proyectos/${baseName}`,
+        totalTasks: taskMatches.length,
+        pendingTasks,
+        completedTasks,
+        antipatternsCount,
+        date: dateStr,
+      });
+    } catch (e) {}
+  }
+  results.sort((a, b) => a.name.localeCompare(b.name));
+  return results;
+}
+
+function getGraphData(vaultPath) {
+  const nodes = [];
+  const links = [];
+  const nodeMap = new Map();
+  const baseDir = path.join(vaultPath, 'Antigravity');
+  if (!fs.existsSync(baseDir)) return { nodes, links };
+
+  function addNode(id, label, group, relPath) {
+    const key = id.toLowerCase();
+    if (!nodeMap.has(key)) {
+      const node = { id, label, group, relPath };
+      nodeMap.set(key, node);
+      nodes.push(node);
+      return node;
+    }
+    return nodeMap.get(key);
+  }
+
+  addNode('00 Antigravity Hub', 'Hub Principal', 'hub', 'Antigravity/00 Antigravity Hub.md');
+
+  const groups = [
+    { folder: 'Alma', group: 'soul' },
+    { folder: 'Skills', group: 'skill' },
+    { folder: 'Memoria', group: 'memory' },
+    { folder: 'Proyectos', group: 'project' },
+    { folder: 'Sesiones', group: 'session' },
+  ];
+
+  const fileContents = [];
+  for (const g of groups) {
+    const d = path.join(baseDir, g.folder);
+    if (!fs.existsSync(d)) continue;
+    for (const f of fs.readdirSync(d)) {
+      if (!f.endsWith('.md')) continue;
+      const base = f.replace(/\.md$/, '');
+      const fp = path.join(d, f);
+      const isIndex = f.startsWith('00');
+      const relPath = `Antigravity/${g.folder}/${f}`;
+      addNode(base, base.replace(/^\[Proyecto\]\s*/, ''), isIndex ? 'index' : g.group, relPath);
+      try {
+        const c = fs.readFileSync(fp, 'utf8');
+        fileContents.push({ id: base, content: c });
+      } catch (e) {}
+    }
+  }
+
+  const linkSet = new Set();
+  for (const item of fileContents) {
+    const matches = item.content.matchAll(/\[\[([^\]|#]+)(?:\|[^\]]+)?\]\]/g);
+    for (const m of matches) {
+      const targetName = m[1].trim();
+      const targetId = targetName.endsWith('.md') ? targetName.slice(0, -3) : targetName;
+      if (nodeMap.has(targetId.toLowerCase())) {
+        const key = `${item.id}->${targetId}`;
+        const revKey = `${targetId}->${item.id}`;
+        if (!linkSet.has(key) && !linkSet.has(revKey)) {
+          linkSet.add(key);
+          links.push({ source: item.id, target: targetId });
+        }
+      }
+    }
+  }
+
+  return { nodes, links };
+}
+
 module.exports = {
   syncVaultToKnowledge,
   getAntigravityPaths,
@@ -2893,4 +3460,18 @@ module.exports = {
   triageContext,
   peekMemory,
   catalogContext,
+  syncSessionsIndex,
+  saveSessionCheckpoint,
+  getLastSession,
+  listSessions,
+  addProjectAntipattern,
+  listProjectAntipatterns,
+  addProjectTask,
+  completeProjectTask,
+  listProjectTasks,
+  listProjects,
+  exportVaultEncrypted,
+  importVaultEncrypted,
+  gitCommitVault,
+  getGraphData,
 };

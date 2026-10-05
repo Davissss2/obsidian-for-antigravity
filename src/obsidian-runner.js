@@ -2636,6 +2636,36 @@ ${content || '*Sin detalles adicionales.*'}
     break;
   }
 
+  case 'export': {
+    const syncEngine = getSyncEngine();
+    const { flags } = parseFlags(args);
+    const pwd = flags.password || flags.pass || flags.p;
+    if (!pwd) {
+      console.error(JSON.stringify({ error: 'Uso: node obsidian.js export --password <contraseña> [--output <archivo>]' }));
+      process.exit(1);
+    }
+    const outFile = flags.output || flags.out || flags.file || path.join(process.cwd(), `antigravity-vault-${new Date().toISOString().split('T')[0]}.agvault`);
+    const encJson = syncEngine.exportVaultEncrypted(vault.path, pwd);
+    fs.writeFileSync(outFile, encJson, 'utf8');
+    console.log(JSON.stringify({ status: 'ok', file: outFile, size: encJson.length }, null, 2));
+    break;
+  }
+
+  case 'import': {
+    const syncEngine = getSyncEngine();
+    const { flags } = parseFlags(args);
+    const pwd = flags.password || flags.pass || flags.p;
+    const inFile = flags.file || flags.input || flags.in;
+    if (!pwd || !inFile || !fs.existsSync(inFile)) {
+      console.error(JSON.stringify({ error: 'Uso: node obsidian.js import --file <archivo.agvault> --password <contraseña>' }));
+      process.exit(1);
+    }
+    const encJson = fs.readFileSync(inFile, 'utf8');
+    const res = syncEngine.importVaultEncrypted(vault.path, pwd, encJson);
+    console.log(JSON.stringify({ status: 'ok', restoredFiles: res.restoredFiles }, null, 2));
+    break;
+  }
+
   case 'open': {
     const note = args[0] || 'Antigravity/00 Antigravity Hub';
     const clean = note.endsWith('.md') ? note.slice(0, -3) : note;

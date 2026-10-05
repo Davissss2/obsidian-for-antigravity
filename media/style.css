@@ -362,20 +362,20 @@ body {
 }
 
 .tab-pill {
-  flex: 1 1 calc(33.333% - 4px);
-  min-width: 58px;
+  flex: 1 1 calc(25% - 4px);
+  min-width: 46px;
   background: transparent;
   border: 1px solid transparent;
   color: var(--text-muted);
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 600;
-  padding: 6px 4px;
+  padding: 5px 3px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 3px;
   transition: all 0.2s ease;
   white-space: nowrap;
   box-sizing: border-box;
@@ -1003,5 +1003,88 @@ input:checked + .slider:before {
   padding: 4px 8px;
   font-size: 11px;
 }
+
+/* Interactive Graph View */
+.graph-controls-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--card-border);
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 2px;
+}
+
+.dot-hub { background: #8b5cf6; }
+.dot-soul { background: #ec4899; }
+.dot-skill { background: #3b82f6; }
+.dot-memory { background: #10b981; }
+.dot-project { background: #f59e0b; }
+.dot-session { background: #06b6d4; }
+
+.graph-canvas-container {
+  width: 100%;
+  height: 310px;
+  background: rgba(10, 12, 20, 0.8);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.4);
+}
+
+.graph-canvas-container:active {
+  cursor: grabbing;
+}
+
+#graph-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.graph-tooltip {
+  position: absolute;
+  display: none;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(139, 92, 246, 0.5);
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.35;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  z-index: 20;
+  max-width: 220px;
+  backdrop-filter: blur(8px);
+}
+
+.project-badge {
+  background: rgba(245, 158, 11, 0.15) !important;
+  color: #fbbf24 !important;
+  border: 1px solid rgba(245, 158, 11, 0.3) !important;
+}
+
 
 
