@@ -81,7 +81,26 @@ const SVGS = {
   check: `<svg class="svg-icon-sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>`,
   trash: `<svg class="svg-icon-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
   alert: `<svg class="svg-icon-sm" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+  history: `<svg class="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  folder: `<svg class="svg-icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,
 };
+
+function runObsidianCli(cliArgs, cwd) {
+  return new Promise((resolve, reject) => {
+    const scriptPath = path.join(os.homedir(), '.gemini', 'config', 'skills', 'antigravity-obsidian', 'scripts', 'obsidian.js');
+    const runnerSource = path.join(__dirname, 'src', 'obsidian-runner.js');
+    const targetScript = fs.existsSync(scriptPath) ? scriptPath : runnerSource;
+    const cmd = `node "${targetScript}" ${cliArgs}`;
+    exec(cmd, { cwd: cwd || getWorkspaceRoot() || process.cwd() }, (err, stdout, stderr) => {
+      if (err) return reject(new Error(stderr || stdout || (err && err.message) || 'Error ejecutando CLI'));
+      try {
+        resolve(JSON.parse(stdout));
+      } catch (e) {
+        resolve({ stdout, raw: true });
+      }
+    });
+  });
+}
 
 async function promptSelectVault(onSuccess) {
   const folderUri = await vscode.window.showOpenDialog({
@@ -260,6 +279,40 @@ class ObsidianPanelProvider {
           } else {
             vscode.window.showErrorMessage('No hay ninguna bóveda de Obsidian conectada.');
           }
+          break;
+        }
+
+        case 'showSessions': {
+          if (currentVault && currentVault.path) {
+            const idx = path.join(currentVault.path, 'Antigravity', 'Sesiones', '00 Indice de Sesiones.md');
+            if (fs.existsSync(idx)) {
+              vscode.workspace.openTextDocument(idx).then(doc => vscode.window.showTextDocument(doc, { preview: false }));
+            } else {
+              openInObsidianApp(currentVault.name, 'Antigravity/Sesiones/00 Indice de Sesiones');
+            }
+          }
+          break;
+        }
+
+        case 'showProjects': {
+          if (currentVault && currentVault.path) {
+            const idx = path.join(currentVault.path, 'Antigravity', 'Proyectos', '00 Indice de Proyectos.md');
+            if (fs.existsSync(idx)) {
+              vscode.workspace.openTextDocument(idx).then(doc => vscode.window.showTextDocument(doc, { preview: false }));
+            } else {
+              openInObsidianApp(currentVault.name, 'Antigravity/Proyectos/00 Indice de Proyectos');
+            }
+          }
+          break;
+        }
+
+        case 'scanProject': {
+          vscode.commands.executeCommand('antigravityObsidian.scanProject');
+          break;
+        }
+
+        case 'saveSession': {
+          vscode.commands.executeCommand('antigravityObsidian.saveSession');
           break;
         }
 
@@ -444,9 +497,13 @@ class ObsidianPanelProvider {
       <div class="stat-num">${stats.skills}</div>
       <div class="stat-meta">${SVGS.zap} <span data-i18n="skills">Skills</span></div>
     </div>
-    <div class="stat-box" data-tab="panel">
-      <div class="stat-num">Hub</div>
-      <div class="stat-meta">${SVGS.network} <span data-i18n="graph">Grafo</span></div>
+    <div class="stat-box" id="stat-sessions" title="Bitácora de Sesiones">
+      <div class="stat-num">${stats.sessions || 0}</div>
+      <div class="stat-meta">${SVGS.history} <span data-i18n="sessions">Sesiones</span></div>
+    </div>
+    <div class="stat-box" id="stat-projects" title="Índice de Proyectos">
+      <div class="stat-num">${stats.projects || 0}</div>
+      <div class="stat-meta">${SVGS.folder} <span data-i18n="projects">Proyectos</span></div>
     </div>
   </div>
 
@@ -491,6 +548,14 @@ class ObsidianPanelProvider {
       </button>
       <button class="btn-action btn-outline" id="btn-open-hub">
         ${SVGS.open} <span data-i18n="btn_open_hub">Abrir 00 Antigravity Hub</span>
+      </button>
+    </div>
+    <div class="action-grid" style="margin-top:6px;">
+      <button class="btn-action btn-outline" id="btn-scan-project">
+        ${SVGS.search} <span data-i18n="btn_scan_project">Escanear Proyecto</span>
+      </button>
+      <button class="btn-action btn-outline" id="btn-save-session">
+        ${SVGS.history} <span data-i18n="btn_save_session">Guardar Sesión</span>
       </button>
     </div>
 
@@ -1093,6 +1158,92 @@ function activate(context) {
         await vscode.window.showTextDocument(doc, { preview: false });
       } else {
         vscode.window.showWarningMessage('El Índice de Proyectos aún no ha sido generado.');
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('antigravityObsidian.scanProject', async () => {
+      const activeVault = getActiveOrConfiguredVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
+      if (!activeVault || !activeVault.exists) {
+        vscode.window.showWarningMessage('No hay ninguna bóveda de Obsidian conectada.');
+        return;
+      }
+      const root = getWorkspaceRoot();
+      if (!root) {
+        vscode.window.showWarningMessage('No hay ningún espacio de trabajo (workspace) abierto en este momento.');
+        return;
+      }
+
+      await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: 'Obsidian: Escaneando arquitectura viva del proyecto...',
+        cancellable: false
+      }, async () => {
+        try {
+          const res = await runObsidianCli(`project scan "${root}"`, root);
+          if (currentWebviewView) {
+            currentWebviewView.webview.html = provider._getHtmlForWebview(currentWebviewView.webview);
+          }
+          const pName = (res && res.project) || path.basename(root);
+          vscode.window.showInformationMessage(`Blueprint y arquitectura viva de "${pName}" actualizados en Obsidian.`);
+        } catch (e) {
+          vscode.window.showErrorMessage('Error al escanear arquitectura: ' + (e.message || JSON.stringify(e)));
+        }
+      });
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('antigravityObsidian.saveSession', async () => {
+      const activeVault = getActiveOrConfiguredVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
+      if (!activeVault || !activeVault.exists) {
+        vscode.window.showWarningMessage('No hay ninguna bóveda de Obsidian conectada.');
+        return;
+      }
+      const root = getWorkspaceRoot();
+      const pName = root ? path.basename(root) : 'General';
+
+      const summary = await vscode.window.showInputBox({
+        title: `Guardar Checkpoint de Sesión: ${pName}`,
+        prompt: 'Resumen conciso en una frase de los avances y decisiones clave',
+        placeHolder: 'Ej: Implementado soporte de sesiones y escaneo profundo de módulos',
+      });
+      if (!summary) return;
+
+      const content = await vscode.window.showInputBox({
+        title: 'Detalles Técnicos y Próximos Pasos (Opcional)',
+        prompt: 'Decisiones clave, módulos modificados o siguientes pasos',
+        placeHolder: 'Ej: Registrados nuevos comandos CLI, reglas actualizadas, empaquetado 1.7.0',
+      });
+
+      try {
+        const cleanSum = summary.replace(/"/g, '\\"');
+        const cleanContent = (content || '').replace(/"/g, '\\"');
+        await runObsidianCli(`session save --project "${pName}" --summary "${cleanSum}" --content "${cleanContent}"`, root);
+        if (currentWebviewView) {
+          currentWebviewView.webview.html = provider._getHtmlForWebview(currentWebviewView.webview);
+        }
+        vscode.window.showInformationMessage(`Checkpoint de sesión guardado en Obsidian: "${pName}".`);
+      } catch (e) {
+        vscode.window.showErrorMessage('Error al guardar checkpoint de sesión: ' + (e.message || JSON.stringify(e)));
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('antigravityObsidian.showSessions', async () => {
+      const activeVault = getActiveOrConfiguredVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
+      if (!activeVault || !activeVault.exists) {
+        vscode.window.showWarningMessage('No hay ninguna bóveda de Obsidian conectada.');
+        return;
+      }
+      const idxFile = path.join(activeVault.path, 'Antigravity', 'Sesiones', '00 Indice de Sesiones.md');
+      if (fs.existsSync(idxFile)) {
+        const doc = await vscode.workspace.openTextDocument(idxFile);
+        await vscode.window.showTextDocument(doc, { preview: false });
+      } else {
+        openInObsidianApp(activeVault.name, 'Antigravity/Sesiones/00 Indice de Sesiones');
       }
     })
   );

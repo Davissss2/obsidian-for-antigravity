@@ -10,6 +10,8 @@
       offline: "Offline",
       memories: "Memorias",
       skills: "Skills",
+      sessions: "Sesiones",
+      projects: "Proyectos",
       graph: "Grafo",
       tab_panel: "Panel",
       tab_memories: "Memorias",
@@ -21,6 +23,8 @@
       btn_sync: "Sincronizar Bóveda",
       btn_syncing: "Sincronizando...",
       btn_open_hub: "Abrir 00 Antigravity Hub",
+      btn_scan_project: "Escanear Proyecto",
+      btn_save_session: "Guardar Sesión",
       info_title: "Sincronización Autónoma Activa",
       info_desc: "Antigravity aprende de tus conversaciones y guarda lecciones en tu Vault automáticamente sin pedir confirmación.",
       search_memories: "Buscar en memorias...",
@@ -86,6 +90,8 @@
       offline: "Offline",
       memories: "Memories",
       skills: "Skills",
+      sessions: "Sessions",
+      projects: "Projects",
       graph: "Graph",
       tab_panel: "Dashboard",
       tab_memories: "Memories",
@@ -97,6 +103,8 @@
       btn_sync: "Sync Vault Now",
       btn_syncing: "Syncing...",
       btn_open_hub: "Open 00 Antigravity Hub",
+      btn_scan_project: "Scan Project",
+      btn_save_session: "Save Session",
       info_title: "Autonomous Sync Active",
       info_desc: "Antigravity learns from your conversations and saves lessons to your Vault automatically without asking.",
       search_memories: "Search memories...",
@@ -542,6 +550,34 @@
   if (btnOpenGraph) {
     btnOpenGraph.addEventListener('click', () => {
       vscode.postMessage({ type: 'openHub' });
+    });
+  }
+
+  const statSessions = document.getElementById('stat-sessions');
+  if (statSessions) {
+    statSessions.addEventListener('click', () => {
+      vscode.postMessage({ type: 'showSessions' });
+    });
+  }
+
+  const statProjects = document.getElementById('stat-projects');
+  if (statProjects) {
+    statProjects.addEventListener('click', () => {
+      vscode.postMessage({ type: 'showProjects' });
+    });
+  }
+
+  const btnScanProject = document.getElementById('btn-scan-project');
+  if (btnScanProject) {
+    btnScanProject.addEventListener('click', () => {
+      vscode.postMessage({ type: 'scanProject' });
+    });
+  }
+
+  const btnSaveSession = document.getElementById('btn-save-session');
+  if (btnSaveSession) {
+    btnSaveSession.addEventListener('click', () => {
+      vscode.postMessage({ type: 'saveSession' });
     });
   }
 

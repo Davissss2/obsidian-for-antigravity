@@ -2,7 +2,7 @@
   "name": "obsidian-for-antigravity",
   "displayName": "Obsidian for Antigravity",
   "description": "Autonomous Second Brain & persistent memory for Antigravity AI connected to Obsidian. Automatically stores bugfixes, architecture decisions, and skills in your local Vault with real-time Graph View.",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "publisher": "Davissss2",
   "author": {
     "name": "Davissss2",
@@ -120,6 +120,21 @@
         "command": "antigravityObsidian.showProjects",
         "title": "Obsidian: View Unified Projects Index",
         "icon": "$(list-unordered)"
+      },
+      {
+        "command": "antigravityObsidian.scanProject",
+        "title": "Obsidian: Deep Scan Project Architecture (Living Blueprint)",
+        "icon": "$(search)"
+      },
+      {
+        "command": "antigravityObsidian.saveSession",
+        "title": "Obsidian: Save Current Working Session Checkpoint",
+        "icon": "$(history)"
+      },
+      {
+        "command": "antigravityObsidian.showSessions",
+        "title": "Obsidian: View Session Checkpoints Index",
+        "icon": "$(list-ordered)"
       },
       {
         "command": "antigravityObsidian.resetData",

@@ -5,6 +5,33 @@ All notable changes to the **Obsidian for Antigravity** extension will be docume
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-10-05
+
+### Added
+- **Continuity Memory & Session Checkpoints Subsystem**:
+  - `node obsidian.js session save --summary "..." --content "..." [--project "..."]`: Creates atomic session checkpoints in `Antigravity/Sesiones/<date>_<time> - <project>.md`.
+  - `node obsidian.js session last [--project "..."]`: Sub-250ms continuity recall consuming <50 tokens, giving the AI immediate context of recent decisions and progress.
+  - `node obsidian.js session list [--limit N]`: Chronological listing of sessions and milestones across all projects.
+  - Maintained `00 Indice de Sesiones.md` and bi-directional session log table in project blueprints (`## Bitácora de Sesiones y Avances Recientes`).
+  - Added chat slash commands `/obsidian session save`, `/obsidian session last`, and `/obsidian session list`.
+  - Added VS Code commands `antigravityObsidian.saveSession` and `antigravityObsidian.showSessions`.
+- **Living Architectural Blueprints & Deep Scanning**:
+  - `node obsidian.js project scan [path]`: Deep recursive structural scanner that maps directories, architectural roles (`src/`, `components/`, `controllers/`, `services/`, `models/`, `routes/`, `views/`, etc.), key entrypoints (`extension.js`, `index.ts`, `main.py`, etc.), npm scripts, and databases/ORMs (Prisma, Drizzle, SQLite, Mongo, Postgres).
+  - Automatically updates project notes in `Antigravity/Proyectos/<Project>.md` preserving custom rules, anti-patterns, backlog, sessions, and linked memories.
+  - Added VS Code command `antigravityObsidian.scanProject`.
+- **Anti-Patterns & Repository Traps Registry**:
+  - `node obsidian.js project antipattern add "<trap/rule>" [--project "..."]`: Permanently records forbidden coding patterns, quirks, and repository gotchas to avoid repeating mistakes.
+  - `node obsidian.js project antipattern list [--project "..."]`: Distilled overview of known traps.
+- **Bi-Directional Backlog Synchronization**:
+  - `node obsidian.js project backlog add "<task>" [--project "..."]`: Adds tasks directly into Markdown notes with `- [ ] <task>`.
+  - `node obsidian.js project backlog done "<task>" [--project "..."]`: Marks tasks as completed (`- [x] <task>`).
+  - `node obsidian.js project backlog list [--project "..."]`: Inspects open and closed tasks.
+- **Balanced 50/50 Persistence Policy**:
+  - Recalibrated AI agent recording filter in `obsidian-brain.md`, `GEMINI.md`, and `AGENTS.md` from hyper-strict (which caused AI amnesia by rejecting 95% of knowledge) to a balanced policy that actively records structural milestones, architectural decisions, and session continuity checkpoints alongside non-trivial bugfixes.
+- **Enhanced Webview Dashboard**:
+  - Expanded stats row to 4 interactive metric boxes: Memorias, Skills, Sesiones, and Proyectos.
+  - Added quick action buttons in webview for Escanear Proyecto and Guardar Sesión.
+
 ---
 
 ## [1.6.0] - 2026-10-02

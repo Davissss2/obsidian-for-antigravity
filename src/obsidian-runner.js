@@ -403,13 +403,23 @@ function buildManifest(vaultPath) {
     }
   }
 
+  const sesDir = path.join(vaultPath, 'Antigravity', 'Sesiones');
+  const sessions = [];
+  if (fs.existsSync(sesDir)) {
+    for (const f of fs.readdirSync(sesDir)) {
+      if (!f.endsWith('.md') || f.startsWith('00')) continue;
+      sessions.push(f.replace(/\.md$/, ''));
+    }
+  }
+
   const manifest = {
     updatedAt: new Date().toISOString(),
     vaultName: vault.name,
-    stats: { memories: memories.length, skills: skills.length, projects: projects.length },
+    stats: { memories: memories.length, skills: skills.length, projects: projects.length, sessions: sessions.length },
     skills,
     memories,
     projects,
+    sessions,
   };
 
   try {
@@ -655,6 +665,17 @@ function runSaveMemory(vaultPath, argsList) {
     relatedLinks = `\n### Proyecto: [[${project}]]\n`;
   }
 
+  let sectionTitle = 'Solucion Tecnica';
+  if (['arquitectura', 'architecture', 'estructura'].includes(category)) {
+    sectionTitle = 'Detalles de Arquitectura y Estructura';
+  } else if (['hito', 'milestone', 'progreso', 'sesion', 'session'].includes(category)) {
+    sectionTitle = 'Hito y Decisiones de Implementación';
+  } else if (['antipatron', 'anti-patron', 'trampa'].includes(category)) {
+    sectionTitle = 'Anti-Patrones y Trampas a Evitar';
+  } else if (['configuracion', 'config'].includes(category)) {
+    sectionTitle = 'Configuración y Entorno';
+  }
+
   // Strict zero-emoji template
   const md = `---
 title: "${title}"
@@ -671,7 +692,7 @@ updated: ${now}
 > [!NOTE]
 > ${summary || title}
 
-## Solucion Tecnica
+## ${sectionTitle}
 
 ${content || '*Sin contenido adicional registrado.*'}
 ${relatedLinks}
@@ -1762,10 +1783,171 @@ switch (cmd) {
   }
 
   case 'project': {
-    const sub = (args[0] || 'list').toLowerCase();
-    const targetDir = args[1] ? path.resolve(args[1]) : process.cwd();
+    const { flags: pFlags, positional: pPos } = parseFlags(args);
+    const sub = (pPos[0] || 'list').toLowerCase();
+    const targetDir = pPos[1] ? path.resolve(pPos[1]) : (pFlags.path ? path.resolve(pFlags.path) : process.cwd());
     const projFolder = path.join(vault.path, 'Antigravity', 'Proyectos');
     if (!fs.existsSync(projFolder)) fs.mkdirSync(projFolder, { recursive: true });
+
+    function scanProjectStructure(wsPath) {
+      if (!fs.existsSync(wsPath)) {
+        return {
+          structureMarkdown: '*Directorio no disponible*',
+          entrypointsMarkdown: '- No detectados',
+          databaseMarkdown: '- No detectada',
+          dirSummaries: [],
+          entrypoints: [],
+          dbFound: []
+        };
+      }
+
+      const ignoreList = new Set([
+        'node_modules', '.git', '.next', 'dist', 'build', 'coverage', '.cache',
+        '.system_generated', 'brain', 'artifacts', '.gemini', 'out', 'venv', '.venv',
+        '__pycache__', '.idea', '.vscode', '.agent', '.agents', '.husky', 'tmp', 'temp'
+      ]);
+
+      const topItems = [];
+      try {
+        const entries = fs.readdirSync(wsPath, { withFileTypes: true });
+        for (const ent of entries) {
+          if (ent.name.startsWith('.') && !['.env.example', '.env'].includes(ent.name)) continue;
+          if (ignoreList.has(ent.name.toLowerCase())) continue;
+          topItems.push(ent);
+        }
+      } catch (e) {}
+
+      const dirSummaries = [];
+      const keyFiles = [];
+
+      for (const ent of topItems) {
+        if (ent.isFile()) {
+          keyFiles.push(ent.name);
+        } else if (ent.isDirectory()) {
+          const subPath = path.join(wsPath, ent.name);
+          try {
+            const subEntries = fs.readdirSync(subPath, { withFileTypes: true })
+              .filter(s => !ignoreList.has(s.name.toLowerCase()) && !s.name.startsWith('.'));
+            const subFiles = subEntries.filter(s => s.isFile());
+            const subDirs = subEntries.filter(s => s.isDirectory());
+            
+            let desc = 'Módulo ' + ent.name;
+            const nLow = ent.name.toLowerCase();
+            if (nLow === 'src') desc = 'Código fuente principal';
+            else if (nLow === 'components') desc = 'Componentes de UI / Vistas';
+            else if (nLow === 'controllers') desc = 'Controladores de lógica de endpoints';
+            else if (nLow === 'models') desc = 'Modelos de datos y entidades';
+            else if (nLow === 'routes' || nLow === 'api') desc = 'Definición de rutas y endpoints de API';
+            else if (nLow === 'services') desc = 'Capa de lógica de negocio y servicios';
+            else if (nLow === 'lib' || nLow === 'utils') desc = 'Librerías auxiliares y utilidades';
+            else if (nLow === 'public' || nLow === 'static') desc = 'Activos estáticos públicos';
+            else if (nLow === 'tests' || nLow === 'test') desc = 'Suites de pruebas y tests unitarios';
+            else if (nLow === 'scripts') desc = 'Scripts de automatización y herramientas CLI';
+            else if (nLow === 'docs') desc = 'Documentación del proyecto';
+            else if (nLow === 'config') desc = 'Archivos de configuración';
+            else if (nLow === 'prisma') desc = 'Esquema y migraciones de Prisma ORM';
+            else if (nLow === 'views') desc = 'Plantillas y vistas renderizables';
+            else if (nLow === 'middleware' || nLow === 'middlewares') desc = 'Middlewares de petición y seguridad';
+
+            const subNames = subEntries.slice(0, 8).map(s => s.name + (s.isDirectory() ? '/' : ''));
+            dirSummaries.push({
+              dir: ent.name + '/',
+              desc,
+              filesCount: subFiles.length,
+              dirsCount: subDirs.length,
+              sample: subNames.join(', ')
+            });
+          } catch (e) {
+            dirSummaries.push({ dir: ent.name + '/', desc: 'Directorio', filesCount: 0, dirsCount: 0, sample: '' });
+          }
+        }
+      }
+
+      const entrypoints = [];
+      const possibleEntries = [
+        'extension.js', 'index.js', 'index.ts', 'server.js', 'app.js', 'main.js',
+        'src/index.js', 'src/index.ts', 'src/main.js', 'src/main.ts', 'src/app.js', 'src/app.ts',
+        'src/extension.ts', 'src/extension.js', 'main.py', 'app.py', 'manage.py', 'artisan',
+        'main.go', 'cmd/main.go', 'src/main.rs', 'vite.config.ts', 'vite.config.js', 'next.config.js'
+      ];
+      for (const pe of possibleEntries) {
+        if (fs.existsSync(path.join(wsPath, pe))) {
+          entrypoints.push('`' + pe + '`');
+        }
+      }
+
+      const pkgPath = path.join(wsPath, 'package.json');
+      let scriptsList = '';
+      if (fs.existsSync(pkgPath)) {
+        try {
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+          if (pkg.scripts) {
+            const scKeys = Object.keys(pkg.scripts);
+            if (scKeys.length > 0) {
+              scriptsList = scKeys.slice(0, 10).map(s => '`npm run ' + s + '`').join(', ');
+            }
+          }
+        } catch (e) {}
+      }
+
+      const dbFound = [];
+      if (fs.existsSync(path.join(wsPath, 'prisma', 'schema.prisma'))) {
+        dbFound.push('Prisma ORM (`prisma/schema.prisma`)');
+      }
+      if (fs.existsSync(path.join(wsPath, 'drizzle.config.ts')) || fs.existsSync(path.join(wsPath, 'drizzle.config.js'))) {
+        dbFound.push('Drizzle ORM');
+      }
+      for (const ent of topItems) {
+        if (ent.isFile() && (ent.name.endsWith('.sqlite') || ent.name.endsWith('.sqlite3') || ent.name.endsWith('.db'))) {
+          dbFound.push('SQLite Database (`' + ent.name + '`)');
+        }
+      }
+      if (fs.existsSync(pkgPath)) {
+        try {
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+          const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+          if (allDeps['mongoose']) dbFound.push('MongoDB (Mongoose)');
+          if (allDeps['pg'] || allDeps['postgres']) dbFound.push('PostgreSQL (`pg`)');
+          if (allDeps['mysql2'] || allDeps['mysql']) dbFound.push('MySQL');
+          if (allDeps['redis'] || allDeps['ioredis']) dbFound.push('Redis Cache');
+          if (allDeps['@supabase/supabase-js']) dbFound.push('Supabase Client');
+          if (allDeps['typeorm']) dbFound.push('TypeORM');
+        } catch (e) {}
+      }
+
+      let structureMarkdown = '';
+      if (dirSummaries.length > 0) {
+        structureMarkdown = '| Carpeta / Módulo | Rol Arquitectónico | Contenido Detectado |\n|---|---|---|\n';
+        for (const d of dirSummaries) {
+          structureMarkdown += '| `' + d.dir + '` | ' + d.desc + ' | ' + (d.sample || (d.filesCount + ' archivos')) + ' |\n';
+        }
+      } else {
+        structureMarkdown = '*Proyecto plano o sin subdirectorios mayores.*\n';
+      }
+      if (keyFiles.length > 0) {
+        structureMarkdown += '\n**Archivos raíz clave:** ' + keyFiles.slice(0, 15).map(f => '`' + f + '`').join(', ');
+      }
+
+      let entrypointsMarkdown = entrypoints.length > 0 
+        ? '- **Punto(s) de entrada:** ' + entrypoints.join(', ')
+        : '- **Punto(s) de entrada:** No detectado estándar';
+      if (scriptsList) {
+        entrypointsMarkdown += '\n- **Scripts de ejecución:** ' + scriptsList;
+      }
+
+      const databaseMarkdown = dbFound.length > 0
+        ? dbFound.map(d => '- ' + d).join('\n')
+        : '- No se detectó base de datos o ORM local dedicado en la raíz';
+
+      return {
+        structureMarkdown,
+        entrypointsMarkdown,
+        databaseMarkdown,
+        dirSummaries,
+        entrypoints,
+        dbFound
+      };
+    }
 
     function detectProject(wsPath) {
       const info = {
@@ -1844,6 +2026,12 @@ switch (cmd) {
       }
 
       if (!info.description) info.description = `Proyecto en desarrollo (${info.stack})`;
+
+      const struct = scanProjectStructure(wsPath);
+      info.structureMarkdown = struct.structureMarkdown;
+      info.entrypointsMarkdown = struct.entrypointsMarkdown;
+      info.databaseMarkdown = struct.databaseMarkdown;
+
       return info;
     }
 
@@ -1983,7 +2171,7 @@ ${rows}
       return { indexPath: idxFile, count: projects.length, projects };
     }
 
-    if (sub === 'register') {
+    if (sub === 'register' || sub === 'scan' || sub === 'update') {
       const detected = detectProject(targetDir);
       const pName = detected.name;
       const associatedSkill = findSkill(pName, targetDir);
@@ -2005,15 +2193,29 @@ ${rows}
       } catch (e) {}
 
       let existingRules = '';
+      let existingAntiPatterns = '';
+      let existingBacklog = '';
+      let existingSessions = '';
       let existingMemories = '';
       let existingSkills = '';
       if (fs.existsSync(noteFile)) {
         try {
           const ex = fs.readFileSync(noteFile, 'utf8');
           const rM = ex.match(/##\s*Reglas y Condiciones Obligatorias del Proyecto[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
-          if (rM && rM[1].trim()) existingRules = rM[1].trim();
+          if (rM && rM[1].trim() && !rM[1].includes('<!-- Reglas operativas')) existingRules = rM[1].trim();
+
+          const apM = ex.match(/##\s*Anti-Patrones y Trampas Prohibidas[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
+          if (apM && apM[1].trim() && !apM[1].includes('<!-- Trampas técnicas')) existingAntiPatterns = apM[1].trim();
+
+          const bM = ex.match(/##\s*Backlog y Tareas Pendientes[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
+          if (bM && bM[1].trim() && !bM[1].includes('<!-- Tareas pendientes')) existingBacklog = bM[1].trim();
+
+          const sesM = ex.match(/##\s*Bitácora de Sesiones y Avances Recientes[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
+          if (sesM && sesM[1].trim() && !sesM[1].includes('*Sin sesiones registradas aún*')) existingSessions = sesM[1].trim();
+
           const mM = ex.match(/##\s*Memorias y Decisiones Vinculadas[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
           if (mM && mM[1].trim() && !mM[1].includes('<!-- Agrega enlaces')) existingMemories = mM[1].trim();
+
           const sM = ex.match(/##\s*Skills de Proyecto[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
           if (sM && sM[1].trim() && !sM[1].includes('<!-- Agrega skills')) existingSkills = sM[1].trim();
         } catch (e) {}
@@ -2046,8 +2248,26 @@ updated: ${now}
 - **Framework / Core**: \`${detected.framework || detected.stack}\`
 - **Dependencias clave**: ${detected.dependencies.slice(0, 15).map(d => `\`${d}\``).join(', ') || 'Ninguna'}
 
+### Estructura Arquitectónica y Módulos Clave
+${detected.structureMarkdown}
+
+### Puntos de Entrada y Servicios
+${detected.entrypointsMarkdown}
+
+### Base de Datos y APIs
+${detected.databaseMarkdown}
+
 ## Reglas y Condiciones Obligatorias del Proyecto
 ${existingRules || '<!-- Reglas operativas y condiciones obligatorias para este proyecto (commits, empaquetado, workflows, etc.) -->'}
+
+## Anti-Patrones y Trampas Prohibidas del Proyecto
+${existingAntiPatterns || '<!-- Trampas técnicas, errores a evitar y prácticas prohibidas en este repositorio -->'}
+
+## Backlog y Tareas Pendientes
+${existingBacklog || '- [ ] Tarea inicial del proyecto (gestiona tareas con `/obsidian project backlog`)'}
+
+## Bitácora de Sesiones y Avances Recientes
+${existingSessions || '| Fecha | Resumen de Sesión | Sesión |\n|---|---|---|\n| *Sin sesiones registradas aún* | — | — |'}
 
 ## Memorias y Decisiones Vinculadas
 ${existingMemories || '<!-- Agrega enlaces [[Nombre de la Memoria]] para conectar este proyecto con el grafo de Antigravity -->'}
@@ -2063,7 +2283,7 @@ ${skillsSection}
 
       console.log(JSON.stringify({
         status: 'ok',
-        action: 'registered',
+        action: sub === 'scan' ? 'scanned_and_updated' : 'registered',
         project: {
           name: pName,
           path: targetDir,
@@ -2074,6 +2294,98 @@ ${skillsSection}
         },
         totalProjects: idxResult.count,
       }, null, 2));
+      break;
+    }
+
+    if (sub === 'antipattern' || sub === 'antipatterns' || sub === 'trampa' || sub === 'trampas') {
+      const action = (pPos[1] || 'list').toLowerCase();
+      const pName = pFlags.project || pFlags.p || path.basename(targetDir);
+      const safeTitle = sanitize(pName);
+      const noteFile = path.join(projFolder, `${safeTitle}.md`);
+      if (!fs.existsSync(noteFile)) {
+        console.error(JSON.stringify({ error: `Proyecto no encontrado en Obsidian: ${pName}` }));
+        process.exit(1);
+      }
+      let content = fs.readFileSync(noteFile, 'utf8');
+      if (action === 'add') {
+        const ruleText = pPos.slice(2).join(' ') || pFlags.rule || pFlags.text || '';
+        if (!ruleText.trim()) {
+          console.error(JSON.stringify({ error: 'Uso: node obsidian.js project antipattern add "<regla o trampa a evitar>"' }));
+          process.exit(1);
+        }
+        const bullet = `- PROHIBIDO / TRAMPA: ${cleanText(ruleText)}`;
+        if (content.includes('## Anti-Patrones y Trampas Prohibidas del Proyecto')) {
+          content = content.replace(/(## Anti-Patrones y Trampas Prohibidas del Proyecto[^\r\n]*\r?\n)([\s\S]*?)(\r?\n##|$)/, (m, h, body, nextH) => {
+            const cleanBody = body.replace(/<!--[\s\S]*?-->/g, '').trim();
+            const newBody = cleanBody ? `${cleanBody}\n${bullet}` : bullet;
+            return `${h}${newBody}\n${nextH}`;
+          });
+        } else {
+          content += `\n## Anti-Patrones y Trampas Prohibidas del Proyecto\n${bullet}\n`;
+        }
+        fs.writeFileSync(noteFile, content, 'utf8');
+        console.log(JSON.stringify({ status: 'ok', action: 'antipattern_added', project: pName, rule: ruleText }));
+      } else {
+        const match = content.match(/## Anti-Patrones y Trampas Prohibidas del Proyecto[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
+        const rules = match ? match[1].replace(/<!--[\s\S]*?-->/g, '').trim().split(/\r?\n/).filter(Boolean) : [];
+        console.log(JSON.stringify({ project: pName, antipatterns: rules }, null, 2));
+      }
+      break;
+    }
+
+    if (sub === 'backlog' || sub === 'tasks' || sub === 'tareas') {
+      const action = (pPos[1] || 'list').toLowerCase();
+      const pName = pFlags.project || pFlags.p || path.basename(targetDir);
+      const safeTitle = sanitize(pName);
+      const noteFile = path.join(projFolder, `${safeTitle}.md`);
+      if (!fs.existsSync(noteFile)) {
+        console.error(JSON.stringify({ error: `Proyecto no encontrado en Obsidian: ${pName}` }));
+        process.exit(1);
+      }
+      let content = fs.readFileSync(noteFile, 'utf8');
+      if (action === 'add') {
+        const taskText = pPos.slice(2).join(' ') || pFlags.task || pFlags.text || '';
+        if (!taskText.trim()) {
+          console.error(JSON.stringify({ error: 'Uso: node obsidian.js project backlog add "<tarea>"' }));
+          process.exit(1);
+        }
+        const bullet = `- [ ] ${cleanText(taskText)}`;
+        if (content.includes('## Backlog y Tareas Pendientes')) {
+          content = content.replace(/(## Backlog y Tareas Pendientes[^\r\n]*\r?\n)([\s\S]*?)(\r?\n##|$)/, (m, h, body, nextH) => {
+            const cleanBody = body.replace(/<!--[\s\S]*?-->/g, '').trim();
+            const newBody = cleanBody ? `${cleanBody}\n${bullet}` : bullet;
+            return `${h}${newBody}\n${nextH}`;
+          });
+        } else {
+          content += `\n## Backlog y Tareas Pendientes\n${bullet}\n`;
+        }
+        fs.writeFileSync(noteFile, content, 'utf8');
+        console.log(JSON.stringify({ status: 'ok', action: 'task_added', project: pName, task: taskText }));
+      } else if (action === 'done' || action === 'complete') {
+        const query = pPos.slice(2).join(' ') || pFlags.task || '';
+        let marked = false;
+        content = content.replace(/-\s*\[\s*\]\s*([^\r\n]+)/g, (fullLine, tText) => {
+          if (!marked && (!query || tText.toLowerCase().includes(query.toLowerCase()))) {
+            marked = true;
+            return `- [x] ${tText}`;
+          }
+          return fullLine;
+        });
+        if (marked) {
+          fs.writeFileSync(noteFile, content, 'utf8');
+          console.log(JSON.stringify({ status: 'ok', action: 'task_completed', project: pName, query }));
+        } else {
+          console.log(JSON.stringify({ status: 'not_found', message: 'No se encontró tarea pendiente coincidente' }));
+        }
+      } else {
+        const match = content.match(/## Backlog y Tareas Pendientes[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
+        const lines = match ? match[1].split(/\r?\n/).filter(l => l.trim().startsWith('- [')) : [];
+        const tasks = lines.map(l => ({
+          done: l.includes('- [x]') || l.includes('- [X]'),
+          text: l.replace(/^-\s*\[[ xX]\]\s*/, '').trim()
+        }));
+        console.log(JSON.stringify({ project: pName, total: tasks.length, tasks }, null, 2));
+      }
       break;
     }
 
@@ -2107,6 +2419,223 @@ ${skillsSection}
     break;
   }
 
+  case 'session':
+  case 'sessions': {
+    const { flags, positional } = parseFlags(args);
+    const sesSub = (positional[0] || 'list').toLowerCase();
+    const sesFolder = path.join(vault.path, 'Antigravity', 'Sesiones');
+    const projFolder = path.join(vault.path, 'Antigravity', 'Proyectos');
+    if (!fs.existsSync(sesFolder)) fs.mkdirSync(sesFolder, { recursive: true });
+
+    function updateSessionsIndex() {
+      const files = fs.readdirSync(sesFolder).filter(f => f.endsWith('.md') && !f.startsWith('00'));
+      const list = [];
+      for (const f of files) {
+        try {
+          const fp = path.join(sesFolder, f);
+          const c = fs.readFileSync(fp, 'utf8');
+          const base = f.replace(/\.md$/, '');
+          let title = base;
+          let proj = 'General';
+          let date = '';
+          let time = '';
+          let summary = '';
+
+          const mTitle = c.match(/^title:\s*["']?([^"'\r\n]+)["']?/m);
+          if (mTitle) title = mTitle[1].trim();
+          const mP = c.match(/^project:\s*["']?([^"'\r\n]+)["']?/m);
+          if (mP) proj = mP[1].trim();
+          const mD = c.match(/^date:\s*["']?([^"'\r\n]+)["']?/m);
+          if (mD) date = mD[1].trim();
+          const mT = c.match(/^time:\s*["']?([^"'\r\n]+)["']?/m);
+          if (mT) time = mT[1].trim();
+          const mSum = c.match(/>\s*\[!NOTE\]\s*\*\*Resumen[^\r\n]*\*\*\r?\n>\s*([^\r\n]+)/i)
+            || c.match(/^summary:\s*["']?([^"'\r\n]+)["']?/m);
+          if (mSum) summary = mSum[1].trim();
+
+          const stat = fs.statSync(fp);
+          list.push({
+            file: f,
+            base,
+            title,
+            project: proj,
+            date: date || stat.mtime.toISOString().split('T')[0],
+            time: time || '—',
+            summary: summary || 'Sin resumen',
+            mtime: stat.mtimeMs
+          });
+        } catch (e) {}
+      }
+
+      list.sort((a, b) => b.mtime - a.mtime);
+
+      let rows = '';
+      if (list.length === 0) {
+        rows = '| *Aún no hay sesiones registradas* | — | — | — | — |\n';
+      } else {
+        for (const s of list) {
+          rows += `| ${s.date} | ${s.time} | [[Proyecto: ${s.project}]] | ${s.summary.replace(/\|/g, '-')} | [[${s.base}]] |\n`;
+        }
+      }
+
+      const now = new Date().toISOString().split('T')[0];
+      const idxContent = `---
+title: "Índice de Sesiones y Checkpoints — Antigravity"
+type: antigravity-index
+tags:
+  - antigravity/sesiones
+  - antigravity/index
+created: ${now}
+updated: ${now}
+---
+
+# Índice de Sesiones y Checkpoints — Antigravity
+
+> [!INFO] **Bitácora de Continuidad de Trabajo**
+> Registro cronológico de hitos, decisiones de arquitectura y sesiones de trabajo para mantener la continuidad entre conversaciones.
+
+Total sesiones registradas: **${list.length}**
+
+| Fecha | Hora | Proyecto | Resumen | Sesión |
+|---|---|---|---|---|
+${rows}
+---
+*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Indice de Proyectos]]
+`;
+
+      const idxFile = path.join(sesFolder, '00 Indice de Sesiones.md');
+      fs.writeFileSync(idxFile, idxContent, 'utf8');
+      return { count: list.length, sessions: list };
+    }
+
+    if (sesSub === 'save' || sesSub === 'checkpoint' || sesSub === 'log') {
+      const pName = flags.project || flags.p || positional[1] || path.basename(process.cwd());
+      let summary = flags.summary || flags.s || flags.title || '';
+      let content = flags.content || flags.c || flags.details || flags.body || '';
+      const tags = (flags.tags ? flags.tags.split(',') : []).map(t => cleanText(t).toLowerCase());
+      if (!tags.includes('antigravity/sesion')) tags.push('antigravity/sesion');
+      const safeProject = sanitize(pName);
+
+      if (!summary && content) summary = cleanText(content).slice(0, 140);
+      if (!summary && !content) {
+        console.error(JSON.stringify({ error: 'Uso: node obsidian.js session save --project "<nombre>" --summary "<resumen>" --content "<detalles y decisiones>"' }));
+        process.exit(1);
+      }
+
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0];
+      const hours = String(now.getHours()).padStart(2, '0');
+      const mins = String(now.getMinutes()).padStart(2, '0');
+      const timeStr = `${hours}${mins}`;
+      const sessionBase = `${dateStr}_${timeStr} - ${safeProject}`;
+      const sessionFile = path.join(sesFolder, `${sessionBase}.md`);
+
+      const sessionMd = `---
+title: "Sesión: ${pName} (${dateStr} ${hours}:${mins})"
+type: antigravity-session
+project: "${pName}"
+tags:
+${tags.map(t => `  - ${t}`).join('\n')}
+date: ${dateStr}
+time: "${hours}:${mins}"
+summary: "${summary}"
+---
+
+# Sesión: ${pName} — ${dateStr} ${hours}:${mins}
+
+> [!NOTE] **Resumen de la Sesión**
+> ${summary}
+
+## Trabajo Realizado y Decisiones Técnicas
+${content || '*Sin detalles adicionales.*'}
+
+---
+*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[Proyecto: ${pName}]] | [[00 Indice de Sesiones]]
+`;
+      fs.writeFileSync(sessionFile, sessionMd, 'utf8');
+      updateSessionsIndex();
+
+      // Append row to project note
+      const projNote = path.join(projFolder, `${safeProject}.md`);
+      if (fs.existsSync(projNote)) {
+        try {
+          let pContent = fs.readFileSync(projNote, 'utf8');
+          const row = `| ${dateStr} ${hours}:${mins} | ${summary.replace(/\|/g, '-')} | [[${sessionBase}]] |\n`;
+          if (pContent.includes('## Bitácora de Sesiones y Avances Recientes')) {
+            pContent = pContent.replace(/(## Bitácora de Sesiones y Avances Recientes[^\r\n]*\r?\n)(\| Fecha[^\r\n]*\r?\n\|---[^\r\n]*\r?\n)([\s\S]*?)(\r?\n##|$)/, (m, h, tableH, body, nextH) => {
+              const cleanBody = body.replace(/\|\s*\*Sin sesiones registradas aún\*[^\r\n]*\r?\n/g, '').trim();
+              const existingRows = cleanBody ? cleanBody.split(/\r?\n/).slice(0, 14).join('\n') + '\n' : '';
+              return `${h}${tableH}${row}${existingRows}${nextH}`;
+            });
+            fs.writeFileSync(projNote, pContent, 'utf8');
+          }
+        } catch (e) {}
+      }
+
+      console.log(JSON.stringify({
+        status: 'ok',
+        action: 'session_saved',
+        project: pName,
+        summary,
+        sessionFile,
+        note: sessionBase,
+      }, null, 2));
+      break;
+    }
+
+    if (sesSub === 'last' || sesSub === 'recent' || sesSub === 'peek') {
+      const pName = flags.project || flags.p || positional[1] || '';
+      const files = fs.readdirSync(sesFolder).filter(f => f.endsWith('.md') && !f.startsWith('00'));
+      const list = [];
+      for (const f of files) {
+        try {
+          const fp = path.join(sesFolder, f);
+          const c = fs.readFileSync(fp, 'utf8');
+          let proj = '';
+          const mP = c.match(/^project:\s*["']?([^"'\r\n]+)["']?/m);
+          if (mP) proj = mP[1].trim();
+          if (pName && proj.toLowerCase() !== pName.toLowerCase() && !f.toLowerCase().includes(pName.toLowerCase())) {
+            continue;
+          }
+          const stat = fs.statSync(fp);
+          list.push({ file: f, path: fp, content: c, mtime: stat.mtimeMs, project: proj });
+        } catch (e) {}
+      }
+      list.sort((a, b) => b.mtime - a.mtime);
+      if (list.length === 0) {
+        console.log(JSON.stringify({ status: 'empty', message: pName ? `Sin sesiones previas para ${pName}` : 'Sin sesiones registradas' }));
+        break;
+      }
+      const latest = list[0];
+      const mSum = latest.content.match(/>\s*\[!NOTE\]\s*\*\*Resumen[^\r\n]*\*\*\r?\n>\s*([^\r\n]+)/i);
+      const summary = mSum ? mSum[1].trim() : 'Sin resumen';
+      const mWork = latest.content.match(/##\s*Trabajo Realizado y Decisiones Técnicas[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
+      const work = mWork ? mWork[1].trim() : '';
+
+      if (flags.json) {
+        console.log(JSON.stringify({
+          project: latest.project,
+          sessionFile: latest.file,
+          summary,
+          details: work
+        }, null, 2));
+      } else {
+        console.log(`[SESION PREVIA: ${latest.project || 'General'}]\nResumen: ${summary}\n\nDetalles:\n${work}`);
+      }
+      break;
+    }
+
+    // Default: list
+    const limit = parseInt(flags.limit || '10', 10);
+    const { sessions } = updateSessionsIndex();
+    console.log(JSON.stringify({
+      status: 'ok',
+      total: sessions.length,
+      sessions: sessions.slice(0, limit)
+    }, null, 2));
+    break;
+  }
+
   case 'open': {
     const note = args[0] || 'Antigravity/00 Antigravity Hub';
     const clean = note.endsWith('.md') ? note.slice(0, -3) : note;
@@ -2127,10 +2656,17 @@ Comandos de Obsidian for Antigravity (Zero Emojis, Ultra-Bajo Contexto):
   node obsidian.js config [get|set ...] (Consultar o actualizar ajustes de configuracion)
   node obsidian.js status               (Estado de conexion, stats y personalidad)
   node obsidian.js personality [args]   (Ver o calibrar personalidad completa y trato)
-  node obsidian.js project [register|list|status] [path] (Indice unificado y deteccion de proyectos)
+  node obsidian.js project scan [path]  (Escanear arquitectura viva y actualizar blueprint del proyecto)
+  node obsidian.js project register [path] (Registrar proyecto con analisis estructural profundo)
+  node obsidian.js project list         (Listar proyectos vinculados)
+  node obsidian.js project antipattern [list|add "<regla>"] (Gestionar trampas y errores prohibidos)
+  node obsidian.js project backlog [list|add "<tarea>"|done "<tarea>"] (Backlog bidireccional Obsidian <-> IDE)
+  node obsidian.js session save --summary "..." --content "..." [--project "..."] (Guardar checkpoint de sesion)
+  node obsidian.js session last [--project "..."] (Recuperar contexto y decisiones de la sesion previa)
+  node obsidian.js session list [--limit N] (Listar sesiones e hitos recientes)
   node obsidian.js triage "<query>"     (Triage ultra-compacto: Skill vs Memoria vs Nada)
   node obsidian.js peek "<nota>"        (Solucion tecnica directa sin metadatos)
-  node obsidian.js save --title "..." --summary "..." --content "..." (Guardado atomico)
+  node obsidian.js save --title "..." --summary "..." --content "..." (Guardado atomico de conocimiento)
   node obsidian.js skill list [--scope global|project] (Listar skills disponibles)
   node obsidian.js skill view <nombre>  (Ver instrucciones y scripts de una skill con bajo contexto)
   node obsidian.js skill create <nombre> --desc "<desc>" --content "<instrucciones>" [--scope global|project]

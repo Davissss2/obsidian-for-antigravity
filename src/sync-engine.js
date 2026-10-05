@@ -2158,12 +2158,12 @@ Welcome to the interconnected memory, skills, and knowledge core between **Antig
 All nodes in this vault are bidirectionally linked to light up your **Graph View**.
 
 \`\`\`
-       ┌──────────────────────────────┐
-       │     00 Antigravity Hub       │
-       └──────────────┬───────────────┘
-          ┌───────────┼───────────┬───────────┐
-          ▼           ▼           ▼           ▼
-        Soul       Skills      Memory      Projects
+       ┌──────────────────────────────────────────────┐
+       │              00 Antigravity Hub              │
+       └──────────────────────┬───────────────────────┘
+          ┌───────────┬───────┴───────┬───────────┐
+          ▼           ▼               ▼           ▼
+        Soul       Skills          Memory     Sessions & Projects
 \`\`\`
 
 ---
@@ -2188,13 +2188,22 @@ Lessons learned, architectures, debugging fixes, models, and permanent documenta
 
 ---
 
-## Linked Projects
-${projectName ? `- Current Project: [[${projectName}]]` : '- *Open a project in Antigravity to automatically register it.*'}
+## Work Continuity & Sessions
+Chronological history of checkpoints, architecture decisions, and milestones across sessions:
+- [[00 Indice de Sesiones]]
+
+---
+
+## Linked Projects & Blueprints
+Consolidated index of project architectures, antipatterns, and backlogs:
+- [[00 Indice de Proyectos]]
+${projectName ? `- Current Active Project: [[${projectName}]]` : '- *Open a project in Antigravity to automatically register its blueprint.*'}
 
 ---
 
 > [!TIP] **How does autonomous sync work?**
 > - Every time Antigravity solves a problem or generates knowledge, it is automatically stored in \`Antigravity/Memoria/\`.
+> - Work sessions and milestones are recorded in \`Antigravity/Sesiones/\`.
 > - Global skills from \`~/.gemini/config/skills/\` are synchronized in real-time into \`Antigravity/Skills/\`.
 > - You can create or edit skills right here in Markdown and Antigravity will assimilate them.
 `
@@ -2213,12 +2222,12 @@ Bienvenido al núcleo de memoria, skills y conocimiento interconectado entre **A
 Todos los nodos de esta bóveda están enlazados bidireccionalmente para iluminar tu **Vista Gráfica (Graph View)**.
 
 \`\`\`
-       ┌──────────────────────────────┐
-       │     00 Antigravity Hub       │
-       └──────────────┬───────────────┘
-          ┌───────────┼───────────┬───────────┐
-          ▼           ▼           ▼           ▼
-        Alma       Skills      Memoria    Proyectos
+       ┌──────────────────────────────────────────────┐
+       │              00 Antigravity Hub              │
+       └──────────────────────┬───────────────────────┘
+          ┌───────────┬───────┴───────┬───────────┐
+          ▼           ▼               ▼           ▼
+        Alma       Skills          Memoria    Sesiones & Proyectos
 \`\`\`
 
 ---
@@ -2243,13 +2252,22 @@ Lecciones aprendidas, arquitecturas, trucos, modelos y documentación permanente
 
 ---
 
-## Proyectos Vinculados
-${projectName ? `- Proyecto Actual: [[${projectName}]]` : '- *Abre un proyecto en Antigravity para registrarlo automáticamente.*'}
+## Continuidad de Trabajo & Sesiones
+Historial cronológico de checkpoints, decisiones arquitectónicas e hitos de sesión:
+- [[00 Indice de Sesiones]]
+
+---
+
+## Proyectos Vinculados & Blueprints
+Índice consolidado de arquitectura de proyectos, anti-patrones y backlog:
+- [[00 Indice de Proyectos]]
+${projectName ? `- Proyecto Activo Actual: [[${projectName}]]` : '- *Abre un proyecto en Antigravity para registrar su blueprint automáticamente.*'}
 
 ---
 
 > [!TIP] **¿Cómo funciona la sincronización automática?**
 > - Cada vez que Antigravity resuelve un problema o genera conocimiento, se guarda automáticamente en \`Antigravity/Memoria/\`.
+> - Las sesiones e hitos de trabajo se registran en \`Antigravity/Sesiones/\`.
 > - Las skills globales de \`~/.gemini/config/skills/\` se mantienen sincronizadas en tiempo real en \`Antigravity/Skills/\`.
 > - Puedes crear o editar skills aquí mismo con formato markdown y Antigravity las asimilará.
 `;

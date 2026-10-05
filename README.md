@@ -123,8 +123,11 @@ All files are structured cleanly inside your vault under the `Antigravity/` fold
     ├── 📁 Skills/                       <-- Synced global and project skills (deduplicated)
     │   ├── 📄 00 Indice de Skills.md    <-- Central skills catalog
     │   └── ...
-    └── 📁 Proyectos/                    <-- Workspaces & Consolidated Registry
-        ├── 📄 00 Indice de Proyectos.md <-- Consolidated project table
+    ├── 📁 Proyectos/                    <-- Workspaces, Blueprints & Backlog
+    │   ├── 📄 00 Indice de Proyectos.md <-- Consolidated project table
+    │   └── ...
+    └── 📁 Sesiones/                     <-- Work Continuity & Session Checkpoints
+        ├── 📄 00 Indice de Sesiones.md  <-- Chronological sessions index
         └── ...
 ```
 
@@ -136,44 +139,58 @@ The AI agent and developer can interact directly with the vault using the runner
 
 ```powershell
 # 1. Instant 1-Line Identity & Callsign Updates (Zero Code Browsing)
-node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js name "Hermes"
-node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js user "Davissss2"
-node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js personality --ai-name "Hermes" --user-callsign "Davissss2" --personality "Senior engineer, pragmatic, surgical, zero fluff"
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js name "Pedro"
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js user "David"
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js personality --ai-name "Pedro" --user-callsign "David" --personality "Senior autonomous engineer, pragmatic, surgical, zero fluff"
 
 # 2. Instant Config Inspection and Updates
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js config get
-node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js config set aiName "zurumbaba"
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js config set aiName "Pedro"
 
-# 3. Unified Projects Registry & Autonomous Workspace Detection
+# 3. Living Architectural Blueprints & Deep Structural Scanner
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js project scan "C:\Path\To\Project"
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js project register "C:\Path\To\Project"
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js project list
-node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js project status
 
-# 4. Ultra-Low-Context Triage (<80 tokens)
+# 4. Anti-Patterns & Repository Traps Registry
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js project antipattern add "Do not use synchronous fs methods in critical request path"
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js project antipattern list
+
+# 5. Bi-Directional Backlog Synchronization
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js project backlog add "Implement Redis caching layer for sessions"
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js project backlog done "Implement Redis caching layer"
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js project backlog list
+
+# 6. Session Checkpoints & Continuity Recall (<50 tokens)
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js session save --summary "Completed architecture scan and session tracking" --content "Updated extension.js, sync-engine, runner and styles"
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js session last
+node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js session list
+
+# 7. Ultra-Low-Context Triage (<80 tokens)
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js triage "sqlite database locked"
 
-# 5. Extract technical solution without noise
+# 8. Extract technical solution without noise
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js peek "SQLite WAL Concurrency Bugfix"
 
-# 6. Fast atomic save (Zero emojis, technical format)
+# 9. Fast atomic save (Zero emojis, technical format)
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js save --title "Plesk Nginx Proxy Timeout" --category "configuracion" --summary "Timeout 504 -> proxy_read_timeout 300s applied" --content "Root cause: Long-running script. Solution: Directiva nginx proxy_read_timeout 300s."
 
-# 7. Active Soul, User Profile & Personality
+# 10. Active Soul, User Profile & Personality
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js soul
 
-# 8. Learn new preference or habit
+# 11. Learn new preference or habit
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js learn "Always package vsix and run tests"
 
-# 9. 1-Line overview catalog of all skills and memories
+# 12. 1-Line overview catalog of all skills and memories
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js catalog
 
-# 10. Connection status, stats and personality
+# 13. Connection status, stats and personality
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js status
 
-# 11. Open note in Obsidian desktop app
+# 14. Open note in Obsidian desktop app
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js open "Antigravity/00 Antigravity Hub"
 
-# 12. AI Skill Management (List, View, Create, Edit, Script injection, Delete)
+# 15. AI Skill Management (List, View, Create, Edit, Script injection, Delete)
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js skill list
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js skill view my-skill --full
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js skill create deploy-tool --desc "Deployment automation" --content "# Deploy\nUse scripts/deploy.sh"
@@ -181,7 +198,7 @@ node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js skill edit
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js skill script deploy-tool add deploy.sh --code "npm run build && rsync..."
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js skill delete deploy-tool
 
-# 13. AI Rule Management (List, View, Add)
+# 16. AI Rule Management (List, View, Add)
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js rule list
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js rule view obsidian-brain
 node ~/.gemini/config/skills/antigravity-obsidian/scripts/obsidian.js rule add "[my-repo] Always run lint before commit"
