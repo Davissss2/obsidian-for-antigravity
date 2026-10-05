@@ -99,7 +99,7 @@ function installSkillAndRules(targetVaultPath, options = {}) {
   }
 
   // Also deploy helper modules so scriptsDir is fully functional and self-contained
-  const helperFiles = ['skill-installer.js', 'sync-engine.js', 'vault-detector.js'];
+  const helperFiles = ['skill-installer.js', 'sync-engine.js', 'vault-detector.js', 'mcp-server.js'];
   for (const hf of helperFiles) {
     const srcPath = path.join(__dirname, hf);
     const destPath = path.join(scriptsDir, hf);
@@ -751,11 +751,19 @@ function installSkillAndRules(targetVaultPath, options = {}) {
 
   fs.writeFileSync(rulePath, ruleContent, 'utf8');
 
-  // 4b. Write Global GEMINI.md & AGENTS.md in ~/.gemini/config/ (universally loaded in ALL chats)
+  // Clean up legacy GEMINI.md & AGENTS.md in ~/.gemini/config/ if present to prevent duplicate rules in prompt context
   const geminiMdPath = path.join(configDir, 'GEMINI.md');
   const agentsMdPath = path.join(configDir, 'AGENTS.md');
-  fs.writeFileSync(geminiMdPath, ruleContent, 'utf8');
-  fs.writeFileSync(agentsMdPath, ruleContent, 'utf8');
+  for (const legacyPath of [geminiMdPath, agentsMdPath]) {
+    try {
+      if (fs.existsSync(legacyPath)) {
+        const legacyContent = fs.readFileSync(legacyPath, 'utf8');
+        if (legacyContent.includes('Hermes Protocol') || legacyContent.includes('Protocolo Hermes') || legacyContent.includes('Autonomous Second Brain') || legacyContent.includes('Segundo Cerebro')) {
+          fs.unlinkSync(legacyPath);
+        }
+      }
+    } catch (e) {}
+  }
 
   // 5. Run Initial Sync if vault path exists
   let syncResult = null;

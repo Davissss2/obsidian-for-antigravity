@@ -112,6 +112,52 @@ const TOOLS = [
     },
   },
   {
+    name: 'obsidian_session_save',
+    description: 'Guarda un checkpoint de sesión o hito de trabajo en el Daily Log del proyecto en Obsidian (Antigravity/Sesiones/YYYY-MM-DD - Proyecto.md).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project: { type: 'string', description: 'Nombre del proyecto de trabajo' },
+        summary: { type: 'string', description: 'Resumen conciso del hito o tarea completada' },
+        content: { type: 'string', description: 'Detalles técnicos, archivos modificados y decisiones tomadas' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'Etiquetas opcionales' },
+      },
+      required: ['summary'],
+    },
+  },
+  {
+    name: 'obsidian_session_last',
+    description: 'Recupera el último hito o sesión de trabajo registrada para un proyecto para recordar contexto previo sin quemar tokens.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project: { type: 'string', description: 'Nombre del proyecto a consultar (opcional)' },
+      },
+    },
+  },
+  {
+    name: 'obsidian_session_list',
+    description: 'Lista los checkpoints y sesiones de trabajo recientes del vault.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'number', description: 'Número máximo de sesiones a retornar (por defecto 10)' },
+      },
+    },
+  },
+  {
+    name: 'obsidian_learn',
+    description: 'Registra un hábito, preferencia o regla de trabajo del usuario. Si incluye [Proyecto] o project, se almacena exclusivamente en el dossier del proyecto.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        habit: { type: 'string', description: 'Preferencia, hábito técnico o condición obligatoria aprendida' },
+        project: { type: 'string', description: 'Proyecto específico al que aplica (opcional)' },
+      },
+      required: ['habit'],
+    },
+  },
+  {
     name: 'obsidian_open_note',
     description: 'Abre una nota directamente en la ventana de la aplicación de escritorio Obsidian del usuario.',
     inputSchema: {
@@ -286,6 +332,135 @@ async function executeTool(name, args) {
           content: [{
             type: 'text',
             text: `✅ Sincronización completa con Obsidian finalizada:\n- Skills sincronizadas: ${result.skillsCount}\n- Memorias sincronizadas: ${result.memoriesCount}\n- Hub actualizado: ${result.hub}`,
+          }],
+        };
+      case 'obsidian_session_save': {
+        const pName = args.project || path.basename(process.cwd());
+        const result = syncEngine.saveSessionCheckpoint(vaultPath, {
+          project: pName,
+          summary: args.summary,
+          content: args.content,
+          tags: args.tags,
+        });
+        const dateStr = new Date().toISOString().split('T')[0];
+        const safeP = (pName || 'General').replace(/[\/:*?"<>|\\]/g, '-').trim();
+        return {
+          content: [{
+            type: 'text',
+            text: `Checkpoint guardado exitosamente en Daily Log de ${pName}:\nAntigravity/Sesiones/${dateStr} - ${safeP}.md\nResumen: ${args.summary}`,
+          }],
+        };
+      }
+
+      case 'obsidian_session_last': {
+        const pName = args.project || '';
+        const sesFolder = path.join(vaultPath, 'Antigravity', 'Sesiones');
+        if (!fs.existsSync(sesFolder)) {
+          return { content: [{ type: 'text', text: 'No hay sesiones registradas.' }] };
+        }
+        const files = fs.readdirSync(sesFolder).filter(f => f.endsWith('.md') && !f.startsWith('00'));
+        const list = [];
+        for (const f of files) {
+          try {
+            const fp = path.join(sesFolder, f);
+            const c = fs.readFileSync(fp, 'utf8');
+            let proj = '';
+            const mP = c.match(/^project:\s*["']?([^"'\r\n]+)["']?/m);
+            if (mP) proj = mP[1].trim();
+            if (pName && proj.toLowerCase() !== pName.toLowerCase() && !f.toLowerCase().includes(pName.toLowerCase())) continue;
+            const stat = fs.statSync(fp);
+            list.push({ file: f, path: fp, content: c, mtime: stat.mtimeMs, project: proj });
+          } catch (e) {}
+        }
+        list.sort((a, b) => b.mtime - a.mtime);
+        if (list.length === 0) {
+          return { content: [{ type: 'text', text: `Sin sesiones previas para ${pName || 'este workspace'}.` }] };
+        }
+        const latest = list[0];
+        const milestones = [];
+        const mRegex = /##\s*(\d{2}:\d{2})\s*[—–-]\s*([^\r\n]+)\r?\n([\s\S]*?)(?=(?:\r?\n##\s*\d{2}:\d{2}\s*[—–-])|(?:\r?\n---)|$)/g;
+        let mMatch;
+        while ((mMatch = mRegex.exec(latest.content)) !== null) {
+          milestones.push({ time: mMatch[1], summary: mMatch[2].trim(), details: mMatch[3].trim() });
+        }
+        let summary = '';
+        let details = '';
+        if (milestones.length > 0) {
+          const lastM = milestones[milestones.length - 1];
+          summary = lastM.summary;
+          details = lastM.details;
+        } else {
+          const mSum = latest.content.match(/>\s*\[!NOTE\]\s*\*\*(?:Último Hito|Resumen)[^\r\n]*\*\*\r?\n>\s*([^\r\n]+)/i)
+            || latest.content.match(/^summary:\s*["']?([^"'\r\n]+)["']?/m);
+          summary = mSum ? mSum[1].trim() : 'Sin resumen';
+          const mWork = latest.content.match(/##\s*Trabajo Realizado y Decisiones Técnicas[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
+          details = mWork ? mWork[1].trim() : '';
+        }
+        return {
+          content: [{
+            type: 'text',
+            text: `[SESION PREVIA: ${latest.project || 'General'}]\nResumen: ${summary}\n\nDetalles:\n${details}`,
+          }],
+        };
+      }
+
+      case 'obsidian_session_list': {
+        const { sessions } = syncEngine.syncSessionsIndex(vaultPath);
+        const limit = args.limit || 10;
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({ total: sessions.length, sessions: sessions.slice(0, limit) }, null, 2),
+          }],
+        };
+      }
+
+      case 'obsidian_learn': {
+        const habit = args.habit || '';
+        let project = args.project || null;
+        if (!project) {
+          const projTagMatch = habit.match(/^\[([a-zA-Z0-9_\-.]+)\]/);
+          if (projTagMatch) project = projTagMatch[1];
+        }
+        const isGlobal = !project || project.toLowerCase() === 'global';
+        const now = new Date().toISOString().split('T')[0];
+        const entry = `- \`[${now}]\` ${habit}`;
+        let target = '';
+
+        if (isGlobal) {
+          const userFile = path.join(vaultPath, 'Antigravity', 'Alma', '00 Perfil de Usuario.md');
+          if (fs.existsSync(userFile)) {
+            let uContent = fs.readFileSync(userFile, 'utf8');
+            if (uContent.includes('## 4. Aprendizajes y Preferencias Dinámicas Acumuladas')) {
+              uContent = uContent.replace('## 4. Aprendizajes y Preferencias Dinámicas Acumuladas', `## 4. Aprendizajes y Preferencias Dinámicas Acumuladas\n${entry}`);
+            } else {
+              uContent += `\n## 4. Aprendizajes y Preferencias Dinámicas Acumuladas\n${entry}\n`;
+            }
+            fs.writeFileSync(userFile, uContent, 'utf8');
+          }
+          target = '00 Perfil de Usuario.md';
+        } else {
+          const projDir = path.join(vaultPath, 'Antigravity', 'Proyectos');
+          if (!fs.existsSync(projDir)) fs.mkdirSync(projDir, { recursive: true });
+          const projFile = path.join(projDir, `${project}.md`);
+          if (fs.existsSync(projFile)) {
+            let pContent = fs.readFileSync(projFile, 'utf8');
+            const h = '## Reglas y Condiciones Obligatorias del Proyecto';
+            if (pContent.includes(h)) {
+              pContent = pContent.replace(h, `${h}\n${entry}`);
+            } else {
+              const splitIdx = pContent.lastIndexOf('---');
+              if (splitIdx !== -1) pContent = pContent.slice(0, splitIdx) + `${h}\n${entry}\n\n` + pContent.slice(splitIdx);
+              else pContent += `\n${h}\n${entry}\n`;
+            }
+            fs.writeFileSync(projFile, pContent, 'utf8');
+          }
+          target = `Antigravity/Proyectos/${project}.md`;
+        }
+        return {
+          content: [{
+            type: 'text',
+            text: `Aprendizaje asimilado y persistido en ${target}:\n${entry}`,
           }],
         };
       }

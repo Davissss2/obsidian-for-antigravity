@@ -5,6 +5,40 @@ All notable changes to the **Obsidian for Antigravity** extension will be docume
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.2] - 2026-10-05
+
+### Fixed
+- **Rule Duplication in Prompt Context (Zero Token Waste)**:
+  - Eliminated writing identical copies of the Hermes Protocol to both `rules/obsidian-brain.md` and `GEMINI.md` / `AGENTS.md`.
+  - Configured `rules/obsidian-brain.md` as the exclusive single source of truth for global rules.
+  - Automatically cleans up legacy `GEMINI.md` and `AGENTS.md` in `~/.gemini/config/`, saving ~2,000 to ~3,000 redundant tokens in prompt context on every message turn.
+- **PowerShell Escaping Fragility in CLI Commands**:
+  - Added native Base64 payload decoding (`--b64`, `--content-b64`, `--base64`, `--summary-b64`) across `session save`, `save`, `learn`, `skill create`, and `skill edit`.
+  - Added support for reading content directly from files (`--file <path>`) or standard input (`--stdin`).
+  - Guarantees 100% reliable execution of multi-line Markdown, quotes, dollar signs (`$`), and backticks without PowerShell parser errors.
+
+### Changed
+- **Session Consolidation: Daily Log per Project Model**:
+  - Replaced the fragmented single-checkpoint-per-file model (`YYYY-MM-DD_HHMM - Project.md`) with a consolidated **Daily Log per Project** (`Antigravity/Sesiones/YYYY-MM-DD - Project.md`).
+  - Subsequent session checkpoints on the same day are appended as chronological milestone sections (`## HH:MM — Resumen`), updating frontmatter `updated`, `summary`, and `milestones` count.
+  - Project blueprint bitácora links directly to milestone anchors (`[[YYYY-MM-DD - Project#HH:MM — Resumen|YYYY-MM-DD - Project]]`).
+  - Added `node obsidian.js session consolidate` CLI command to automatically detect and merge historical or legacy fragmented session notes into clean daily logs.
+- **Strictly Scoped Learnings (`learn`)**:
+  - Scoped project conditions (e.g. `[ProjectName] condition` or `--project <name>`) are now stored exclusively in the target project's dossier (`Antigravity/Proyectos/<Project>.md`) under `## Reglas y Condiciones Obligatorias del Proyecto`.
+  - Global user preferences without a project tag or tagged `[Global]` remain isolated in `Antigravity/Alma/00 Perfil de Usuario.md`.
+  - Eliminates context bleeding where project-specific release or packaging workflows leaked into unrelated projects.
+
+### Added
+- **Full-Text BM25 Semantic Triage & Snippet Extraction**:
+  - Upgraded context triage algorithm from simple substring/tag matching to true Okapi BM25 full-text ranking across titles (5x), tags (3.5x), summaries (2.5x), and full note body excerpts (1x).
+  - Integrated bilingual Spanish & English suffix stemming and camelCase / snake_case code token splitting.
+  - Extracts and returns context snippets highlighting the exact region of the note solution matching the query symptoms or technical errors.
+- **Full-Featured MCP Server (Model Context Protocol)**:
+  - Upgraded `src/mcp-server.js` with complete toolsuite: `obsidian_session_save` (Daily Log), `obsidian_session_last`, `obsidian_session_list`, `obsidian_learn` (scoped), `obsidian_triage`, `obsidian_peek`, `obsidian_search`, `obsidian_save_memory`, `obsidian_save_skill`, `obsidian_status`, `obsidian_open_note`.
+  - Added CLI helper `node obsidian.js mcp [status|start|config]` allowing seamless stdio invocation or optional registration in Antigravity / Claude Desktop configurations.
+
+---
+
 ## [1.7.1] - 2026-10-05
 
 ### Added

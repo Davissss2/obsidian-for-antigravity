@@ -97,7 +97,20 @@ function updateGlobalRulesWithPersonality({ aiName, userCallsign, personality, c
   const agentsMdPath = path.join(configDir, 'AGENTS.md');
   const scriptPath = path.join(configDir, 'skills', 'antigravity-obsidian', 'scripts', 'obsidian.js').replace(/\\/g, '/');
 
-  const ruleFiles = [rulePath, geminiMdPath, agentsMdPath];
+  // Clean up legacy GEMINI.md and AGENTS.md if present to avoid duplicate rules in prompt context
+  for (const legacyFile of [geminiMdPath, agentsMdPath]) {
+    if (fs.existsSync(legacyFile)) {
+      try {
+        const c = fs.readFileSync(legacyFile, 'utf8');
+        if (c.includes('Hermes Protocol') || c.includes('Protocolo Hermes') || c.includes('Autonomous Second Brain') || c.includes('Segundo Cerebro')) {
+          fs.unlinkSync(legacyFile);
+        }
+      } catch (e) {}
+    }
+  }
+
+  // Only maintain rules/obsidian-brain.md
+  const ruleFiles = [rulePath];
 
   for (const filePath of ruleFiles) {
     if (!fs.existsSync(filePath)) continue;
@@ -357,11 +370,18 @@ function buildManifest(vaultPath) {
         }
 
         const stat = fs.statSync(fp);
+        const bodyClean = cleanText(txt
+          .replace(/^---[\s\S]*?---\r?\n/, '')
+          .replace(/---[\s\S]*?\*Conexiones.*\*[\s\S]*$/, '')
+          .replace(/```[a-zA-Z]*\n?/g, ' ')
+          .replace(/[#*`_>~|]/g, ' '));
+
         memories.push({
           title,
           category,
-          summary: summary.slice(0, 130),
+          summary: summary.slice(0, 180),
           tags,
+          bodyExcerpt: bodyClean.slice(0, 2000),
           relPath: `Antigravity/Memoria/${f}`,
           updated: stat.mtime.toISOString().split('T')[0],
         });
@@ -459,6 +479,11 @@ function extractKeywords(str) {
 }
 
 function runTriage(vaultPath, query) {
+  const syncEngine = getSyncEngine();
+  if (syncEngine && typeof syncEngine.triageContext === 'function') {
+    return syncEngine.triageContext(vaultPath, query);
+  }
+
   if (!query || query.trim() === '') {
     return { hasAntecedents: false, recommendation: 'Consulta vacía. Procede normalmente.' };
   }
@@ -621,8 +646,23 @@ function runSaveMemory(vaultPath, argsList) {
   for (let i = 0; i < argsList.length; i++) {
     const a = argsList[i];
     if (a === '--title' && argsList[i+1]) { title = cleanText(argsList[i+1]); i++; }
-    else if (a === '--content' && argsList[i+1]) { content = argsList[i+1]; i++; }
+    else if ((a === '--content' || a === '--details' || a === '--body') && argsList[i+1]) { content = argsList[i+1]; i++; }
+    else if ((a === '--b64' || a === '--content-b64' || a === '--base64') && argsList[i+1]) {
+      try { content = Buffer.from(argsList[i+1], 'base64').toString('utf8'); } catch (e) {}
+      i++;
+    }
+    else if (a === '--file' && argsList[i+1]) {
+      try { if (fs.existsSync(argsList[i+1])) content = fs.readFileSync(argsList[i+1], 'utf8'); } catch (e) {}
+      i++;
+    }
+    else if (a === '--stdin') {
+      try { content = fs.readFileSync(0, 'utf8'); } catch (e) {}
+    }
     else if (a === '--summary' && argsList[i+1]) { summary = cleanText(argsList[i+1]); i++; }
+    else if (a === '--summary-b64' && argsList[i+1]) {
+      try { summary = cleanText(Buffer.from(argsList[i+1], 'base64').toString('utf8')); } catch (e) {}
+      i++;
+    }
     else if (a === '--category' && argsList[i+1]) { category = cleanText(argsList[i+1]).toLowerCase(); i++; }
     else if (a === '--tags' && argsList[i+1]) {
       tags = argsList[i+1].split(',').map(t => cleanText(t).toLowerCase());
@@ -1519,11 +1559,34 @@ switch (cmd) {
   case 'learn': {
     let project = null;
     let learnArgs = [...args];
-    if (learnArgs[0] === '--project' && learnArgs[1]) {
-      project = cleanText(learnArgs[1]);
-      learnArgs = learnArgs.slice(2);
+    let b64 = null;
+    let fileArg = null;
+
+    for (let i = 0; i < learnArgs.length; i++) {
+      if (learnArgs[i] === '--project' && learnArgs[i + 1]) {
+        project = cleanText(learnArgs[i + 1]);
+        learnArgs.splice(i, 2);
+        i--;
+      } else if ((learnArgs[i] === '--b64' || learnArgs[i] === '--base64') && learnArgs[i + 1]) {
+        b64 = learnArgs[i + 1];
+        learnArgs.splice(i, 2);
+        i--;
+      } else if (learnArgs[i] === '--file' && learnArgs[i + 1]) {
+        fileArg = learnArgs[i + 1];
+        learnArgs.splice(i, 2);
+        i--;
+      }
     }
-    const learning = learnArgs.join(' ').trim();
+
+    let learning = '';
+    if (b64) {
+      try { learning = Buffer.from(b64, 'base64').toString('utf8').trim(); } catch (e) {}
+    } else if (fileArg && fs.existsSync(fileArg)) {
+      try { learning = fs.readFileSync(fileArg, 'utf8').trim(); } catch (e) {}
+    } else {
+      learning = learnArgs.join(' ').trim();
+    }
+
     if (!learning) {
       console.error(JSON.stringify({ error: 'Especifica la preferencia o aprendizaje sobre el usuario.' }));
       process.exit(1);
@@ -1536,72 +1599,106 @@ switch (cmd) {
       }
     }
 
-    const almaDir = path.join(vault.path, 'Antigravity', 'Alma');
-    if (!fs.existsSync(almaDir)) fs.mkdirSync(almaDir, { recursive: true });
-    const userFile = path.join(almaDir, '00 Perfil de Usuario.md');
+    const isGlobal = !project || project.toLowerCase() === 'global';
     const now = new Date().toISOString().split('T')[0];
     const entry = `- \`[${now}]\` ${learning}`;
 
-    let runnerUser = 'User';
-    const cfgFile = path.join(os.homedir(), '.gemini', 'config', 'antigravity-obsidian.json');
-    if (fs.existsSync(cfgFile)) {
-      try {
-        const c = JSON.parse(fs.readFileSync(cfgFile, 'utf8'));
-        if (c.userName) runnerUser = c.userName;
-      } catch (e) {}
-    }
-    if (runnerUser === 'User') {
-      runnerUser = process.env.USERNAME || process.env.USER || 'User';
-    }
-
-    let content = fs.existsSync(userFile) ? fs.readFileSync(userFile, 'utf8') : `# Perfil de Trabajo — ${runnerUser}\n\n## 4. Aprendizajes y Preferencias Dinámicas Acumuladas\n`;
-    if (content.includes('## 4. Aprendizajes y Preferencias Dinámicas Acumuladas')) {
-      content = content.replace(
-        '## 4. Aprendizajes y Preferencias Dinámicas Acumuladas',
-        `## 4. Aprendizajes y Preferencias Dinámicas Acumuladas\n${entry}`
-      );
-    } else if (content.includes('## 4. Dynamic Learnings & Evolved Preferences')) {
-      content = content.replace(
-        '## 4. Dynamic Learnings & Evolved Preferences',
-        `## 4. Dynamic Learnings & Evolved Preferences\n${entry}`
-      );
-    } else {
-      content += `\n## 4. Aprendizajes y Preferencias Dinámicas Acumuladas\n${entry}\n`;
-    }
-    fs.writeFileSync(userFile, content, 'utf8');
-
-    // Also persist in Project note if a project was targeted
+    let userNoteUpdated = null;
     let projectNoteUpdated = null;
-    if (project) {
+
+    if (isGlobal) {
+      // ONLY update 00 Perfil de Usuario.md
+      const almaDir = path.join(vault.path, 'Antigravity', 'Alma');
+      if (!fs.existsSync(almaDir)) fs.mkdirSync(almaDir, { recursive: true });
+      const userFile = path.join(almaDir, '00 Perfil de Usuario.md');
+
+      let runnerUser = 'User';
+      const cfgFile = path.join(os.homedir(), '.gemini', 'config', 'antigravity-obsidian.json');
+      if (fs.existsSync(cfgFile)) {
+        try {
+          const c = JSON.parse(fs.readFileSync(cfgFile, 'utf8'));
+          if (c.userName) runnerUser = c.userName;
+        } catch (e) {}
+      }
+      if (runnerUser === 'User') {
+        runnerUser = process.env.USERNAME || process.env.USER || 'User';
+      }
+
+      let content = fs.existsSync(userFile) ? fs.readFileSync(userFile, 'utf8') : `# Perfil de Trabajo — ${runnerUser}\n\n## 4. Aprendizajes y Preferencias Dinámicas Acumuladas\n`;
+      if (content.includes('## 4. Aprendizajes y Preferencias Dinámicas Acumuladas')) {
+        content = content.replace(
+          '## 4. Aprendizajes y Preferencias Dinámicas Acumuladas',
+          `## 4. Aprendizajes y Preferencias Dinámicas Acumuladas\n${entry}`
+        );
+      } else if (content.includes('## 4. Dynamic Learnings & Evolved Preferences')) {
+        content = content.replace(
+          '## 4. Dynamic Learnings & Evolved Preferences',
+          `## 4. Dynamic Learnings & Evolved Preferences\n${entry}`
+        );
+      } else {
+        content += `\n## 4. Aprendizajes y Preferencias Dinámicas Acumuladas\n${entry}\n`;
+      }
+      fs.writeFileSync(userFile, content, 'utf8');
+      userNoteUpdated = userFile;
+    } else {
+      // Scoped to project: ONLY update the Project note (Antigravity/Proyectos/<Project>.md)
       const projDir = path.join(vault.path, 'Antigravity', 'Proyectos');
-      if (fs.existsSync(projDir)) {
-        let projFile = path.join(projDir, `${project}.md`);
-        if (!fs.existsSync(projFile)) {
-          for (const f of fs.readdirSync(projDir)) {
-            if (f.toLowerCase() === `${project.toLowerCase()}.md`) {
-              projFile = path.join(projDir, f);
-              break;
-            }
+      if (!fs.existsSync(projDir)) fs.mkdirSync(projDir, { recursive: true });
+      let projFile = path.join(projDir, `${project}.md`);
+      if (!fs.existsSync(projFile)) {
+        for (const f of fs.readdirSync(projDir)) {
+          if (f.toLowerCase() === `${project.toLowerCase()}.md`) {
+            projFile = path.join(projDir, f);
+            break;
           }
         }
-        if (fs.existsSync(projFile)) {
-          let pContent = fs.readFileSync(projFile, 'utf8');
-          const ruleHeader = '## Reglas y Condiciones Obligatorias del Proyecto';
-          const ruleHeaderAlt = '## Project Rules & Constraints';
-          if (pContent.includes(ruleHeader)) {
-            pContent = pContent.replace(ruleHeader, `${ruleHeader}\n${entry}`);
-          } else if (pContent.includes(ruleHeaderAlt)) {
-            pContent = pContent.replace(ruleHeaderAlt, `${ruleHeaderAlt}\n${entry}`);
+      }
+      if (fs.existsSync(projFile)) {
+        let pContent = fs.readFileSync(projFile, 'utf8');
+        const ruleHeader = '## Reglas y Condiciones Obligatorias del Proyecto';
+        const ruleHeaderAlt = '## Project Rules & Constraints';
+        if (pContent.includes(ruleHeader)) {
+          pContent = pContent.replace(ruleHeader, `${ruleHeader}\n${entry}`);
+        } else if (pContent.includes(ruleHeaderAlt)) {
+          pContent = pContent.replace(ruleHeaderAlt, `${ruleHeaderAlt}\n${entry}`);
+        } else {
+          const splitIdx = pContent.lastIndexOf('---');
+          if (splitIdx !== -1) {
+            pContent = pContent.slice(0, splitIdx) + `## Reglas y Condiciones Obligatorias del Proyecto\n${entry}\n\n` + pContent.slice(splitIdx);
           } else {
-            pContent = pContent.replace('---', `## Reglas y Condiciones Obligatorias del Proyecto\n${entry}\n\n---`);
+            pContent += `\n## Reglas y Condiciones Obligatorias del Proyecto\n${entry}\n`;
           }
-          fs.writeFileSync(projFile, pContent, 'utf8');
-          projectNoteUpdated = projFile;
         }
+        fs.writeFileSync(projFile, pContent, 'utf8');
+        projectNoteUpdated = projFile;
+      } else {
+        const newProjContent = `---
+title: "Proyecto: ${project}"
+type: antigravity-project
+project: "${project}"
+tags:
+  - antigravity/proyecto
+created: ${now}
+updated: ${now}
+---
+
+# Proyecto: ${project}
+
+> [!INFO] **Dossier de Proyecto y Condiciones**
+> Blueprint y reglas técnicas de ${project}.
+
+## Reglas y Condiciones Obligatorias del Proyecto
+${entry}
+
+---
+*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Indice de Proyectos]]
+`;
+        fs.writeFileSync(projFile, newProjContent, 'utf8');
+        projectNoteUpdated = projFile;
       }
     }
 
-    // Also update global GEMINI.md & AGENTS.md rules immediately
+    // Refresh rules and manifest
     try {
       const installer = getSkillInstaller();
       if (installer && typeof installer.installSkillAndRules === 'function') {
@@ -1611,9 +1708,9 @@ switch (cmd) {
 
     console.log(JSON.stringify({
       status: 'ok',
-      message: 'Aprendizaje registrado en Perfil de Usuario' + (projectNoteUpdated ? ' y en la ficha del Proyecto' : '') + '.',
+      scope: isGlobal ? 'global' : 'project',
+      target: isGlobal ? userNoteUpdated : projectNoteUpdated,
       entry,
-      projectNoteUpdated,
     }, null, 2));
     break;
   }
@@ -2447,11 +2544,14 @@ ${skillsSection}
           if (mP) proj = mP[1].trim();
           const mD = c.match(/^date:\s*["']?([^"'\r\n]+)["']?/m);
           if (mD) date = mD[1].trim();
-          const mT = c.match(/^time:\s*["']?([^"'\r\n]+)["']?/m);
+          const mT = c.match(/^updated:\s*["']?([^"'\r\n]+)["']?/m) || c.match(/^time:\s*["']?([^"'\r\n]+)["']?/m);
           if (mT) time = mT[1].trim();
-          const mSum = c.match(/>\s*\[!NOTE\]\s*\*\*Resumen[^\r\n]*\*\*\r?\n>\s*([^\r\n]+)/i)
+          const mSum = c.match(/>\s*\[!NOTE\]\s*\*\*(?:Último Hito|Resumen)[^\r\n]*\*\*\r?\n>\s*([^\r\n]+)/i)
             || c.match(/^summary:\s*["']?([^"'\r\n]+)["']?/m);
           if (mSum) summary = mSum[1].trim();
+
+          const milestoneMatches = c.match(/##\s*\d{2}:\d{2}\s*[—–-]/g) || [];
+          const milestonesCount = milestoneMatches.length;
 
           const stat = fs.statSync(fp);
           list.push({
@@ -2462,6 +2562,7 @@ ${skillsSection}
             date: date || stat.mtime.toISOString().split('T')[0],
             time: time || '—',
             summary: summary || 'Sin resumen',
+            milestones: milestonesCount,
             mtime: stat.mtimeMs
           });
         } catch (e) {}
@@ -2474,7 +2575,8 @@ ${skillsSection}
         rows = '| *Aún no hay sesiones registradas* | — | — | — | — |\n';
       } else {
         for (const s of list) {
-          rows += `| ${s.date} | ${s.time} | [[Proyecto: ${s.project}]] | ${s.summary.replace(/\|/g, '-')} | [[${s.base}]] |\n`;
+          const badge = s.milestones > 1 ? ` (${s.milestones} hitos)` : '';
+          rows += `| ${s.date} | ${s.time} | [[Proyecto: ${s.project}]] | ${s.summary.replace(/\|/g, '-')} | [[${s.base}]]${badge} |\n`;
         }
       }
 
@@ -2512,13 +2614,27 @@ ${rows}
       const pName = flags.project || flags.p || positional[1] || path.basename(process.cwd());
       let summary = flags.summary || flags.s || flags.title || '';
       let content = flags.content || flags.c || flags.details || flags.body || '';
+
+      // Decode base64 or file payloads if provided (avoids PowerShell escaping issues)
+      if (flags.b64 || flags['content-b64'] || flags.base64) {
+        try { content = Buffer.from(flags.b64 || flags['content-b64'] || flags.base64, 'base64').toString('utf8'); } catch (e) {}
+      } else if (flags.file && fs.existsSync(flags.file)) {
+        try { content = fs.readFileSync(flags.file, 'utf8'); } catch (e) {}
+      } else if (flags.stdin) {
+        try { content = fs.readFileSync(0, 'utf8'); } catch (e) {}
+      }
+
+      if (flags['summary-b64']) {
+        try { summary = cleanText(Buffer.from(flags['summary-b64'], 'base64').toString('utf8')); } catch (e) {}
+      }
+
       const tags = (flags.tags ? flags.tags.split(',') : []).map(t => cleanText(t).toLowerCase());
       if (!tags.includes('antigravity/sesion')) tags.push('antigravity/sesion');
       const safeProject = sanitize(pName);
 
       if (!summary && content) summary = cleanText(content).slice(0, 140);
       if (!summary && !content) {
-        console.error(JSON.stringify({ error: 'Uso: node obsidian.js session save --project "<nombre>" --summary "<resumen>" --content "<detalles y decisiones>"' }));
+        console.error(JSON.stringify({ error: 'Uso: node obsidian.js session save --project "<nombre>" --summary "<resumen>" --content "<detalles>" [--b64 <base64>] [--file <ruta>]' }));
         process.exit(1);
       }
 
@@ -2526,32 +2642,67 @@ ${rows}
       const dateStr = now.toISOString().split('T')[0];
       const hours = String(now.getHours()).padStart(2, '0');
       const mins = String(now.getMinutes()).padStart(2, '0');
-      const timeStr = `${hours}${mins}`;
-      const sessionBase = `${dateStr}_${timeStr} - ${safeProject}`;
+      const sessionBase = `${dateStr} - ${safeProject}`;
       const sessionFile = path.join(sesFolder, `${sessionBase}.md`);
 
-      const sessionMd = `---
-title: "Sesión: ${pName} (${dateStr} ${hours}:${mins})"
-type: antigravity-session
+      const milestoneHeading = `## ${hours}:${mins} — ${summary}`;
+      const milestoneBody = `### Trabajo Realizado y Decisiones Técnicas\n${content || '*Sin detalles adicionales.*'}`;
+
+      let sessionMd = '';
+      let isNew = !fs.existsSync(sessionFile);
+      let totalMilestones = 1;
+
+      if (isNew) {
+        sessionMd = `---
+title: "Sesiones: ${pName} (${dateStr})"
+type: antigravity-session-daily
 project: "${pName}"
 tags:
 ${tags.map(t => `  - ${t}`).join('\n')}
 date: ${dateStr}
-time: "${hours}:${mins}"
-summary: "${summary}"
+updated: "${hours}:${mins}"
+summary: "${summary.replace(/"/g, '\\"')}"
+milestones: 1
 ---
 
-# Sesión: ${pName} — ${dateStr} ${hours}:${mins}
+# Sesiones: ${pName} — ${dateStr}
 
-> [!NOTE] **Resumen de la Sesión**
+> [!NOTE] **Último Hito (${hours}:${mins})**
 > ${summary}
 
-## Trabajo Realizado y Decisiones Técnicas
-${content || '*Sin detalles adicionales.*'}
+${milestoneHeading}
+
+${milestoneBody}
 
 ---
 *Conexiones del Grafo:* [[00 Antigravity Hub]] | [[Proyecto: ${pName}]] | [[00 Indice de Sesiones]]
 `;
+      } else {
+        let existing = fs.readFileSync(sessionFile, 'utf8');
+
+        // Update frontmatter
+        existing = existing.replace(/^updated:\s*["']?[^"'\r\n]+["']?/m, `updated: "${hours}:${mins}"`);
+        existing = existing.replace(/^summary:\s*["']?[^"'\r\n]+["']?/m, `summary: "${summary.replace(/"/g, '\\"')}"`);
+        existing = existing.replace(/^milestones:\s*(\d+)/m, (m, count) => {
+          totalMilestones = parseInt(count, 10) + 1;
+          return `milestones: ${totalMilestones}`;
+        });
+
+        // Update callout
+        if (existing.includes('> [!NOTE] **Último Hito')) {
+          existing = existing.replace(/>\s*\[!NOTE\]\s*\*\*Último Hito[^\r\n]*\*\*\r?\n>\s*[^\r\n]+/i, `> [!NOTE] **Último Hito (${hours}:${mins})**\n> ${summary}`);
+        } else if (existing.includes('> [!NOTE] **Resumen')) {
+          existing = existing.replace(/>\s*\[!NOTE\]\s*\*\*Resumen[^\r\n]*\*\*\r?\n>\s*[^\r\n]+/i, `> [!NOTE] **Último Hito (${hours}:${mins})**\n> ${summary}`);
+        }
+
+        const footerIdx = existing.lastIndexOf('\n---');
+        if (footerIdx !== -1) {
+          sessionMd = existing.slice(0, footerIdx) + `\n\n${milestoneHeading}\n\n${milestoneBody}\n` + existing.slice(footerIdx);
+        } else {
+          sessionMd = existing + `\n\n${milestoneHeading}\n\n${milestoneBody}\n`;
+        }
+      }
+
       fs.writeFileSync(sessionFile, sessionMd, 'utf8');
       updateSessionsIndex();
 
@@ -2560,7 +2711,8 @@ ${content || '*Sin detalles adicionales.*'}
       if (fs.existsSync(projNote)) {
         try {
           let pContent = fs.readFileSync(projNote, 'utf8');
-          const row = `| ${dateStr} ${hours}:${mins} | ${summary.replace(/\|/g, '-')} | [[${sessionBase}]] |\n`;
+          const cleanAnchor = `${hours}:${mins} — ${summary}`.replace(/[#|^[\]]/g, '').trim();
+          const row = `| ${dateStr} ${hours}:${mins} | ${summary.replace(/\|/g, '-')} | [[${sessionBase}#${cleanAnchor}|${sessionBase}]] |\n`;
           if (pContent.includes('## Bitácora de Sesiones y Avances Recientes')) {
             pContent = pContent.replace(/(## Bitácora de Sesiones y Avances Recientes[^\r\n]*\r?\n)(\| Fecha[^\r\n]*\r?\n\|---[^\r\n]*\r?\n)([\s\S]*?)(\r?\n##|$)/, (m, h, tableH, body, nextH) => {
               const cleanBody = body.replace(/\|\s*\*Sin sesiones registradas aún\*[^\r\n]*\r?\n/g, '').trim();
@@ -2575,10 +2727,144 @@ ${content || '*Sin detalles adicionales.*'}
       console.log(JSON.stringify({
         status: 'ok',
         action: 'session_saved',
+        model: 'daily_log',
         project: pName,
         summary,
         sessionFile,
         note: sessionBase,
+        milestones: totalMilestones,
+      }, null, 2));
+      break;
+    }
+
+    if (sesSub === 'consolidate') {
+      const files = fs.readdirSync(sesFolder).filter(f => f.endsWith('.md') && !f.startsWith('00'));
+      const groups = {};
+      for (const f of files) {
+        const legacyMatch = f.match(/^(\d{4}-\d{2}-\d{2})_(\d{2})(\d{2})\s*-\s*(.+)\.md$/);
+        const dailyMatch = f.match(/^(\d{4}-\d{2}-\d{2})\s*-\s*(.+)\.md$/);
+        if (legacyMatch) {
+          const [, date, hh, mm, proj] = legacyMatch;
+          const key = `${date}___${proj}`;
+          if (!groups[key]) groups[key] = { date, project: proj, files: [] };
+          groups[key].files.push({ file: f, time: `${hh}:${mm}`, fullPath: path.join(sesFolder, f), isLegacy: true });
+        } else if (dailyMatch) {
+          const [, date, proj] = dailyMatch;
+          const key = `${date}___${proj}`;
+          if (!groups[key]) groups[key] = { date, project: proj, files: [] };
+          groups[key].files.push({ file: f, time: 'daily', fullPath: path.join(sesFolder, f), isDaily: true });
+        }
+      }
+
+      let consolidatedCount = 0;
+      for (const [, group] of Object.entries(groups)) {
+        const hasLegacy = group.files.some(item => item.isLegacy);
+        if (!hasLegacy) continue;
+
+        const targetDailyBase = `${group.date} - ${group.project}`;
+        const targetDailyPath = path.join(sesFolder, `${targetDailyBase}.md`);
+
+        group.files.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+
+        const allMilestones = [];
+        let pName = group.project;
+        let lastSummary = '';
+        let lastTime = '';
+
+        for (const item of group.files) {
+          try {
+            const fileContent = fs.readFileSync(item.fullPath, 'utf8');
+            const mP = fileContent.match(/^project:\s*["']?([^"'\r\n]+)["']?/m);
+            if (mP) pName = mP[1].trim();
+
+            if (item.isLegacy) {
+              const mSum = fileContent.match(/>\s*\[!NOTE\]\s*\*\*Resumen[^\r\n]*\*\*\r?\n>\s*([^\r\n]+)/i)
+                || fileContent.match(/^summary:\s*["']?([^"'\r\n]+)["']?/m);
+              const summary = mSum ? mSum[1].trim() : 'Checkpoint de trabajo';
+              const mWork = fileContent.match(/##\s*Trabajo Realizado y Decisiones Técnicas[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
+              const work = mWork ? mWork[1].trim() : '';
+
+              allMilestones.push({
+                time: item.time,
+                summary,
+                details: work,
+              });
+              lastSummary = summary;
+              lastTime = item.time;
+            } else if (item.isDaily) {
+              const mRegex = /##\s*(\d{2}:\d{2})\s*[—–-]\s*([^\r\n]+)\r?\n([\s\S]*?)(?=(?:\r?\n##\s*\d{2}:\d{2}\s*[—–-])|(?:\r?\n---)|$)/g;
+              let mMatch;
+              while ((mMatch = mRegex.exec(fileContent)) !== null) {
+                allMilestones.push({
+                  time: mMatch[1],
+                  summary: mMatch[2].trim(),
+                  details: mMatch[3].trim(),
+                });
+                lastSummary = mMatch[2].trim();
+                lastTime = mMatch[1];
+              }
+            }
+          } catch (e) {}
+        }
+
+        const uniqueMilestones = [];
+        const seen = new Set();
+        for (const m of allMilestones) {
+          const mKey = `${m.time}_${m.summary}`;
+          if (!seen.has(mKey)) {
+            seen.add(mKey);
+            uniqueMilestones.push(m);
+          }
+        }
+        uniqueMilestones.sort((a, b) => a.time.localeCompare(b.time));
+
+        if (uniqueMilestones.length > 0) {
+          lastSummary = uniqueMilestones[uniqueMilestones.length - 1].summary;
+          lastTime = uniqueMilestones[uniqueMilestones.length - 1].time;
+        }
+
+        const milestoneBlocks = uniqueMilestones.map(m =>
+          `## ${m.time} — ${m.summary}\n\n### Trabajo Realizado y Decisiones Técnicas\n${m.details || '*Sin detalles adicionales.*'}`
+        ).join('\n\n');
+
+        const dailyMd = `---
+title: "Sesiones: ${pName} (${group.date})"
+type: antigravity-session-daily
+project: "${pName}"
+tags:
+  - antigravity/sesion
+date: ${group.date}
+updated: "${lastTime || '12:00'}"
+summary: "${lastSummary.replace(/"/g, '\\"')}"
+milestones: ${uniqueMilestones.length}
+---
+
+# Sesiones: ${pName} — ${group.date}
+
+> [!NOTE] **Último Hito (${lastTime || '12:00'})**
+> ${lastSummary}
+
+${milestoneBlocks}
+
+---
+*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[Proyecto: ${pName}]] | [[00 Indice de Sesiones]]
+`;
+
+        fs.writeFileSync(targetDailyPath, dailyMd, 'utf8');
+
+        for (const item of group.files) {
+          if (item.isLegacy && fs.existsSync(item.fullPath)) {
+            try { fs.unlinkSync(item.fullPath); } catch (e) {}
+          }
+        }
+        consolidatedCount += group.files.filter(f => f.isLegacy).length;
+      }
+
+      updateSessionsIndex();
+      console.log(JSON.stringify({
+        status: 'ok',
+        action: 'consolidated',
+        legacyFilesMerged: consolidatedCount,
       }, null, 2));
       break;
     }
@@ -2607,20 +2893,46 @@ ${content || '*Sin detalles adicionales.*'}
         break;
       }
       const latest = list[0];
-      const mSum = latest.content.match(/>\s*\[!NOTE\]\s*\*\*Resumen[^\r\n]*\*\*\r?\n>\s*([^\r\n]+)/i);
-      const summary = mSum ? mSum[1].trim() : 'Sin resumen';
-      const mWork = latest.content.match(/##\s*Trabajo Realizado y Decisiones Técnicas[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
-      const work = mWork ? mWork[1].trim() : '';
+
+      // Parse milestones
+      const milestones = [];
+      const mRegex = /##\s*(\d{2}:\d{2})\s*[—–-]\s*([^\r\n]+)\r?\n([\s\S]*?)(?=(?:\r?\n##\s*\d{2}:\d{2}\s*[—–-])|(?:\r?\n---)|$)/g;
+      let mMatch;
+      while ((mMatch = mRegex.exec(latest.content)) !== null) {
+        milestones.push({
+          time: mMatch[1],
+          summary: mMatch[2].trim(),
+          details: mMatch[3].trim(),
+        });
+      }
+
+      let summary = '';
+      let work = '';
+      let timeLabel = '';
+
+      if (milestones.length > 0) {
+        const lastM = milestones[milestones.length - 1];
+        summary = lastM.summary;
+        work = lastM.details;
+        timeLabel = ` a las ${lastM.time}`;
+      } else {
+        const mSum = latest.content.match(/>\s*\[!NOTE\]\s*\*\*(?:Último Hito|Resumen)[^\r\n]*\*\*\r?\n>\s*([^\r\n]+)/i)
+          || latest.content.match(/^summary:\s*["']?([^"'\r\n]+)["']?/m);
+        summary = mSum ? mSum[1].trim() : 'Sin resumen';
+        const mWork = latest.content.match(/##\s*Trabajo Realizado y Decisiones Técnicas[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
+        work = mWork ? mWork[1].trim() : '';
+      }
 
       if (flags.json) {
         console.log(JSON.stringify({
           project: latest.project,
           sessionFile: latest.file,
           summary,
-          details: work
+          details: work,
+          totalMilestones: milestones.length || 1,
         }, null, 2));
       } else {
-        console.log(`[SESION PREVIA: ${latest.project || 'General'}]\nResumen: ${summary}\n\nDetalles:\n${work}`);
+        console.log(`[SESION PREVIA: ${latest.project || 'General'}${timeLabel}]\nResumen: ${summary}\n\nDetalles:\n${work}`);
       }
       break;
     }
@@ -2663,6 +2975,51 @@ ${content || '*Sin detalles adicionales.*'}
     const encJson = fs.readFileSync(inFile, 'utf8');
     const res = syncEngine.importVaultEncrypted(vault.path, pwd, encJson);
     console.log(JSON.stringify({ status: 'ok', restoredFiles: res.restoredFiles }, null, 2));
+    break;
+  }
+
+  case 'mcp': {
+    const { flags, positional } = parseFlags(args);
+    const sub = (positional[0] || 'status').toLowerCase();
+    const mcpServerFile = path.join(__dirname, 'mcp-server.js');
+    const home = os.homedir();
+    const agyMcpDir = path.join(home, '.gemini', 'antigravity-ide', 'mcp', 'antigravity-obsidian');
+
+    if (sub === 'start') {
+      if (fs.existsSync(mcpServerFile)) {
+        require(mcpServerFile);
+      } else {
+        console.error(JSON.stringify({ error: `No se encontró ${mcpServerFile}` }));
+        process.exit(1);
+      }
+      break;
+    }
+
+    if (sub === 'config' || sub === 'schema') {
+      const configJson = {
+        mcpServers: {
+          "antigravity-obsidian": {
+            command: "node",
+            args: [mcpServerFile.replace(/\\/g, '/')],
+            env: {
+              OBSIDIAN_VAULT_PATH: vault.path.replace(/\\/g, '/')
+            }
+          }
+        }
+      };
+      console.log(JSON.stringify(configJson, null, 2));
+      break;
+    }
+
+    const isInstalled = fs.existsSync(agyMcpDir);
+    console.log(JSON.stringify({
+      status: 'ok',
+      mcpServerFile,
+      registeredInIde: isInstalled,
+      vault: vault.name,
+      vaultPath: vault.path,
+      note: 'El servidor MCP está completamente implementado. Para ejecutar en stdio: node obsidian.js mcp start. Para ver la configuración: node obsidian.js mcp config.'
+    }, null, 2));
     break;
   }
 

@@ -2476,11 +2476,20 @@ function buildContextManifest(vaultPath) {
         }
 
         const stat = fs.statSync(fp);
+        const bodyClean = txt
+          .replace(/^---[\s\S]*?---\r?\n/, '')
+          .replace(/---[\s\S]*?\*Conexiones.*\*[\s\S]*$/, '')
+          .replace(/```[a-zA-Z]*\n?/g, ' ')
+          .replace(/[#*`_>~|]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+
         memories.push({
           title,
           category,
-          summary: summary.slice(0, 160),
+          summary: summary.slice(0, 180),
           tags,
+          bodyExcerpt: bodyClean.slice(0, 2000),
           relPath: `Antigravity/Memoria/${f}`,
           updated: stat.mtime.toISOString().split('T')[0],
         });
@@ -2561,68 +2570,165 @@ function getContextManifest(vaultPath, forceRebuild = false) {
   return buildContextManifest(vaultPath);
 }
 
+function stemToken(word) {
+  let w = (word || '').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  if (w.length <= 3) return w;
+
+  const esSuffixes = [
+    'amientos', 'amiento', 'imientos', 'imiento',
+    'aciones', 'acion', 'iciones', 'icion',
+    'idades', 'idad', 'mente',
+    'ancias', 'ancia', 'encias', 'encia',
+    'adoras', 'adores', 'adora', 'ador',
+    'abamos', 'abais', 'arian', 'arias', 'aria',
+    'eremos', 'iremos', 'eron',
+    'iendo', 'ando', 'ieron',
+    'ables', 'ibles', 'able', 'ible',
+    'istas', 'ista', 'ismos', 'ismo',
+    'aban', 'abas', 'aron',
+    'ados', 'adas', 'ado', 'ada',
+    'idos', 'idas', 'ido', 'ida',
+    'es', 's'
+  ];
+
+  for (const suf of esSuffixes) {
+    if (w.length - suf.length >= 3 && w.endsWith(suf)) {
+      w = w.slice(0, -suf.length);
+      break;
+    }
+  }
+
+  const enSuffixes = [
+    'ational', 'tional', 'ization', 'ation',
+    'fulness', 'ousness', 'iveness',
+    'encies', 'ency', 'ances', 'ance',
+    'ously', 'fully', 'ively',
+    'izing', 'ising', 'izer',
+    'ating', 'ator',
+    'ments', 'ment',
+    'able', 'ible',
+    'ness', 'ship',
+    'ies', 'ied',
+    'ing', 'ed',
+    'es', 's'
+  ];
+
+  for (const suf of enSuffixes) {
+    if (w.length - suf.length >= 3 && w.endsWith(suf)) {
+      w = w.slice(0, -suf.length);
+      break;
+    }
+  }
+
+  return w;
+}
+
 function tokenize(text) {
   if (!text) return [];
   const STOPWORDS = new Set([
     'de', 'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'y', 'o', 'en', 'a',
     'con', 'por', 'para', 'del', 'al', 'que', 'es', 'son', 'fue', 'era', 'como', 'se',
-    'su', 'sus', 'mi', 'mis', 'tu', 'tus', 'the', 'and', 'in', 'on', 'for', 'with', 'to', 'at', 'is', 'it'
+    'su', 'sus', 'mi', 'mis', 'tu', 'tus', 'the', 'and', 'in', 'on', 'for', 'with', 'to',
+    'at', 'is', 'it', 'this', 'that', 'from', 'by', 'an', 'be', 'or', 'as', 'not', 'no'
   ]);
-  return text
+
+  const expanded = text
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[_\-.:/\\()[\]{}'"`]/g, ' ');
+
+  const rawWords = expanded
     .toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9_\-\s]/g, ' ')
+    .replace(/[^a-z0-9\s]/g, ' ')
     .split(/\s+/)
     .filter(w => w.length >= 2 && !STOPWORDS.has(w));
+
+  const stems = rawWords.map(stemToken).filter(w => w.length >= 2 && !STOPWORDS.has(w));
+  return [...new Set([...rawWords, ...stems])];
 }
 
-function computeBM25(corpus, queryTokens, k1 = 1.2, b = 0.75) {
+function computeFullBM25(corpus, queryTokens, k1 = 1.2, b = 0.75) {
   const N = corpus.length;
   if (N === 0 || queryTokens.length === 0) return [];
 
-  let totalLen = 0;
-  const docTokensList = corpus.map(doc => {
-    const text = `${doc.title || doc.name || ''} ${(doc.tags || []).join(' ')} ${doc.summary || ''} ${doc.description || ''}`;
-    const tokens = tokenize(text);
-    totalLen += tokens.length;
-    return tokens;
+  const docData = corpus.map(doc => {
+    const tTokens = tokenize(doc.title || doc.name || '');
+    const tagTokens = tokenize((doc.tags || []).join(' '));
+    const sTokens = tokenize(doc.summary || doc.description || '');
+    const bTokens = tokenize(doc.bodyExcerpt || doc.body || doc.solution || '');
+
+    const weightedLen = 5.0 * tTokens.length + 3.5 * tagTokens.length + 2.5 * sTokens.length + 1.0 * bTokens.length;
+    const allTokens = [...tTokens, ...tagTokens, ...sTokens, ...bTokens];
+
+    return {
+      tTokens,
+      tagTokens,
+      sTokens,
+      bTokens,
+      weightedLen: Math.max(weightedLen, 1),
+      uniqueTokens: new Set(allTokens)
+    };
   });
-  const avgdl = totalLen / N || 1;
+
+  const avgdl = docData.reduce((acc, d) => acc + d.weightedLen, 0) / N || 1;
 
   const df = {};
   for (const q of queryTokens) {
     let count = 0;
-    for (const tokens of docTokensList) {
-      if (tokens.includes(q)) count++;
+    for (const d of docData) {
+      if (d.uniqueTokens.has(q)) count++;
     }
     df[q] = count;
   }
 
   return corpus.map((doc, idx) => {
-    const tokens = docTokensList[idx];
-    const docLen = tokens.length;
-    const tf = {};
-    for (const t of tokens) {
-      tf[t] = (tf[t] || 0) + 1;
-    }
-
+    const d = docData[idx];
     let score = 0;
+    const matchedTerms = [];
+
     for (const q of queryTokens) {
-      if (df[q] > 0 && tf[q]) {
+      if (df[q] > 0 && d.uniqueTokens.has(q)) {
+        matchedTerms.push(q);
+        const countT = d.tTokens.filter(t => t === q).length;
+        const countTag = d.tagTokens.filter(t => t === q).length;
+        const countS = d.sTokens.filter(t => t === q).length;
+        const countB = d.bTokens.filter(t => t === q).length;
+
+        const weightedTF = 5.0 * countT + 3.5 * countTag + 2.5 * countS + 1.0 * countB;
         const idf = Math.log(1 + (N - df[q] + 0.5) / (df[q] + 0.5));
-        const num = tf[q] * (k1 + 1);
-        const denom = tf[q] + k1 * (1 - b + b * (docLen / avgdl));
+        const num = weightedTF * (k1 + 1);
+        const denom = weightedTF + k1 * (1 - b + b * (d.weightedLen / avgdl));
         score += idf * (num / denom);
       }
     }
 
-    // Exact title/name boost
-    const titleNorm = (doc.title || doc.name || '').toLowerCase();
+    const titleNorm = (doc.title || doc.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     for (const q of queryTokens) {
-      if (titleNorm.includes(q)) score += 3.5;
+      if (titleNorm.includes(q)) score += 3.0;
     }
 
-    return { ...doc, score };
+    let snippet = '';
+    const fullText = (doc.bodyExcerpt || doc.body || doc.solution || doc.summary || '');
+    if (fullText && matchedTerms.length > 0) {
+      const lowerText = fullText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      let bestPos = -1;
+      for (const term of matchedTerms) {
+        const pos = lowerText.indexOf(term);
+        if (pos !== -1) {
+          bestPos = pos;
+          break;
+        }
+      }
+      if (bestPos !== -1) {
+        const start = Math.max(0, bestPos - 60);
+        const end = Math.min(fullText.length, bestPos + 140);
+        snippet = (start > 0 ? '...' : '') + fullText.slice(start, end).replace(/\s+/g, ' ').trim() + (end < fullText.length ? '...' : '');
+      }
+    }
+
+    return { ...doc, score, matchedTerms, snippet };
   });
 }
 
@@ -2640,7 +2746,7 @@ function triageContext(vaultPath, query) {
 
   // 1. BM25 on Skills
   let skillMatch = null;
-  const scoredSkills = computeBM25(manifest.skills || [], queryTokens);
+  const scoredSkills = computeFullBM25(manifest.skills || [], queryTokens);
   scoredSkills.sort((a, b) => b.score - a.score);
   if (scoredSkills.length > 0 && scoredSkills[0].score >= 2.0) {
     const best = scoredSkills[0];
@@ -2649,27 +2755,28 @@ function triageContext(vaultPath, query) {
       scope: best.scope,
       summary: best.description || 'Procedimiento especializado',
       advice: `Usa la Skill [[${best.name}]] para este flujo de trabajo. Lee su SKILL.md para instrucciones operativas.`,
-      score: best.score,
+      score: Math.round(best.score * 100) / 100,
     };
   }
 
-  // 2. BM25 on Memories
-  const scoredMemories = computeBM25(manifest.memories || [], queryTokens);
+  // 2. Full-Text BM25 on Memories (ranking title, tags, summary, and full body content)
+  const scoredMemories = computeFullBM25(manifest.memories || [], queryTokens);
   scoredMemories.sort((a, b) => b.score - a.score);
-  const relevantMemories = scoredMemories.filter(m => m.score >= 1.5);
-  const topMemories = relevantMemories.slice(0, 2).map(({ title, category, summary, relPath, score }) => ({
+  const relevantMemories = scoredMemories.filter(m => m.score >= 1.2);
+  const topMemories = relevantMemories.slice(0, 2).map(({ title, category, summary, relPath, score, snippet }) => ({
     title,
     category,
     summary,
+    snippet: snippet || undefined,
     relPath,
-    score,
+    score: Math.round(score * 100) / 100,
   }));
 
   const hasAntecedents = topMemories.length > 0 || !!skillMatch;
 
   let recommendation = '';
   if (topMemories.length > 0) {
-    recommendation = 'Antecedente encontrado con ranking BM25: Usa directamente el resumen arriba indicado. Usa "peek" si necesitas ver el código exacto.';
+    recommendation = 'Antecedente encontrado con ranking BM25: Aplica directamente el resumen arriba indicado. Usa "peek" si necesitas ver el código exacto.';
   } else if (skillMatch) {
     recommendation = `Flujo técnico cubierto por la Skill [[${skillMatch.name}]]. Consulta sus instrucciones operativas.`;
   } else {
@@ -2919,11 +3026,14 @@ function syncSessionsIndex(vaultPath) {
       if (mP) proj = mP[1].trim();
       const mD = c.match(/^date:\s*["']?([^"'\r\n]+)["']?/m);
       if (mD) date = mD[1].trim();
-      const mT = c.match(/^time:\s*["']?([^"'\r\n]+)["']?/m);
+      const mT = c.match(/^updated:\s*["']?([^"'\r\n]+)["']?/m) || c.match(/^time:\s*["']?([^"'\r\n]+)["']?/m);
       if (mT) time = mT[1].trim();
-      const mSum = c.match(/>\s*\[!NOTE\]\s*\*\*Resumen[^\r\n]*\*\*\r?\n>\s*([^\r\n]+)/i)
+      const mSum = c.match(/>\s*\[!NOTE\]\s*\*\*(?:Último Hito|Resumen)[^\r\n]*\*\*\r?\n>\s*([^\r\n]+)/i)
         || c.match(/^summary:\s*["']?([^"'\r\n]+)["']?/m);
       if (mSum) summary = mSum[1].trim();
+
+      const milestoneMatches = c.match(/##\s*\d{2}:\d{2}\s*[—–-]/g) || [];
+      const milestonesCount = milestoneMatches.length;
 
       const stat = fs.statSync(fp);
       list.push({
@@ -2934,6 +3044,7 @@ function syncSessionsIndex(vaultPath) {
         date: date || stat.mtime.toISOString().split('T')[0],
         time: time || '—',
         summary: summary || 'Sin resumen',
+        milestones: milestonesCount,
         mtime: stat.mtimeMs,
       });
     } catch (e) {}
@@ -2946,7 +3057,8 @@ function syncSessionsIndex(vaultPath) {
     rows = '| *Aún no hay sesiones registradas* | — | — | — | — |\n';
   } else {
     for (const s of list) {
-      rows += `| ${s.date} | ${s.time} | [[Proyecto: ${s.project}]] | ${s.summary.replace(/\|/g, '-')} | [[${s.base}]] |\n`;
+      const badge = s.milestones > 1 ? ` (${s.milestones} hitos)` : '';
+      rows += `| ${s.date} | ${s.time} | [[Proyecto: ${s.project}]] | ${s.summary.replace(/\|/g, '-')} | [[${s.base}]]${badge} |\n`;
     }
   }
 
@@ -2998,8 +3110,7 @@ function saveSessionCheckpoint(vaultPath, options = {}) {
   const dateStr = now.toISOString().split('T')[0];
   const hours = String(now.getHours()).padStart(2, '0');
   const mins = String(now.getMinutes()).padStart(2, '0');
-  const timeStr = `${hours}${mins}`;
-  const sessionBase = `${dateStr}_${timeStr} - ${safeProject}`;
+  const sessionBase = `${dateStr} - ${safeProject}`;
   const sessionFile = path.join(sesFolder, `${sessionBase}.md`);
 
   const tags = ['antigravity/sesion'];
@@ -3007,28 +3118,60 @@ function saveSessionCheckpoint(vaultPath, options = {}) {
     for (const t of options.tags) if (!tags.includes(t)) tags.push(t);
   }
 
-  const sessionMd = `---
-title: "Sesión: ${pName} (${dateStr} ${hours}:${mins})"
-type: antigravity-session
+  const milestoneHeading = `## ${hours}:${mins} — ${summary}`;
+  const milestoneBody = `### Trabajo Realizado y Decisiones Técnicas\n${content || '*Sin detalles adicionales.*'}`;
+
+  let sessionMd = '';
+  let isNew = !fs.existsSync(sessionFile);
+  let totalMilestones = 1;
+
+  if (isNew) {
+    sessionMd = `---
+title: "Sesiones: ${pName} (${dateStr})"
+type: antigravity-session-daily
 project: "${pName}"
 tags:
 ${tags.map(t => `  - ${t}`).join('\n')}
 date: ${dateStr}
-time: "${hours}:${mins}"
+updated: "${hours}:${mins}"
 summary: "${summary.replace(/"/g, '\\"')}"
+milestones: 1
 ---
 
-# Sesión: ${pName} — ${dateStr} ${hours}:${mins}
+# Sesiones: ${pName} — ${dateStr}
 
-> [!NOTE] **Resumen de la Sesión**
+> [!NOTE] **Último Hito (${hours}:${mins})**
 > ${summary}
 
-## Trabajo Realizado y Decisiones Técnicas
-${content || '*Sin detalles adicionales.*'}
+${milestoneHeading}
+
+${milestoneBody}
 
 ---
 *Conexiones del Grafo:* [[00 Antigravity Hub]] | [[Proyecto: ${pName}]] | [[00 Indice de Sesiones]]
 `;
+  } else {
+    let existing = fs.readFileSync(sessionFile, 'utf8');
+    existing = existing.replace(/^updated:\s*["']?[^"'\r\n]+["']?/m, `updated: "${hours}:${mins}"`);
+    existing = existing.replace(/^summary:\s*["']?[^"'\r\n]+["']?/m, `summary: "${summary.replace(/"/g, '\\"')}"`);
+    existing = existing.replace(/^milestones:\s*(\d+)/m, (m, c) => {
+      totalMilestones = parseInt(c, 10) + 1;
+      return `milestones: ${totalMilestones}`;
+    });
+
+    if (existing.includes('> [!NOTE] **Último Hito')) {
+      existing = existing.replace(/>\s*\[!NOTE\]\s*\*\*Último Hito[^\r\n]*\*\*\r?\n>\s*[^\r\n]+/i, `> [!NOTE] **Último Hito (${hours}:${mins})**\n> ${summary}`);
+    } else if (existing.includes('> [!NOTE] **Resumen')) {
+      existing = existing.replace(/>\s*\[!NOTE\]\s*\*\*Resumen[^\r\n]*\*\*\r?\n>\s*[^\r\n]+/i, `> [!NOTE] **Último Hito (${hours}:${mins})**\n> ${summary}`);
+    }
+
+    const footerIdx = existing.lastIndexOf('\n---');
+    if (footerIdx !== -1) {
+      sessionMd = existing.slice(0, footerIdx) + `\n\n${milestoneHeading}\n\n${milestoneBody}\n` + existing.slice(footerIdx);
+    } else {
+      sessionMd = existing + `\n\n${milestoneHeading}\n\n${milestoneBody}\n`;
+    }
+  }
 
   fs.writeFileSync(sessionFile, sessionMd, 'utf8');
   syncSessionsIndex(vaultPath);
@@ -3038,7 +3181,8 @@ ${content || '*Sin detalles adicionales.*'}
   if (fs.existsSync(projNote)) {
     try {
       let pContent = fs.readFileSync(projNote, 'utf8');
-      const row = `| ${dateStr} ${hours}:${mins} | ${summary.replace(/\|/g, '-')} | [[${sessionBase}]] |\n`;
+      const cleanAnchor = `${hours}:${mins} — ${summary}`.replace(/[#|^[\]]/g, '').trim();
+      const row = `| ${dateStr} ${hours}:${mins} | ${summary.replace(/\|/g, '-')} | [[${sessionBase}#${cleanAnchor}|${sessionBase}]] |\n`;
       if (pContent.includes('## Bitácora de Sesiones y Avances Recientes')) {
         pContent = pContent.replace(/(## Bitácora de Sesiones y Avances Recientes[^\r\n]*\r?\n)(\| Fecha[^\r\n]*\r?\n\|---[^\r\n]*\r?\n)([\s\S]*?)(\r?\n##|$)/, (m, h, tableH, body, nextH) => {
           const cleanBody = body.replace(/\|\s*\*Sin sesiones registradas aún\*[^\r\n]*\r?\n/g, '').trim();
