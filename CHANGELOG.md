@@ -5,6 +5,30 @@ All notable changes to the **Obsidian for Antigravity** extension will be docume
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.3] - 2026-10-05
+
+### Fixed
+- **Skill Discovery in Workspace Subdirectories (`resolveWorkspaceRoot`)**:
+  - Implemented recursive parent directory resolution in `sync-engine.js` that traverses upwards looking for `.agents`, `.git`, or `package.json`.
+  - Solves the problem where Antigravity and the extension failed to locate project skills when operating within nested subdirectories of a workspace.
+  - Added Antigravity IDE built-in skills directory (`~/.gemini/antigravity-ide/builtin/skills`) to skill catalog discovery (`listAllSkills`).
+- **Native Tool & Dual Mode Harmony in AI Rules**:
+  - Refactored Section 2b of `rules/obsidian-brain.md` to eliminate restrictive phrasing that prevented the AI from inspecting skills with Antigravity's native `view_file` on `SKILL.md`.
+  - Defined a clear **Dual Operating Mode**: Native MCP tools (`mcp_antigravity-obsidian_*`) as primary high-speed interface when active, standard IDE tools for file operations, and Node CLI as clean fallback when MCP is disabled.
+- **MCP Server Syntax Error**:
+  - Fixed syntax error in `src/mcp-server.js` (line 337: missing closing brace in `obsidian_sync_all` switch case handler) that prevented the MCP server from starting.
+
+### Added
+- **Non-Destructive Safe MCP Management**:
+  - Added robust MCP configuration engine in `sync-engine.js` (`installMcpServer`, `disableMcpServer`, `enableMcpServer`, `getMcpStatus`, `uninstallMcpServer`) targeting `~/.gemini/config/mcp_config.json`.
+  - Preserves all existing third-party MCP servers (e.g. Supabase, MongoDB) with automated `.bak` backup creation before any modification.
+  - Added CLI commands: `node obsidian.js mcp [install|disable|enable|status|uninstall|start|config]`.
+  - Added VS Code commands: `antigravityObsidian.installMcp`, `antigravityObsidian.disableMcp`, and `antigravityObsidian.mcpStatus`.
+  - Added MCP Management control card to Extension Webview panel with one-click installation and toggling.
+  - Added `/obsidian mcp [status|install|disable|enable]` chat slash command integration.
+
+---
+
 ## [1.7.2] - 2026-10-05
 
 ### Fixed

@@ -334,6 +334,8 @@ async function executeTool(name, args) {
             text: `✅ Sincronización completa con Obsidian finalizada:\n- Skills sincronizadas: ${result.skillsCount}\n- Memorias sincronizadas: ${result.memoriesCount}\n- Hub actualizado: ${result.hub}`,
           }],
         };
+      }
+
       case 'obsidian_session_save': {
         const pName = args.project || path.basename(process.cwd());
         const result = syncEngine.saveSessionCheckpoint(vaultPath, {

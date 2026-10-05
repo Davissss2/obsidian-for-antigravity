@@ -642,6 +642,20 @@
     });
   }
 
+  const btnInstallMcp = document.getElementById('btn-install-mcp');
+  if (btnInstallMcp) {
+    btnInstallMcp.addEventListener('click', () => {
+      vscode.postMessage({ type: 'installMcp' });
+    });
+  }
+
+  const btnDisableMcp = document.getElementById('btn-disable-mcp');
+  if (btnDisableMcp) {
+    btnDisableMcp.addEventListener('click', () => {
+      vscode.postMessage({ type: 'disableMcp' });
+    });
+  }
+
   const searchSessions = document.getElementById('search-sessions');
   if (searchSessions) {
     searchSessions.addEventListener('input', (e) => {

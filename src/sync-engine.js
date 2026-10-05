@@ -14,15 +14,43 @@ function sanitizeFilename(name) {
   return name.replace(/[\\/:*?"<>|]/g, '-').trim();
 }
 
+function resolveWorkspaceRoot(startPath) {
+  if (!startPath) return process.cwd();
+  let current = path.resolve(startPath);
+  try {
+    if (fs.existsSync(current) && fs.statSync(current).isFile()) {
+      current = path.dirname(current);
+    }
+  } catch (e) {}
+
+  let checkDir = current;
+  while (checkDir) {
+    if (fs.existsSync(path.join(checkDir, '.agents'))) {
+      return checkDir;
+    }
+    if (fs.existsSync(path.join(checkDir, '.git'))) {
+      return checkDir;
+    }
+    const parent = path.dirname(checkDir);
+    if (!parent || parent === checkDir) break;
+    checkDir = parent;
+  }
+  return current;
+}
+
 function getAntigravityPaths() {
   const home = os.homedir();
   const globalSkillsDir = path.join(home, '.gemini', 'config', 'skills');
+  const builtinSkillsDir = path.join(home, '.gemini', 'antigravity-ide', 'builtin', 'skills');
+  const mcpConfigFile = path.join(home, '.gemini', 'config', 'mcp_config.json');
   return {
     globalSkillsDir,
+    builtinSkillsDir,
     skillsDir: globalSkillsDir,
     knowledgeDir: path.join(home, '.gemini', 'antigravity-ide', 'knowledge'),
     brainDir: path.join(home, '.gemini', 'antigravity-ide', 'brain'),
     configDir: path.join(home, '.gemini', 'config'),
+    mcpConfigFile,
   };
 }
 
@@ -739,8 +767,9 @@ ${bodyText}
   }
 
   // 2. Scan Project Skills (if inside workspace)
-  if (workspaceRoot) {
-    const projSkillsDir = path.join(workspaceRoot, '.agents', 'skills');
+  const effectiveWs = resolveWorkspaceRoot(workspaceRoot || process.cwd());
+  if (effectiveWs) {
+    const projSkillsDir = path.join(effectiveWs, '.agents', 'skills');
     if (fs.existsSync(projSkillsDir)) {
       const entries = fs.readdirSync(projSkillsDir, { withFileTypes: true });
       for (const ent of entries) {
@@ -769,7 +798,7 @@ ${bodyText}
 title: "Skill: ${cleanName}"
 type: antigravity-skill
 scope: project
-project: "${path.basename(workspaceRoot)}"
+project: "${path.basename(effectiveWs)}"
 tags:
   - antigravity/skill
   - antigravity/skill/project
@@ -780,7 +809,7 @@ updated: ${nowStr}
 
 > [!INFO] **Metadatos de la Skill**
 > - **Nombre**: \`${cleanName}\`
-> - **Ámbito**: Proyecto actual (\`${path.basename(workspaceRoot)}\`)
+> - **Ámbito**: Proyecto actual (\`${path.basename(effectiveWs)}\`)
 > - **Descripción**: ${parsed.description || 'Sin descripción'}
 
 ## Instrucciones del Agente
@@ -788,7 +817,7 @@ updated: ${nowStr}
 ${bodyText}
 
 ---
-*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Indice de Skills]] | [[${path.basename(workspaceRoot)}]]
+*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Indice de Skills]] | [[${path.basename(effectiveWs)}]]
 `;
             fs.writeFileSync(obsFile, obsContent, 'utf8');
             syncedSkills.push({ name: cleanName, scope: 'project', path: obsFile, description: parsed.description || '' });
@@ -1108,13 +1137,13 @@ Total de memorias registradas: **${allFiles.length}**
 // -------------------------------------------------------------
 
 function listAllSkills(vaultPath, workspaceRoot, options = {}) {
-  const { globalSkillsDir } = getAntigravityPaths();
+  const { globalSkillsDir, builtinSkillsDir } = getAntigravityPaths();
   const scopeFilter = (options.scope || 'all').toLowerCase();
   const query = (options.query || '').toLowerCase().trim();
   const skillsMap = new Map();
 
   function scanDir(dir, scope) {
-    if (!fs.existsSync(dir)) return;
+    if (!dir || !fs.existsSync(dir)) return;
     try {
       const entries = fs.readdirSync(dir, { withFileTypes: true });
       for (const ent of entries) {
@@ -1164,8 +1193,13 @@ function listAllSkills(vaultPath, workspaceRoot, options = {}) {
     scanDir(globalSkillsDir, 'global');
   }
 
+  // 1b. Scan Antigravity built-in skills
+  if (scopeFilter === 'all' || scopeFilter === 'builtin' || scopeFilter === 'global') {
+    scanDir(builtinSkillsDir, 'builtin');
+  }
+
   // 2. Scan workspace skills
-  const effectiveWs = workspaceRoot || process.cwd();
+  const effectiveWs = resolveWorkspaceRoot(workspaceRoot || process.cwd());
   if (scopeFilter === 'all' || scopeFilter === 'project') {
     if (effectiveWs) {
       scanDir(path.join(effectiveWs, '.agents', 'skills'), 'project');
@@ -1304,7 +1338,7 @@ function createSkill(vaultPath, workspaceRoot, options = {}) {
   const description = (options.description || options.desc || `Skill técnica ${safeName}`).trim();
   const content = (options.content || options.instructions || `# ${safeName}\n\nInstrucciones operativas para el agente.`).trim();
 
-  const effectiveWs = options.workspacePath || workspaceRoot || process.cwd();
+  const effectiveWs = resolveWorkspaceRoot(options.workspacePath || workspaceRoot || process.cwd());
   let skillDir = '';
   if (scope === 'project') {
     if (!effectiveWs) throw new Error('No se detectó la carpeta del workspace para la skill de proyecto.');
@@ -1480,7 +1514,7 @@ function editSkill(vaultPath, workspaceRoot, options = {}) {
   ].join('\n');
   fs.writeFileSync(skillMdPath, updatedMd, 'utf8');
 
-  const effectiveWs = workspaceRoot || process.cwd();
+  const effectiveWs = resolveWorkspaceRoot(workspaceRoot || process.cwd());
   if (vaultPath && fs.existsSync(vaultPath)) {
     syncSkillsToVault(vaultPath, effectiveWs);
     generateHub(vaultPath, effectiveWs);
@@ -1525,7 +1559,7 @@ function deleteSkill(vaultPath, workspaceRoot, options = {}) {
     } catch (e) {}
   }
 
-  const effectiveWs = workspaceRoot || process.cwd();
+  const effectiveWs = resolveWorkspaceRoot(workspaceRoot || process.cwd());
   if (vaultPath && fs.existsSync(vaultPath)) {
     syncSkillsToVault(vaultPath, effectiveWs);
     generateHub(vaultPath, effectiveWs);
@@ -1591,7 +1625,7 @@ function listRules(vaultPath, workspaceRoot) {
     }
   }
 
-  const effectiveWs = workspaceRoot || process.cwd();
+  const effectiveWs = resolveWorkspaceRoot(workspaceRoot || process.cwd());
   if (effectiveWs) {
     const wsRulesDir = path.join(effectiveWs, '.agents', 'rules');
     if (fs.existsSync(wsRulesDir)) {
@@ -1801,8 +1835,9 @@ function findAssociatedSkill(projectName, workspaceRoot, vaultPath) {
   }
 
   // 1. Workspace skills
-  if (workspaceRoot) {
-    const wsSkills = path.join(workspaceRoot, '.agents', 'skills');
+  const effectiveWs = resolveWorkspaceRoot(workspaceRoot || process.cwd());
+  if (effectiveWs) {
+    const wsSkills = path.join(effectiveWs, '.agents', 'skills');
     if (fs.existsSync(wsSkills)) {
       try {
         const list = fs.readdirSync(wsSkills, { withFileTypes: true });
@@ -1815,18 +1850,20 @@ function findAssociatedSkill(projectName, workspaceRoot, vaultPath) {
     }
   }
 
-  // 2. Global skills
-  const { skillsDir } = getAntigravityPaths();
-  if (fs.existsSync(skillsDir)) {
-    try {
-      const list = fs.readdirSync(skillsDir, { withFileTypes: true });
-      for (const s of list) {
-        if (!s.isDirectory()) continue;
-        if (matchesSkill(s.name)) {
-          return s.name;
+  // 2. Global & Built-in skills
+  const { globalSkillsDir, builtinSkillsDir } = getAntigravityPaths();
+  for (const sDir of [globalSkillsDir, builtinSkillsDir]) {
+    if (sDir && fs.existsSync(sDir)) {
+      try {
+        const list = fs.readdirSync(sDir, { withFileTypes: true });
+        for (const s of list) {
+          if (!s.isDirectory()) continue;
+          if (matchesSkill(s.name)) {
+            return s.name;
+          }
         }
-      }
-    } catch (e) {}
+      } catch (e) {}
+    }
   }
 
   // 3. Vault skills
@@ -3566,9 +3603,209 @@ function getGraphData(vaultPath) {
   return { nodes, links };
 }
 
+// -------------------------------------------------------------
+// MCP Server Safe Management (Zero Collision / Non-Destructive)
+// -------------------------------------------------------------
+
+function getMcpStatus(vaultPath) {
+  const home = os.homedir();
+  const mcpConfigFile = path.join(home, '.gemini', 'config', 'mcp_config.json');
+  const serverPath = path.join(home, '.gemini', 'config', 'skills', 'antigravity-obsidian', 'scripts', 'mcp-server.js');
+  const targetVault = vaultPath || (getActiveOrConfiguredVault() ? getActiveOrConfiguredVault().path : null);
+
+  let installed = false;
+  let enabled = false;
+  let otherServers = [];
+  let serverConfig = null;
+
+  if (fs.existsSync(mcpConfigFile)) {
+    try {
+      let raw = fs.readFileSync(mcpConfigFile, 'utf8').replace(/^\uFEFF/, '');
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.mcpServers) {
+        const keys = Object.keys(parsed.mcpServers);
+        otherServers = keys.filter(k => k !== 'antigravity-obsidian');
+        if (parsed.mcpServers['antigravity-obsidian']) {
+          installed = true;
+          serverConfig = parsed.mcpServers['antigravity-obsidian'];
+          enabled = serverConfig.disabled !== true;
+        }
+      }
+    } catch (e) {}
+  }
+
+  return {
+    installed,
+    enabled,
+    configPath: mcpConfigFile,
+    serverPath: serverPath.replace(/\\/g, '/'),
+    vaultPath: targetVault ? targetVault.replace(/\\/g, '/') : null,
+    otherServers,
+    serverConfig,
+  };
+}
+
+function installMcpServer(vaultPath, options = {}) {
+  const home = os.homedir();
+  const configDir = path.join(home, '.gemini', 'config');
+  const mcpConfigFile = path.join(configDir, 'mcp_config.json');
+  const serverPath = path.join(configDir, 'skills', 'antigravity-obsidian', 'scripts', 'mcp-server.js').replace(/\\/g, '/');
+
+  let targetVault = vaultPath;
+  if (!targetVault) {
+    const v = getActiveOrConfiguredVault();
+    targetVault = v ? v.path : '';
+  }
+  const normalizedVault = (targetVault || '').replace(/\\/g, '/');
+
+  if (!fs.existsSync(configDir)) {
+    fs.mkdirSync(configDir, { recursive: true });
+  }
+
+  let mcpData = { mcpServers: {} };
+  if (fs.existsSync(mcpConfigFile)) {
+    try {
+      let raw = fs.readFileSync(mcpConfigFile, 'utf8').replace(/^\uFEFF/, '');
+      mcpData = JSON.parse(raw);
+      if (!mcpData || typeof mcpData !== 'object') {
+        mcpData = { mcpServers: {} };
+      }
+      if (!mcpData.mcpServers || typeof mcpData.mcpServers !== 'object') {
+        mcpData.mcpServers = {};
+      }
+      // Backup current configuration
+      try {
+        fs.copyFileSync(mcpConfigFile, path.join(configDir, 'mcp_config.json.bak'));
+      } catch (e) {}
+    } catch (err) {
+      const corruptBackup = path.join(configDir, `mcp_config.json.corrupt.${Date.now()}`);
+      try { fs.copyFileSync(mcpConfigFile, corruptBackup); } catch (e) {}
+      mcpData = { mcpServers: {} };
+    }
+  }
+
+  // Preserve all other MCP servers safely!
+  mcpData.mcpServers['antigravity-obsidian'] = {
+    command: 'node',
+    args: [serverPath],
+    env: {
+      OBSIDIAN_VAULT_PATH: normalizedVault,
+    },
+    disabled: false,
+  };
+
+  fs.writeFileSync(mcpConfigFile, JSON.stringify(mcpData, null, 2), 'utf8');
+
+  return {
+    status: 'ok',
+    action: 'installed',
+    enabled: true,
+    configPath: mcpConfigFile,
+    otherServers: Object.keys(mcpData.mcpServers).filter(k => k !== 'antigravity-obsidian'),
+    message: 'Servidor MCP de Obsidian instalado y activado en mcp_config.json sin alterar el resto de servidores.',
+  };
+}
+
+function disableMcpServer() {
+  const home = os.homedir();
+  const mcpConfigFile = path.join(home, '.gemini', 'config', 'mcp_config.json');
+
+  if (!fs.existsSync(mcpConfigFile)) {
+    return { status: 'not_found', message: 'No existe mcp_config.json.' };
+  }
+
+  try {
+    let raw = fs.readFileSync(mcpConfigFile, 'utf8').replace(/^\uFEFF/, '');
+    const mcpData = JSON.parse(raw);
+    if (mcpData && mcpData.mcpServers && mcpData.mcpServers['antigravity-obsidian']) {
+      try {
+        fs.copyFileSync(mcpConfigFile, path.join(path.dirname(mcpConfigFile), 'mcp_config.json.bak'));
+      } catch (e) {}
+      mcpData.mcpServers['antigravity-obsidian'].disabled = true;
+      fs.writeFileSync(mcpConfigFile, JSON.stringify(mcpData, null, 2), 'utf8');
+      return {
+        status: 'ok',
+        action: 'disabled',
+        enabled: false,
+        message: 'Servidor MCP desactivado correctamente (disabled: true). La IA operará mediante Node CLI como fallback sin MCP.',
+      };
+    } else {
+      return { status: 'not_installed', message: 'El servidor MCP de Obsidian no está configurado en mcp_config.json.' };
+    }
+  } catch (err) {
+    return { status: 'error', error: err.message };
+  }
+}
+
+function enableMcpServer(vaultPath) {
+  const home = os.homedir();
+  const mcpConfigFile = path.join(home, '.gemini', 'config', 'mcp_config.json');
+
+  if (!fs.existsSync(mcpConfigFile)) {
+    return installMcpServer(vaultPath);
+  }
+
+  try {
+    let raw = fs.readFileSync(mcpConfigFile, 'utf8').replace(/^\uFEFF/, '');
+    const mcpData = JSON.parse(raw);
+    if (mcpData && mcpData.mcpServers && mcpData.mcpServers['antigravity-obsidian']) {
+      mcpData.mcpServers['antigravity-obsidian'].disabled = false;
+      if (vaultPath) {
+        if (!mcpData.mcpServers['antigravity-obsidian'].env) {
+          mcpData.mcpServers['antigravity-obsidian'].env = {};
+        }
+        mcpData.mcpServers['antigravity-obsidian'].env.OBSIDIAN_VAULT_PATH = vaultPath.replace(/\\/g, '/');
+      }
+      fs.writeFileSync(mcpConfigFile, JSON.stringify(mcpData, null, 2), 'utf8');
+      return {
+        status: 'ok',
+        action: 'enabled',
+        enabled: true,
+        message: 'Servidor MCP activado correctamente en mcp_config.json.',
+      };
+    } else {
+      return installMcpServer(vaultPath);
+    }
+  } catch (err) {
+    return { status: 'error', error: err.message };
+  }
+}
+
+function uninstallMcpServer() {
+  const home = os.homedir();
+  const mcpConfigFile = path.join(home, '.gemini', 'config', 'mcp_config.json');
+
+  if (!fs.existsSync(mcpConfigFile)) {
+    return { status: 'not_found', message: 'No existe mcp_config.json.' };
+  }
+
+  try {
+    let raw = fs.readFileSync(mcpConfigFile, 'utf8').replace(/^\uFEFF/, '');
+    const mcpData = JSON.parse(raw);
+    if (mcpData && mcpData.mcpServers && mcpData.mcpServers['antigravity-obsidian']) {
+      try {
+        fs.copyFileSync(mcpConfigFile, path.join(path.dirname(mcpConfigFile), 'mcp_config.json.bak'));
+      } catch (e) {}
+      delete mcpData.mcpServers['antigravity-obsidian'];
+      fs.writeFileSync(mcpConfigFile, JSON.stringify(mcpData, null, 2), 'utf8');
+      return {
+        status: 'ok',
+        action: 'uninstalled',
+        enabled: false,
+        message: 'Servidor MCP eliminado de mcp_config.json manteniendo el resto de servidores intactos. La IA continuará operando vía Node CLI.',
+      };
+    } else {
+      return { status: 'not_installed', message: 'El servidor MCP de Obsidian no figuraba en mcp_config.json.' };
+    }
+  } catch (err) {
+    return { status: 'error', error: err.message };
+  }
+}
+
 module.exports = {
   syncVaultToKnowledge,
   getAntigravityPaths,
+  resolveWorkspaceRoot,
   ensureVaultStructure,
   ensureSoulAndProfile,
   getSoulAndProfile,
@@ -3618,4 +3855,9 @@ module.exports = {
   importVaultEncrypted,
   gitCommitVault,
   getGraphData,
+  getMcpStatus,
+  installMcpServer,
+  disableMcpServer,
+  enableMcpServer,
+  uninstallMcpServer,
 };

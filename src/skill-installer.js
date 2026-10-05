@@ -216,6 +216,7 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '| `/obsidian catalog` | `node "' + normalizedScriptPath + '" catalog` | 1-line overview of skills & memories |',
         '| `/obsidian skills` | `node "' + normalizedScriptPath + '" skills` | List available vault skills |',
         '| `/obsidian memories` | `node "' + normalizedScriptPath + '" memories` | List technical memories |',
+        '| `/obsidian mcp [status|install|disable|enable]` | `node "' + normalizedScriptPath + '" mcp [args]` | Manage MCP Server safely without breaking existing MCPs |',
         '| `/obsidian open [note]` | `node "' + normalizedScriptPath + '" open [note]` | Open note in Obsidian Desktop |',
         '| `/obsidian help` | `node "' + normalizedScriptPath + '" help` | Show quick command list |',
         '',
@@ -225,6 +226,7 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '',
         '| Command | Description |',
         '|---|---|',
+        '| `node "' + normalizedScriptPath + '" mcp [status|install|disable|enable]` | Manage MCP Server safely without breaking existing MCPs |',
         '| `node "' + normalizedScriptPath + '" name "<name>"` | Change AI agent name immediately |',
         '| `node "' + normalizedScriptPath + '" user "<callsign>"` | Change user callsign immediately |',
         '| `node "' + normalizedScriptPath + '" config [get|set ...]` | Query or update configuration |',
@@ -358,6 +360,7 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '| `/obsidian catalog` | `node "' + normalizedScriptPath + '" catalog` | Resumen 1-linea de skills y memorias |',
         '| `/obsidian skills` | `node "' + normalizedScriptPath + '" skills` | Lista skills disponibles en la boveda |',
         '| `/obsidian memories` | `node "' + normalizedScriptPath + '" memories` | Lista memorias registradas |',
+        '| `/obsidian mcp [status|install|disable|enable]` | `node "' + normalizedScriptPath + '" mcp [args]` | Gestiona el servidor MCP de forma segura sin romper otros MCPs |',
         '| `/obsidian open [nota]` | `node "' + normalizedScriptPath + '" open [nota]` | Abre nota en Obsidian Desktop |',
         '| `/obsidian help` | `node "' + normalizedScriptPath + '" help` | Muestra lista rapida de comandos |',
         '',
@@ -367,6 +370,7 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '',
         '| Comando | Descripcion |',
         '|---|---|',
+        '| `node "' + normalizedScriptPath + '" mcp [status|install|disable|enable]` | Gestiona el servidor MCP de forma segura sin romper otros MCPs |',
         '| `node "' + normalizedScriptPath + '" name "<nombre>"` | Cambia el nombre del agente inmediatamente |',
         '| `node "' + normalizedScriptPath + '" user "<trato>"` | Cambia el trato hacia el usuario inmediatamente |',
         '| `node "' + normalizedScriptPath + '" config [get|set ...]` | Consulta o actualiza ajustes de configuracion |',
@@ -593,34 +597,35 @@ function installSkillAndRules(targetVaultPath, options = {}) {
 
   const skillsManagementSection = isEn
     ? [
-        '### 2b. AUTONOMOUS SKILL & RULE MANAGEMENT (DIRECT CLI EXECUTION / ZERO HUNTING):',
-        'Whenever the user asks to create, modify, inspect, or manage technical skills or rules, NEVER create directories by hand or hunt through folders. Execute DIRECTLY with `run_command`:',
-        '- **List all skills:** `node "' + normalizedScriptPath + '" skill list [--scope global|project]`',
-        '- **Inspect/View skill (low-context peek):** `node "' + normalizedScriptPath + '" skill view <name>`',
-        '- **Create standard skill:** `node "' + normalizedScriptPath + '" skill create <name> --desc "<description>" --content "<instructions>" [--scope global|project]`',
-        '- **Edit existing skill:** `node "' + normalizedScriptPath + '" skill edit <name> [--desc "<desc>"] [--content "<content>"] [--append "<extra>"]`',
-        '- **Delete skill & mirror:** `node "' + normalizedScriptPath + '" skill delete <name>`',
-        '- **Attach helper script:** `node "' + normalizedScriptPath + '" skill script <skill> add <file> --code "..."`',
-        '- **List active system rules:** `node "' + normalizedScriptPath + '" rule list`',
-        '- **View rule content:** `node "' + normalizedScriptPath + '" rule view <name>`'
+        '### 2b. DUAL OPERATION MODE & SKILLS / TOOLS INTEGRATION:',
+        '- **MCP Server Integration (Primary if enabled):** If `obsidian_*` tools are active in your toolset, use them directly as native tools (`obsidian_triage`, `obsidian_peek`, `obsidian_session_save`, `obsidian_search`, etc.).',
+        '- **Node CLI Fallback (If MCP disabled or inactive):** If MCP tools are unavailable, execute commands with `run_command` (`node "' + normalizedScriptPath + '" ...`). The assistant operates at 100% capability without MCP.',
+        '- **Reading & Managing Skills:** Antigravity discovers skills in `<skills>`, `~/.gemini/config/skills/`, builtin IDE skills, and `.agents/skills/`. You may read skill instructions directly with native `view_file` on `SKILL.md`. To create, edit, or list skills with Obsidian vault mirroring, execute `node "' + normalizedScriptPath + '" skill [list|view|create|edit|delete]`.',
+        '- **MCP Server Management (Safe / Zero collision):**',
+        '  - `node "' + normalizedScriptPath + '" mcp status`: Check if MCP server is active or disabled.',
+        '  - `node "' + normalizedScriptPath + '" mcp install`: Safely inject into `mcp_config.json` without breaking other MCPs.',
+        '  - `node "' + normalizedScriptPath + '" mcp disable`: Disable MCP server (`disabled: true`), falling back cleanly to Node CLI.',
+        '  - `node "' + normalizedScriptPath + '" mcp enable`: Re-enable MCP server.',
+        '  - `node "' + normalizedScriptPath + '" mcp uninstall`: Safely remove MCP server from `mcp_config.json`.'
       ].join('\n')
     : [
-        '### 2b. CREACIÓN, MODIFICACIÓN Y GESTIÓN DE SKILLS Y REGLAS (EJECUCIÓN DIRECTA):',
-        'Siempre que el usuario te pida crear una nueva skill, editar una existente, consultarla o listar skills/reglas, NUNCA crees carpetas a mano ni busques por el explorador de archivos. Ejecuta DIRECTAMENTE con `run_command`:',
-        '- **Listar todas las skills:** `node "' + normalizedScriptPath + '" skill list [--scope global|project]`',
-        '- **Consultar/Ver skill (ultra-bajo contexto):** `node "' + normalizedScriptPath + '" skill view <nombre>`',
-        '- **Crear skill técnica estándar:** `node "' + normalizedScriptPath + '" skill create <nombre> --desc "<descripcion>" --content "<instrucciones>" [--scope global|project]`',
-        '- **Editar skill existente:** `node "' + normalizedScriptPath + '" skill edit <nombre> [--desc "<desc>"] [--content "<contenido>"] [--append "<añadido>"]`',
-        '- **Eliminar skill y nota espejo:** `node "' + normalizedScriptPath + '" skill delete <nombre>`',
-        '- **Adjuntar script ejecutable:** `node "' + normalizedScriptPath + '" skill script <skill> add <archivo> --code "..."`',
-        '- **Listar reglas del sistema:** `node "' + normalizedScriptPath + '" rule list`',
-        '- **Consultar regla específica:** `node "' + normalizedScriptPath + '" rule view <nombre>`'
+        '### 2b. MODO DE OPERACION DUAL Y GESTION DE SKILLS Y HERRAMIENTAS:',
+        '- **Integracion Servidor MCP (Principal si esta activo):** Si dispones de herramientas `obsidian_*` en tu set de herramientas, usalas directamente como herramientas nativas (`obsidian_triage`, `obsidian_peek`, `obsidian_session_save`, `obsidian_search`, etc.).',
+        '- **Fallback Node CLI (Si MCP esta desactivado o ausente):** Si no hay herramientas MCP disponibles, ejecuta directamente comandos CLI con `run_command` (`node "' + normalizedScriptPath + '" ...`). El asistente opera al 100% sin depender de MCP.',
+        '- **Lectura y Gestion de Skills:** Antigravity descubre skills en `<skills>`, `~/.gemini/config/skills/`, builtins del IDE y `.agents/skills/`. Puedes leer las instrucciones de skills directamente con `view_file` sobre `SKILL.md`. Para crear, modificar o sincronizar skills en la boveda de Obsidian, usa `node "' + normalizedScriptPath + '" skill [list|view|create|edit|delete]`.',
+        '- **Gestion del Servidor MCP (Seguro / Cero colision):**',
+        '  - `node "' + normalizedScriptPath + '" mcp status`: Comprueba si el servidor MCP esta activo o deshabilitado.',
+        '  - `node "' + normalizedScriptPath + '" mcp install`: Instala de forma segura en `mcp_config.json` sin alterar otros servidores MCP.',
+        '  - `node "' + normalizedScriptPath + '" mcp disable`: Desactiva el servidor MCP (`disabled: true`), pasando a modo Node CLI.',
+        '  - `node "' + normalizedScriptPath + '" mcp enable`: Reactiva el servidor MCP.',
+        '  - `node "' + normalizedScriptPath + '" mcp uninstall`: Elimina de forma segura la entrada en `mcp_config.json`.'
       ].join('\n');
 
   const slashCommandsSection = isEn
     ? [
         '### 5. CHAT SLASH COMMANDS PROTOCOL (/obsidian):',
         'When the user sends a message starting with `/obsidian`, execute the corresponding CLI command IMMEDIATELY using `run_command` without asking for confirmation:',
+        '- `/obsidian mcp [status|install|disable|enable]`: Run `node "' + normalizedScriptPath + '" mcp [args]` to manage MCP integration safely without breaking other servers.',
         '- `/obsidian name <name>`: Run `node "' + normalizedScriptPath + '" name "<name>"` to change AI name immediately.',
         '- `/obsidian user <callsign>`: Run `node "' + normalizedScriptPath + '" user "<callsign>"` to change user callsign immediately.',
         '- `/obsidian config [get|set]`: Run `node "' + normalizedScriptPath + '" config [args]` to query or update configuration.',
@@ -651,6 +656,7 @@ function installSkillAndRules(targetVaultPath, options = {}) {
     : [
         '### 5. PROTOCOLO DE COMANDOS SLASH (/obsidian):',
         'Cuando el usuario escriba un comando que empiece por `/obsidian`, ejecuta INMEDIATAMENTE el comando CLI correspondiente con `run_command` sin pedir confirmaciones adicionales:',
+        '- `/obsidian mcp [status|install|disable|enable]`: Ejecuta `node "' + normalizedScriptPath + '" mcp [args]` para gestionar la integracion MCP de forma segura sin romper otros servidores.',
         '- `/obsidian name <nombre>`: Ejecuta `node "' + normalizedScriptPath + '" name "<nombre>"` para cambiar el nombre de la IA inmediatamente.',
         '- `/obsidian user <trato>`: Ejecuta `node "' + normalizedScriptPath + '" user "<trato>"` para cambiar el trato hacia el usuario inmediatamente.',
         '- `/obsidian config [get|set]`: Ejecuta `node "' + normalizedScriptPath + '" config [args]` para consultar o actualizar la configuracion.',
@@ -758,7 +764,7 @@ function installSkillAndRules(targetVaultPath, options = {}) {
     try {
       if (fs.existsSync(legacyPath)) {
         const legacyContent = fs.readFileSync(legacyPath, 'utf8');
-        if (legacyContent.includes('Hermes Protocol') || legacyContent.includes('Protocolo Hermes') || legacyContent.includes('Autonomous Second Brain') || legacyContent.includes('Segundo Cerebro')) {
+        if (legacyContent.includes('Hermes') || legacyContent.includes('Obsidian') || legacyContent.includes('Protocol') || legacyContent.includes('Autonomous Second Brain') || legacyContent.includes('Segundo Cerebro') || legacyContent.includes('Pedro') || legacyContent.includes('David')) {
           fs.unlinkSync(legacyPath);
         }
       }

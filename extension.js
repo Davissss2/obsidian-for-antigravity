@@ -329,6 +329,21 @@ class ObsidianPanelProvider {
           break;
         }
 
+        case 'installMcp': {
+          vscode.commands.executeCommand('antigravityObsidian.installMcp');
+          break;
+        }
+
+        case 'disableMcp': {
+          vscode.commands.executeCommand('antigravityObsidian.disableMcp');
+          break;
+        }
+
+        case 'mcpStatus': {
+          vscode.commands.executeCommand('antigravityObsidian.mcpStatus');
+          break;
+        }
+
         case 'openNote': {
           if (message.note && currentVault && currentVault.path) {
             let noteRel = message.note;
@@ -448,6 +463,7 @@ class ObsidianPanelProvider {
       ? (ideLang.startsWith('en') ? 'en' : (ideLang.startsWith('es') ? 'es' : 'en'))
       : configuredLang;
     const effectiveUser = syncEngine.resolveUserName(vault ? vault.path : null, configuredUser);
+    const mcpStatus = syncEngine.getMcpStatus(vault ? vault.path : null);
 
     return `<!DOCTYPE html>
 <html lang="${effectiveLang}">
@@ -633,6 +649,32 @@ class ObsidianPanelProvider {
         <button class="btn-open-link btn-open-note" data-note="Antigravity/Alma/00 Perfil de Usuario.md">
           ${SVGS.open} <span data-i18n="soul_view_profile">Ver Perfil</span>
         </button>
+      </div>
+    </div>
+
+    <!-- MCP Server Integration Card -->
+    <div class="soul-card" style="margin-top:10px;">
+      <div class="soul-header">
+        ${SVGS.crystal} <span style="font-weight:600;">Servidor MCP (Model Context Protocol)</span>
+        <span class="tag-badge" style="${mcpStatus.enabled ? 'background:rgba(34,197,94,0.15);color:#4ade80;' : 'background:rgba(239,68,68,0.15);color:#f87171;'}">
+          ${mcpStatus.enabled ? 'Activo' : (mcpStatus.installed ? 'Desactivado' : 'No Instalado')}
+        </span>
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);margin:8px 0;line-height:1.4;">
+        ${mcpStatus.enabled 
+          ? 'Herramientas MCP nativas activadas en Antigravity. Preserva intactos todos tus demás servidores MCP.'
+          : 'Operando vía Node CLI como fallback seguro. Puedes activar el servidor MCP en cualquier momento sin romper otros servidores.'}
+      </div>
+      <div style="display:flex;gap:8px;">
+        ${mcpStatus.enabled ? `
+          <button class="btn-action btn-outline" id="btn-disable-mcp" style="flex:1;">
+            <span>Desactivar MCP (Usar Node)</span>
+          </button>
+        ` : `
+          <button class="btn-action btn-gradient" id="btn-install-mcp" style="flex:1;">
+            <span>Instalar / Activar MCP</span>
+          </button>
+        `}
       </div>
     </div>
 
@@ -1607,6 +1649,64 @@ function activate(context) {
         openInObsidianApp(activeVault.name, 'Antigravity/00 Antigravity Hub');
       } else {
         vscode.window.showWarningMessage('No hay ninguna bóveda de Obsidian conectada.');
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('antigravityObsidian.installMcp', async () => {
+      const activeVault = getActiveOrConfiguredVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
+      const vaultPath = activeVault ? activeVault.path : '';
+      try {
+        const res = syncEngine.installMcpServer(vaultPath);
+        vscode.window.showInformationMessage(`Servidor MCP activado exitosamente en mcp_config.json. (${res.otherServers.length} otros servidores MCP preservados intactos).`);
+        if (currentWebviewView) {
+          currentWebviewView.webview.html = provider._getHtmlForWebview(currentWebviewView.webview);
+        }
+      } catch (err) {
+        vscode.window.showErrorMessage('Error al instalar servidor MCP: ' + err.message);
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('antigravityObsidian.disableMcp', async () => {
+      try {
+        const res = syncEngine.disableMcpServer();
+        if (res.status === 'ok') {
+          vscode.window.showInformationMessage('Servidor MCP desactivado correctamente. Antigravity utilizará comandos Node CLI como fallback.');
+        } else {
+          vscode.window.showWarningMessage(res.message || 'No se pudo desactivar el servidor MCP.');
+        }
+        if (currentWebviewView) {
+          currentWebviewView.webview.html = provider._getHtmlForWebview(currentWebviewView.webview);
+        }
+      } catch (err) {
+        vscode.window.showErrorMessage('Error al desactivar servidor MCP: ' + err.message);
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('antigravityObsidian.mcpStatus', async () => {
+      const activeVault = getActiveOrConfiguredVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
+      const vaultPath = activeVault ? activeVault.path : '';
+      try {
+        const st = syncEngine.getMcpStatus(vaultPath);
+        const stateStr = st.enabled ? 'Activo (Habilitado)' : (st.installed ? 'Desactivado (disabled: true)' : 'No instalado');
+        const otherStr = st.otherServers.length > 0 ? st.otherServers.join(', ') : 'Ninguno';
+        const msg = `MCP Obsidian: ${stateStr}\nOtros servidores en mcp_config.json: ${otherStr}\nArchivo: ${st.configPath}`;
+        const action = await vscode.window.showInformationMessage(msg, st.enabled ? 'Desactivar MCP' : 'Instalar / Activar MCP', 'Abrir Archivo');
+        if (action === 'Desactivar MCP') {
+          vscode.commands.executeCommand('antigravityObsidian.disableMcp');
+        } else if (action === 'Instalar / Activar MCP') {
+          vscode.commands.executeCommand('antigravityObsidian.installMcp');
+        } else if (action === 'Abrir Archivo' && fs.existsSync(st.configPath)) {
+          const doc = await vscode.workspace.openTextDocument(st.configPath);
+          await vscode.window.showTextDocument(doc);
+        }
+      } catch (err) {
+        vscode.window.showErrorMessage('Error al consultar estado MCP: ' + err.message);
       }
     })
   );

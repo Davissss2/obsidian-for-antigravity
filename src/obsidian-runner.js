@@ -2979,11 +2979,10 @@ ${milestoneBlocks}
   }
 
   case 'mcp': {
+    const syncEngine = getSyncEngine();
     const { flags, positional } = parseFlags(args);
     const sub = (positional[0] || 'status').toLowerCase();
     const mcpServerFile = path.join(__dirname, 'mcp-server.js');
-    const home = os.homedir();
-    const agyMcpDir = path.join(home, '.gemini', 'antigravity-ide', 'mcp', 'antigravity-obsidian');
 
     if (sub === 'start') {
       if (fs.existsSync(mcpServerFile)) {
@@ -3003,7 +3002,8 @@ ${milestoneBlocks}
             args: [mcpServerFile.replace(/\\/g, '/')],
             env: {
               OBSIDIAN_VAULT_PATH: vault.path.replace(/\\/g, '/')
-            }
+            },
+            disabled: false
           }
         }
       };
@@ -3011,14 +3011,42 @@ ${milestoneBlocks}
       break;
     }
 
-    const isInstalled = fs.existsSync(agyMcpDir);
+    if (sub === 'install') {
+      const targetV = flags.vault || positional[1] || vault.path;
+      const res = syncEngine.installMcpServer(targetV, flags);
+      console.log(JSON.stringify(res, null, 2));
+      break;
+    }
+
+    if (sub === 'disable') {
+      const res = syncEngine.disableMcpServer();
+      console.log(JSON.stringify(res, null, 2));
+      break;
+    }
+
+    if (sub === 'enable') {
+      const targetV = flags.vault || positional[1] || vault.path;
+      const res = syncEngine.enableMcpServer(targetV);
+      console.log(JSON.stringify(res, null, 2));
+      break;
+    }
+
+    if (sub === 'uninstall' || sub === 'remove' || sub === 'rm') {
+      const res = syncEngine.uninstallMcpServer();
+      console.log(JSON.stringify(res, null, 2));
+      break;
+    }
+
+    // Default: status
+    const status = syncEngine.getMcpStatus(vault.path);
     console.log(JSON.stringify({
       status: 'ok',
-      mcpServerFile,
-      registeredInIde: isInstalled,
-      vault: vault.name,
-      vaultPath: vault.path,
-      note: 'El servidor MCP está completamente implementado. Para ejecutar en stdio: node obsidian.js mcp start. Para ver la configuración: node obsidian.js mcp config.'
+      ...status,
+      note: status.enabled 
+        ? 'El servidor MCP está activo en mcp_config.json. Antigravity utilizará herramientas obsidian_* directamente.'
+        : (status.installed 
+          ? 'El servidor MCP está deshabilitado (disabled: true). Antigravity opera vía Node CLI como fallback.'
+          : 'El servidor MCP no está instalado en mcp_config.json. Para instalarlo sin romper otros servidores: node obsidian.js mcp install')
     }, null, 2));
     break;
   }

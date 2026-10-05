@@ -2,7 +2,7 @@
   "name": "obsidian-for-antigravity",
   "displayName": "Obsidian for Antigravity",
   "description": "Autonomous Second Brain & persistent memory for Antigravity AI connected to Obsidian. Automatically stores bugfixes, architecture decisions, and skills in your local Vault with real-time Graph View.",
-  "version": "1.7.2",
+  "version": "1.7.3",
   "publisher": "Davissss2",
   "author": {
     "name": "Davissss2",
@@ -36,8 +36,7 @@
     "knowledge-graph"
   ],
   "activationEvents": [
-    "onStartupFinished",
-    "onView:antigravityObsidian.panel"
+    "onStartupFinished"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -145,6 +144,21 @@
         "command": "antigravityObsidian.importVault",
         "title": "Obsidian: Import Encrypted Vault Backup (.agvault)",
         "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "antigravityObsidian.installMcp",
+        "title": "Obsidian: Install / Enable MCP Server in Antigravity",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "antigravityObsidian.disableMcp",
+        "title": "Obsidian: Disable MCP Server in Antigravity (Node CLI Fallback)",
+        "icon": "$(circle-slash)"
+      },
+      {
+        "command": "antigravityObsidian.mcpStatus",
+        "title": "Obsidian: Check MCP Server Status",
+        "icon": "$(server-process)"
       },
       {
         "command": "antigravityObsidian.resetData",
