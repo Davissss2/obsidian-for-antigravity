@@ -92,7 +92,7 @@ const TOOLS = [
   },
   {
     name: 'obsidian_save_skill',
-    description: 'Crea o actualiza una skill tanto en Obsidian como en Antigravity (~/.gemini/config/skills).',
+    description: 'Registra o actualiza una skill: escribe el SKILL.md operativo en Antigravity y su ficha documental vinculada en el Vault de Obsidian (sin duplicar ejecutables).',
     inputSchema: {
       type: 'object',
       properties: {
