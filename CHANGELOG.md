@@ -5,6 +5,26 @@ All notable changes to the **Obsidian for Antigravity** extension will be docume
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.4] - 2026-10-06
+
+### Added
+- **Bidirectional Project Rules Mirroring into Workspace (`.agents/rules/project-rules.md`)**:
+  - Implemented `syncProjectRulesToWorkspace` in `src/sync-engine.js` which automatically mirrors rules defined in `Antigravity/Proyectos/<Project>.md` into `<workspaceRoot>/.agents/rules/project-rules.md`.
+  - Connects directly into Antigravity IDE's native prompt customization pipeline (`.agents/rules/`), ensuring mandatory project rules (commits, push workflows, changelog updates, VSIX packaging, branch policies) are injected into the system prompt's `<user_rules>` in every chat turn without requiring manual reminders.
+  - Automatically triggered during `recordUserLearning`, `syncProject`, `syncAll`, and the `learn` command across both CLI and MCP.
+
+### Changed
+- **Strict MCP-First Protocol in AI System Rules**:
+  - Refactored `src/skill-installer.js` and global rules in `rules/obsidian-brain.md` to establish **Priority 1: Native MCP Tools** via `call_mcp_tool` for all triage, peek, session checkpointing, memory saving, and habit learning.
+  - Relegated Node CLI subprocesses (`run_command` with `node obsidian.js`) to Priority 2 (fallback only when MCP is disabled/offline or for non-tool CLI management commands).
+  - Clarified tool descriptions in `src/mcp-server.js` (`obsidian_save_skill`) to prevent misconceptions regarding vault documentation versus Antigravity executables.
+
+### Fixed
+- **Clean MCP Schema Validation**:
+  - Removed deprecated `$typeName` property from `mcp_config.json` that triggered VS Code schema validation warnings.
+
+---
+
 ## [1.7.3] - 2026-10-05
 
 ### Fixed

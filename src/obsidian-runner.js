@@ -1670,6 +1670,9 @@ switch (cmd) {
           }
         }
         fs.writeFileSync(projFile, pContent, 'utf8');
+        try {
+          syncEngine.syncProjectRulesToWorkspace(vault.path, process.cwd(), project);
+        } catch (e) {}
         projectNoteUpdated = projFile;
       } else {
         const newProjContent = `---
@@ -1694,6 +1697,9 @@ ${entry}
 *Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Indice de Proyectos]]
 `;
         fs.writeFileSync(projFile, newProjContent, 'utf8');
+        try {
+          syncEngine.syncProjectRulesToWorkspace(vault.path, process.cwd(), project);
+        } catch (e) {}
         projectNoteUpdated = projFile;
       }
     }

@@ -456,6 +456,9 @@ async function executeTool(name, args) {
               else pContent += `\n${h}\n${entry}\n`;
             }
             fs.writeFileSync(projFile, pContent, 'utf8');
+            try {
+              syncEngine.syncProjectRulesToWorkspace(vaultPath, process.cwd(), project);
+            } catch (e) {}
           }
           target = `Antigravity/Proyectos/${project}.md`;
         }

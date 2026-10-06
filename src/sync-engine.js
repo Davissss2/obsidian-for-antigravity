@@ -629,31 +629,90 @@ function recordUserLearning(vaultPath, learningText, options = {}) {
   if (!vaultPath || !fs.existsSync(vaultPath)) return null;
   ensureSoulAndProfile(vaultPath, options);
 
-  const userPath = path.join(vaultPath, 'Antigravity', 'Alma', '00 Perfil de Usuario.md');
-  if (!fs.existsSync(userPath)) return null;
-
-  const now = new Date().toISOString().split('T')[0];
   const cleanLearning = (learningText || '').replace(/\r?\n/g, ' ').trim();
-  const entry = `- \`[${now}]\` ${cleanLearning}`;
+  if (!cleanLearning) return null;
 
-  let content = fs.readFileSync(userPath, 'utf8');
-  if (content.includes('## 4. Aprendizajes y Preferencias Dinámicas Acumuladas')) {
-    content = content.replace(
-      '## 4. Aprendizajes y Preferencias Dinámicas Acumuladas',
-      `## 4. Aprendizajes y Preferencias Dinámicas Acumuladas\n${entry}`
-    );
-  } else if (content.includes('## 4. Dynamic Learnings & Evolved Preferences')) {
-    content = content.replace(
-      '## 4. Dynamic Learnings & Evolved Preferences',
-      `## 4. Dynamic Learnings & Evolved Preferences\n${entry}`
-    );
-  } else {
-    content += `\n## 4. Aprendizajes y Preferencias Dinámicas Acumuladas\n${entry}\n`;
+  let project = options.project || null;
+  if (!project) {
+    const projMatch = cleanLearning.match(/^\[([a-zA-Z0-9_\-.]+)\]/);
+    if (projMatch) {
+      project = projMatch[1];
+    }
   }
 
-  fs.writeFileSync(userPath, content, 'utf8');
-  return { updated: true, entry, userPath };
+  const isGlobal = !project || project.toLowerCase() === 'global';
+  const now = new Date().toISOString().split('T')[0];
+  const entry = `- \`[${now}]\` ${cleanLearning}`;
+
+  if (isGlobal) {
+    const userPath = path.join(vaultPath, 'Antigravity', 'Alma', '00 Perfil de Usuario.md');
+    if (!fs.existsSync(userPath)) return null;
+
+    let content = fs.readFileSync(userPath, 'utf8');
+    if (content.includes('## 4. Aprendizajes y Preferencias Dinámicas Acumuladas')) {
+      content = content.replace(
+        '## 4. Aprendizajes y Preferencias Dinámicas Acumuladas',
+        `## 4. Aprendizajes y Preferencias Dinámicas Acumuladas\n${entry}`
+      );
+    } else if (content.includes('## 4. Dynamic Learnings & Evolved Preferences')) {
+      content = content.replace(
+        '## 4. Dynamic Learnings & Evolved Preferences',
+        `## 4. Dynamic Learnings & Evolved Preferences\n${entry}`
+      );
+    } else {
+      content += `\n## 4. Aprendizajes y Preferencias Dinámicas Acumuladas\n${entry}\n`;
+    }
+
+    fs.writeFileSync(userPath, content, 'utf8');
+    return { updated: true, entry, target: userPath, scope: 'global' };
+  } else {
+    const projDir = path.join(vaultPath, 'Antigravity', 'Proyectos');
+    if (!fs.existsSync(projDir)) fs.mkdirSync(projDir, { recursive: true });
+
+    let projFile = path.join(projDir, `${sanitizeFilename(project)}.md`);
+    if (!fs.existsSync(projFile)) {
+      for (const f of fs.readdirSync(projDir)) {
+        if (f.toLowerCase() === `${project.toLowerCase()}.md`) {
+          projFile = path.join(projDir, f);
+          break;
+        }
+      }
+    }
+
+    if (fs.existsSync(projFile)) {
+      let pContent = fs.readFileSync(projFile, 'utf8');
+      const h = '## Reglas y Condiciones Obligatorias del Proyecto';
+      const hAlt = '## Project Rules & Constraints';
+      if (pContent.includes(h)) {
+        pContent = pContent.replace(h, `${h}\n${entry}`);
+      } else if (pContent.includes(hAlt)) {
+        pContent = pContent.replace(hAlt, `${hAlt}\n${entry}`);
+      } else {
+        const splitIdx = pContent.lastIndexOf('---');
+        if (splitIdx !== -1) {
+          pContent = pContent.slice(0, splitIdx) + `${h}\n${entry}\n\n` + pContent.slice(splitIdx);
+        } else {
+          pContent += `\n${h}\n${entry}\n`;
+        }
+      }
+      fs.writeFileSync(projFile, pContent, 'utf8');
+    }
+
+    // Mirror immediately to workspace .agents/rules/project-rules.md
+    const wsRoot = options.workspaceRoot || options.workspacePath || process.cwd();
+    const wsSync = syncProjectRulesToWorkspace(vaultPath, wsRoot, project);
+
+    return {
+      updated: true,
+      entry,
+      target: projFile,
+      scope: 'project',
+      project,
+      workspaceRule: wsSync ? wsSync.ruleFilePath : null,
+    };
+  }
 }
+
 
 // -------------------------------------------------------------
 // Skills Parser & Sync
@@ -2090,6 +2149,9 @@ ${skillsSection}
   // Automatically update the unified projects index
   syncProjectsIndex(vaultPath, options);
 
+  // Sync project rules to workspace .agents/rules/project-rules.md
+  syncProjectRulesToWorkspace(vaultPath, workspaceRoot, projectName);
+
   return {
     projectName,
     path: obsFile,
@@ -2097,6 +2159,81 @@ ${skillsSection}
     summary: detected.description,
     skill: associatedSkill,
   };
+}
+
+function syncProjectRulesToWorkspace(vaultPath, workspaceRoot, projectName) {
+  if (!vaultPath || !fs.existsSync(vaultPath)) return null;
+  const effectiveWs = resolveWorkspaceRoot(workspaceRoot || process.cwd());
+  if (!effectiveWs || !fs.existsSync(effectiveWs)) return null;
+
+  const projFolder = path.join(vaultPath, 'Antigravity', 'Proyectos');
+  if (!fs.existsSync(projFolder)) return null;
+
+  let pName = projectName;
+  let projFile = null;
+
+  if (pName) {
+    const directFile = path.join(projFolder, `${sanitizeFilename(pName)}.md`);
+    if (fs.existsSync(directFile)) projFile = directFile;
+  }
+
+  if (!projFile) {
+    for (const f of fs.readdirSync(projFolder)) {
+      if (!f.endsWith('.md') || f.startsWith('00')) continue;
+      const fp = path.join(projFolder, f);
+      try {
+        const txt = fs.readFileSync(fp, 'utf8');
+        const m = txt.match(/>\s*-\s*\*\*Ruta local\*\*:\s*`([^`]+)`/i);
+        if (m && path.resolve(m[1]).toLowerCase() === path.resolve(effectiveWs).toLowerCase()) {
+          projFile = fp;
+          pName = f.replace(/\.md$/, '');
+          break;
+        }
+      } catch (e) {}
+    }
+  }
+
+  if (!projFile && pName) {
+    for (const f of fs.readdirSync(projFolder)) {
+      if (f.toLowerCase() === `${pName.toLowerCase()}.md`) {
+        projFile = path.join(projFolder, f);
+        break;
+      }
+    }
+  }
+
+  if (!projFile || !fs.existsSync(projFile)) return null;
+
+  const txt = fs.readFileSync(projFile, 'utf8');
+  const rulesMatch = txt.match(/##\s*(?:Reglas y Condiciones Obligatorias del Proyecto|Project Rules & Constraints)[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
+  if (!rulesMatch) return null;
+
+  const rawRules = rulesMatch[1].trim();
+  const cleanRules = rawRules.replace(/<!--[\s\S]*?-->/g, '').trim();
+  if (!cleanRules) return null;
+
+  const agentsRulesDir = path.join(effectiveWs, '.agents', 'rules');
+  if (!fs.existsSync(agentsRulesDir)) {
+    fs.mkdirSync(agentsRulesDir, { recursive: true });
+  }
+
+  const resolvedName = pName || path.basename(effectiveWs);
+  const ruleFilePath = path.join(agentsRulesDir, 'project-rules.md');
+  const ruleContent = [
+    '---',
+    `description: Reglas y Condiciones Obligatorias del Proyecto — ${resolvedName}`,
+    '---',
+    '',
+    `# Reglas Obligatorias del Proyecto (${resolvedName})`,
+    '',
+    'Estas reglas han sido registradas en Obsidian Second Brain y son de OBLIGATORIO CUMPLIMIENTO en cada intervencion del agente en este workspace:',
+    '',
+    cleanRules,
+    ''
+  ].join('\n');
+
+  fs.writeFileSync(ruleFilePath, ruleContent, 'utf8');
+  return { ruleFilePath, rulesCount: cleanRules.split('\n').filter(l => l.trim().startsWith('-')).length, project: resolvedName };
 }
 
 function getProjectsRegistry(vaultPath) {
@@ -3860,4 +3997,5 @@ module.exports = {
   disableMcpServer,
   enableMcpServer,
   uninstallMcpServer,
+  syncProjectRulesToWorkspace,
 };
