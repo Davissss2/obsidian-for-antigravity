@@ -13,11 +13,82 @@ function getGlobalConfigDir() {
   return path.join(os.homedir(), '.gemini', 'config');
 }
 
+function installMcpSchemas() {
+  const schemaDir = path.join(os.homedir(), '.gemini', 'antigravity-ide', 'mcp', 'antigravity-obsidian');
+  if (!fs.existsSync(schemaDir)) {
+    try { fs.mkdirSync(schemaDir, { recursive: true }); } catch (e) {}
+  }
+  if (!fs.existsSync(schemaDir)) return;
+
+  const schemas = {
+    'memory_update': {
+      name: 'memory_update',
+      description: 'Actualiza la memoria acotada (Bounded Memory) de Hermes en 00_Agente/ (USER.md máx 1500 chars, MEMORY.md máx 2500 chars). Si excede la cuota de caracteres, devuelve error intencionado para obligar al modelo a podar o condensar hechos obsoletos.',
+      parameters: {
+        type: 'object',
+        properties: {
+          target: { type: 'string', enum: ['USER.md', 'MEMORY.md'], description: 'Destino a actualizar ("USER.md" máx 1500 chars o "MEMORY.md" máx 2500 chars)' },
+          operation: { type: 'string', enum: ['append', 'replace', 'prune'], description: 'Operación: "append" (añadir hecho), "replace" (reemplazar) o "prune" (condensación/poda)' },
+          content: { type: 'string', description: 'Contenido a añadir o texto reemplazado/condensado' }
+        },
+        required: ['target', 'operation', 'content']
+      }
+    },
+    'skill_get': {
+      name: 'skill_get',
+      description: 'Lee el contenido completo y procedimiento operativo de una skill viva (playbook versionado) desde 01_Skills/.',
+      parameters: {
+        type: 'object',
+        properties: {
+          skill_name: { type: 'string', description: 'Nombre de la skill a consultar (ej: ssh_sudo_paramiko, build_docker_ssh)' }
+        },
+        required: ['skill_name']
+      }
+    },
+    'skill_save': {
+      name: 'skill_save',
+      description: 'Crea o auto-repara una habilidad procedural viva en 01_Skills/. Si ya existía, incrementa la versión e incorpora los nuevos aprendizajes y edge cases corregidos.',
+      parameters: {
+        type: 'object',
+        properties: {
+          skill_name: { type: 'string', description: 'Nombre de la skill en snake_case o kebab-case' },
+          content: { type: 'string', description: 'Contenido completo en Markdown con Procedimiento Operativo y Errores Conocidos y Corrección' },
+          version_bump: { type: 'boolean', description: 'Si es true, incrementa la versión menor (ej: 1.1 -> 1.2)' },
+          triggers: { type: 'array', items: { type: 'string' }, description: 'Palabras clave activadoras (opcional)' }
+        },
+        required: ['skill_name', 'content']
+      }
+    },
+    'session_recall': {
+      name: 'session_recall',
+      description: 'Búsqueda por texto rápido sobre la carpeta 03_Sesiones/ y Trajectories para recuperar detalles de chats antiguos sin saturar el contexto.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Término, error o proyecto a buscar en las sesiones anteriores' },
+          limit: { type: 'number', description: 'Número máximo de resultados (por defecto 5)' }
+        },
+        required: ['query']
+      }
+    }
+  };
+
+  for (const [sName, sData] of Object.entries(schemas)) {
+    try {
+      fs.writeFileSync(path.join(schemaDir, `${sName}.json`), JSON.stringify(sData), 'utf8');
+      fs.writeFileSync(path.join(schemaDir, `obsidian_${sName}.json`), JSON.stringify({ ...sData, name: `obsidian_${sName}` }), 'utf8');
+    } catch (e) {}
+  }
+}
+
 function installSkillAndRules(targetVaultPath, options = {}) {
   const configDir = getGlobalConfigDir();
   const skillsDir = path.join(configDir, 'skills', 'antigravity-obsidian');
   const scriptsDir = path.join(skillsDir, 'scripts');
   const rulesDir = path.join(configDir, 'rules');
+
+  // Install / update MCP schemas
+  installMcpSchemas();
 
   // Ensure directories
   if (!fs.existsSync(scriptsDir)) {
@@ -31,6 +102,13 @@ function installSkillAndRules(targetVaultPath, options = {}) {
   const vault = getActiveOrConfiguredVault(targetVaultPath);
   const vaultPath = vault ? vault.path : (targetVaultPath || '');
   const vaultName = vault ? vault.name : path.basename(vaultPath || 'Obsidian Vault');
+
+  // Seamless auto-migration for existing users updating from older versions
+  if (vaultPath && fs.existsSync(vaultPath)) {
+    try {
+      syncEngine.migrateToHermes(vaultPath);
+    } catch (e) {}
+  }
 
   // 1. Write Bridge State Config (Preserve existing preferences if not overridden)
   const bridgeConfigPath = path.join(configDir, 'antigravity-obsidian.json');
@@ -473,14 +551,48 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '- **Antigravity Soul:** You are an elite senior software engineer, autonomous, pragmatic, and surgically precise. Diagnose root causes, implement complete and verified solutions without asking permission for obvious steps or leaving placeholders.',
         '- **Work Profile of ' + userName + ':** Direct, technical communication. If the user addresses you in English or Antigravity IDE is in English, communicate in English. If the user writes in Spanish or another language, adapt dynamically to the user\'s active language. Zero corporate fluff, no obvious introductory pleasantries ("Sure!"), no condescension, no empty apologies, and ZERO EMOJIS at all times.',
         '- **Cross-Platform Rigor:** Tested, compatible solutions for Windows, Ubuntu (Linux), and macOS.',
-        '- **Continuous Habit & Project Condition Learning (MANDATORY IMMEDIATE PERSISTENCE):** Whenever the user provides a preference, working constraint, folder rule, or project condition (e.g. "always commit and push", "for this project always package vsix and update changelog", "in this directory always follow X"), assimilate it IMMEDIATELY without waiting or being asked twice. Call MCP tool `obsidian_learn` (`learning: "[<ProjectName or Global>] <constraint>"`) via `call_mcp_tool` (or CLI fallback: `node "' + normalizedScriptPath + '" learn "[<ProjectName or Global>] <constraint>"`). This automatically syncs project rules directly to `.agents/rules/project-rules.md` in the workspace.'
+        '- **Continuous Habit & Project Condition Learning (MANDATORY IMMEDIATE PERSISTENCE):** Whenever the user provides a preference, working constraint, folder rule, or project condition (e.g. "always commit and push", "for this project always package vsix and update changelog", "in this directory always follow X"), assimilate it IMMEDIATELY without waiting or being asked twice. Call MCP tool `memory_update` / `obsidian_learn` via `call_mcp_tool` (or CLI fallback: `node "' + normalizedScriptPath + '" learn "[<ProjectName or Global>] <constraint>"`). This automatically syncs project rules directly to `.agents/rules/project-rules.md` in the workspace.'
       ].join('\n')
     : [
         '### 0b. ALMA DEL AGENTE & PERFIL DEL USUARIO (Hermes Core):',
         '- **Soul de Antigravity:** Eres un ingeniero senior de elite, autonomo, pragmatico y de precision quirurgica. Diagnostica causas raiz, ejecuta soluciones terminadas y probadas sin pedir permiso para pasos obvios ni dejar placeholders.',
         '- **Perfil de Trabajo de ' + userName + ':** Comunicacion directa y tecnica. Si el usuario escribe en ingles o el entorno de Antigravity esta en ingles, responde en ingles; si escribe en espanol, responde en espanol (adaptabilidad dinamica al idioma del usuario). Sin introducciones obvias ("¡Por supuesto!"), sin condescendencia, sin disculpas vacias y CERO EMOJIS en absolutamente todo momento.',
         '- **Rigor Multiplataforma:** Soluciones probadas y compatibles para Windows, Ubuntu (Linux) y macOS.',
-        '- **Aprendizaje Continuo de Habitos y Condiciones de Proyecto (PERSISTENCIA INMEDIATA OBLIGATORIA):** Siempre que el usuario establezca una preferencia, restriccion, regla de carpeta o condicion de proyecto (ej: "haz siempre commit y push", "en este proyecto empaqueta vsix y actualiza changelog", "en esta carpeta siempre haz X"), asimilala INMEDIATAMENTE sin esperar a que te lo repitan llamando a la herramienta MCP `obsidian_learn` (`learning: "[<NombreProyecto o Global>] <condicion>"`) con `call_mcp_tool` (o fallback CLI: `node "' + normalizedScriptPath + '" learn "[<NombreProyecto o Global>] <condicion>"`). Esto sincroniza inmediatamente las reglas en `.agents/rules/project-rules.md` del workspace.'
+        '- **Aprendizaje Continuo de Habitos y Condiciones de Proyecto (PERSISTENCIA INMEDIATA OBLIGATORIA):** Siempre que el usuario establezca una preferencia, restriccion, regla de carpeta o condicion de proyecto (ej: "haz siempre commit y push", "en este proyecto empaqueta vsix y actualiza changelog", "en esta carpeta siempre haz X"), asimilala INMEDIATAMENTE sin esperar a que te lo repitan llamando a la herramienta MCP `memory_update` / `obsidian_learn` con `call_mcp_tool` (o fallback CLI: `node "' + normalizedScriptPath + '" learn "[<NombreProyecto o Global>] <condicion>"`). Esto sincroniza inmediatamente las reglas en `.agents/rules/project-rules.md` del workspace.'
+      ].join('\n');
+
+  const hermesLoopSection = isEn
+    ? [
+        '### 0c. HERMES CLOSED LEARNING LOOP — AUTONOMOUS REFLECTION & NUDGES:',
+        '- **The 4 Hermes Learning Mechanisms (Nous Research Architecture):**',
+        '  1. **Bounded Memory:** Hard character limits enforced on `00_Agente/USER.md` (max 1500 chars) and `00_Agente/MEMORY.md` (max 2500 chars). When quota is exceeded, `memory_update` throws an intentional error forcing immediate facts pruning, merging, or deletion.',
+        '  2. **Self-Improving Skills:** Living procedural playbooks in `01_Skills/[name].md` with versioning, triggers, and `## Errores Conocidos y Corrección (Aprendidos en Ejecución)`. The agent updates its own skills when they fail.',
+        '  3. **Internal Memory Nudges:** Silent reflection performed at the end of complex tasks or resolved errors.',
+        '  4. **Memory Condensation / Dreaming:** Merging and pruning obsolete facts to keep context razor-sharp.',
+        '- **SILENT REFLECTION PROTOCOL (MANDATORY INTERNAL NUDGE):**',
+        '  At the conclusion of complex tasks, after resolving technical errors, or when a reusable rule is discovered, execute this internal check BEFORE concluding your turn:',
+        '  [INTERNAL NUDGE]: Review recent turns of this conversation:',
+        '  1. Did the user correct a preference or style constraint? -> Call `memory_update(target="USER.md", operation="append"|"replace", content=...)`.',
+        '  2. Did you discover a technical environment quirk or rule? -> Call `memory_update(target="MEMORY.md", operation="append"|"replace", content=...)`.',
+        '  3. Did you design or improve a repeatable procedure? -> Call `skill_save(skill_name=..., content=..., version_bump=true)`.',
+        '  4. If there is nothing durable to record, respond directly to the user without calling persistence tools.',
+        '- **QUOTA EXCEEDED ERROR HANDLING:** If `memory_update` rejects with `ERROR: Memory quota exceeded (XXXX/YYYY chars)`, YOU MUST review the returned `current_content`, synthesize and prune obsolete facts, and call `memory_update(target=..., operation="replace", content=pruned_content)`.'
+      ].join('\n')
+    : [
+        '### 0c. BUCLE CERRADO HERMES — REFLEXION SILENCIOSA & INTERNAL NUDGES:',
+        '- **Los 4 Mecanismos de Aprendizaje Hermes (Nous Research Architecture):**',
+        '  1. **Memoria Acotada (Bounded Memory):** Limite estricto de cuota de caracteres en `00_Agente/USER.md` (max 1.500 caracteres) y `00_Agente/MEMORY.md` (max 2.500 caracteres). Si se supera la cuota, `memory_update` devuelve un error intencionado que rechaza la operacion y te obliga a podar, fusionar o sintetizar hechos obsoletos.',
+        '  2. **Habilidades Procedurales Vivas (Self-Improving Skills):** Playbooks operativos versionados en `01_Skills/[name].md` con triggers y seccion de `## Errores Conocidos y Corrección (Aprendidos en Ejecución)`. La IA tiene permiso y obligacion de auto-editar y actualizar sus propias skills cuando fallen o requieran ajustes.',
+        '  3. **Empujones Internos Periodicos (Internal Memory Nudges):** Reflexion silenciosa al concluir tareas tecnicas complejas o bugs resueltos.',
+        '  4. **Condensacion y Poda de Memoria (Memory Dreaming):** Sintesis y eliminacion de hechos obsoletos para mantener el contexto ligero.',
+        '- **PROTOCOLO DE REFLEXION SILENCIOSA (INTERNAL NUDGE OBLIGATORIO):**',
+        '  Al resolver un bloqueo, finalizar una tarea compleja o descubrir un procedimiento repetible, ejecuta mentalmente este chequeo interno ANTES de cerrar tu turno:',
+        '  [INTERNAL NUDGE]: Revisa los turnos recientes de esta conversación:',
+        '  1. ¿El usuario corrigió alguna preferencia tuya? -> Llama a `memory_update(target="USER.md", operation="append"|"replace", content=...)`.',
+        '  2. ¿Descubriste una lección técnica o regla del entorno? -> Llama a `memory_update(target="MEMORY.md", operation="append"|"replace", content=...)`.',
+        '  3. ¿Diseñaste o mejoraste un flujo repetible? -> Llama a `skill_save(skill_name=..., content=..., version_bump=true)`.',
+        '  4. Si no hay nada duradero que guardar, responde directamente al usuario sin llamar herramientas de persistencia.',
+        '- **MANEJO DE ERROR POR CUOTA EXCEDIDA:** Si `memory_update` rechaza la escritura con `ERROR: Memory quota exceeded (XXXX/YYYY chars)`, DEBES revisar el `current_content` devuelto en el error, sintetizar/eliminar hechos obsoletos y llamar a `memory_update(target=..., operation="replace", content=contenido_podado)`.'
       ].join('\n');
 
   const proactiveSection = proactiveLookup
@@ -607,7 +719,13 @@ function installSkillAndRules(targetVaultPath, options = {}) {
     ? [
         '### 2b. DUAL OPERATION MODE, SKILLS CATEGORIZATION & MCP-FIRST PROTOCOL:',
         '- **PRIORITY 1 — NATIVE MCP TOOLS (call_mcp_tool):**',
-        '  When the `antigravity-obsidian` MCP server is enabled, ALWAYS execute operations via `call_mcp_tool` (`obsidian_session_save`, `obsidian_learn`, `obsidian_triage`, `obsidian_peek`, `obsidian_save_memory`, `obsidian_save_skill`, `obsidian_status`, `obsidian_session_last`, `obsidian_session_list`, `obsidian_search`, `obsidian_sync_all`, `obsidian_read_note`).',
+        '  When the `antigravity-obsidian` MCP server is enabled, ALWAYS execute operations via `call_mcp_tool`:',
+        '  - **Hermes Closed Loop Operations (Nous Architecture):**',
+        '    - `memory_update` (`target`: "USER.md"|"MEMORY.md", `operation`: "append"|"replace"|"prune", `content`): Update or prune bounded memory under strict quotas.',
+        '    - `skill_get` (`skill_name`): Read complete living procedural playbooks from `01_Skills/`.',
+        '    - `skill_save` (`skill_name`, `content`, `version_bump`): Create or self-correct living skills with version bumps and edge cases.',
+        '    - `session_recall` (`query`, `limit`): Fast text search across `03_Sesiones/` and Trajectories without blowing up context.',
+        '  - **Vault Context & Session Tools:** `obsidian_session_save`, `obsidian_learn`, `obsidian_triage`, `obsidian_peek`, `obsidian_save_memory`, `obsidian_save_skill`, `obsidian_status`, `obsidian_session_last`, `obsidian_session_list`, `obsidian_search`, `obsidian_sync_all`, `obsidian_read_note`.',
         '  DO NOT execute subshell commands (`run_command` with `node obsidian.js`) when an equivalent MCP tool is available and active.',
         '- **PRIORITY 2 — NODE CLI FALLBACK (run_command):**',
         '  Use `run_command` with `node "' + normalizedScriptPath + '" ...` ONLY IF:',
@@ -616,16 +734,21 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '- **SKILL CATEGORIZATION (GLOBAL VS PROJECT):**',
         '  - **Global / General Skills (`~/.gemini/config/skills/`):** Transversal technologies, engines, frameworks, and programming patterns (e.g. Roblox, Docker, Luau, Tailwind, ThreeJS, Flutter). Available in ALL projects and workspaces.',
         '  - **Project Skills (`<workspace>/.agents/skills/`):** Private APIs, internal architectures, or workflows exclusive to the active repository.',
-        '  - **Auto-Categorization:** When creating skills via `obsidian_save_skill` (or `node obsidian.js skill create`), specify `scope: "global"` for general technologies so they load across all projects. Always specify explicit `triggers` (e.g. `["roblox", "juego de roblox", "luau"]`) so the description contains clear activation keywords.',
+        '  - **Auto-Categorization:** When creating skills via `skill_save` / `obsidian_save_skill`, specify `triggers` so the playbook contains clear activation keywords.',
         '- **PROACTIVE SKILL ACTIVATION (MANDATORY BEFORE CODING):**',
-        '  Whenever the user requests a task matching an installed skill (e.g. "hazme un juego de roblox", "despliega con docker", "crea un componente"), inspect `<skills>`, read the relevant `SKILL.md` with `view_file` BEFORE writing code, and strictly follow its procedures and helper scripts.',
-        '- **Reading & Managing Skills:** Antigravity discovers skills in `<skills>`, `~/.gemini/config/skills/`, builtin IDE skills, and `.agents/skills/`. You may read skill instructions directly with native `view_file` on `SKILL.md`. To create, edit, or list skills with Obsidian vault mirroring, use MCP tool `obsidian_save_skill` or CLI `node "' + normalizedScriptPath + '" skill [list|view|create|edit|delete]`.',
+        '  Whenever the user requests a task matching an installed skill, inspect `<skills>`, read the relevant `SKILL.md` (or call `skill_get`) BEFORE writing code, and strictly follow its procedures.',
         '- **MCP Server Safe Management:** `node "' + normalizedScriptPath + '" mcp [status|install|disable|enable|uninstall]`.'
       ].join('\n')
     : [
         '### 2b. MODO DE OPERACION DUAL, CATEGORIZACION DE SKILLS Y PROTOCOLO MCP FIRST:',
         '- **PRIORIDAD 1 — HERRAMIENTAS MCP NATIVAS (call_mcp_tool):**',
-        '  Cuando el servidor MCP `antigravity-obsidian` este activo, ejecuta SIEMPRE las operaciones mediante `call_mcp_tool` (`obsidian_session_save`, `obsidian_learn`, `obsidian_triage`, `obsidian_peek`, `obsidian_save_memory`, `obsidian_save_skill`, `obsidian_status`, `obsidian_session_last`, `obsidian_session_list`, `obsidian_search`, `obsidian_sync_all`, `obsidian_read_note`).',
+        '  Cuando el servidor MCP `antigravity-obsidian` este activo, ejecuta SIEMPRE las operaciones mediante `call_mcp_tool`:',
+        '  - **Operaciones del Bucle Cerrado Hermes:**',
+        '    - `memory_update` (`target`: "USER.md"|"MEMORY.md", `operation`: "append"|"replace"|"prune", `content`): Actualizar o podar memoria acotada bajo limites duros.',
+        '    - `skill_get` (`skill_name`): Cargar procedimientos operativos vivos desde `01_Skills/`.',
+        '    - `skill_save` (`skill_name`, `content`, `version_bump`): Crear o auto-reparar skills con versionado y correccion de edge cases.',
+        '    - `session_recall` (`query`, `limit`): Busqueda rapida sobre `03_Sesiones/` y Trajectories sin saturar el contexto.',
+        '  - **Herramientas de Boveda y Sesion:** `obsidian_session_save`, `obsidian_learn`, `obsidian_triage`, `obsidian_peek`, `obsidian_save_memory`, `obsidian_save_skill`, `obsidian_status`, `obsidian_session_last`, `obsidian_session_list`, `obsidian_search`, `obsidian_sync_all`, `obsidian_read_note`.',
         '  NO ejecutes subprocesos de shell (`run_command` con `node obsidian.js`) si dispones de una herramienta MCP equivalente activa.',
         '- **PRIORIDAD 2 — FALLBACK NODE CLI (run_command):**',
         '  Usa `run_command` con `node "' + normalizedScriptPath + '" ...` UNICAMENTE SI:',
@@ -634,10 +757,9 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '- **CATEGORIZACION DE SKILLS (GLOBAL VS PROYECTO):**',
         '  - **Skills Generales / Globales (`~/.gemini/config/skills/`):** Tecnologias, motores, frameworks y patrones transversales (ej: Roblox, Docker, Luau, Tailwind, ThreeJS, Flutter). Disponibles automaticamente en TODOS los proyectos y workspaces.',
         '  - **Skills de Proyecto (`<workspace>/.agents/skills/`):** APIs privadas, logica interna de base de datos o flujos exclusivos del repositorio actual.',
-        '  - **Auto-Categorizacion:** Al crear skills mediante `obsidian_save_skill` (o `node obsidian.js skill create`), asigna `scope: "global"` para tecnologias generales de modo que esten disponibles en cualquier proyecto. Define siempre `triggers` activadores (ej: `["roblox", "juego de roblox", "luau"]`) para que la descripcion contenga disparadores claros.',
+        '  - **Auto-Categorizacion:** Al crear skills mediante `skill_save` / `obsidian_save_skill`, define siempre `triggers` activadores para que el playbook contenga palabras clave claras.',
         '- **ACTIVACION PROACTIVA DE SKILLS (OBLIGATORIA ANTES DE ESCRIBIR CODIGO):**',
-        '  Siempre que el usuario solicite una tarea relacionada con una skill instalada (ej: "hazme un juego de roblox", "despliega con docker", "crea un componente"), comprueba `<skills>`, lee el `SKILL.md` de la skill relevante con `view_file` ANTES de programar o generar archivos, y sigue al pie de la letra sus directivas y scripts.',
-        '- **Lectura y Gestion de Skills:** Antigravity descubre skills en `<skills>`, `~/.gemini/config/skills/`, builtins del IDE y `.agents/skills/`. Puedes leer las instrucciones de skills directamente con `view_file` sobre `SKILL.md`. Para crear, modificar o sincronizar skills en la boveda de Obsidian, usa la herramienta MCP `obsidian_save_skill` o el CLI `node "' + normalizedScriptPath + '" skill [list|view|create|edit|delete]`.',
+        '  Siempre que el usuario solicite una tarea relacionada con una skill instalada, comprueba `<skills>`, lee el `SKILL.md` (o llama a `skill_get`) ANTES de programar o generar archivos, y sigue al pie de la letra sus directivas.',
         '- **Gestion del Servidor MCP:** `node "' + normalizedScriptPath + '" mcp [status|install|disable|enable|uninstall]`.'
       ].join('\n');
 
@@ -705,19 +827,23 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '- `/obsidian help`: Muestra la guia rapida de todos los comandos `/obsidian`.'
       ].join('\n');
 
+  const bootstrapBlock = vaultPath ? syncEngine.compileHermesBootstrap(vaultPath) : '';
+
   const ruleContent = isEn
     ? [
         '---',
-        'description: Autonomous Second Brain, Hermes Soul and Persistent Memory — Obsidian for Antigravity',
+        'description: Autonomous Second Brain, Hermes Closed Loop & Bounded Memory — Obsidian for Antigravity',
         '---',
+        '',
+        bootstrapBlock,
         '',
         '# Hermes Protocol & Second Brain — Obsidian for Antigravity',
         '',
         'The user has connected their Obsidian vault as **Second Brain and Persistent Memory**:',
         '- Active vault: **' + vaultName + '** (`' + vaultPath + '`).',
-        '- Soul & Identity: **Hermes Core (Active)** (`Antigravity/Alma/`).',
+        '- Soul & Identity: **Hermes Core (Active)** (`00_Agente/`).',
         '- Active skill across all chats: **`antigravity-obsidian`**.',
-        '- Query mode: **Low-Context Smart Triage (Zero Token Waste)**.',
+        '- Closed Learning Loop: **Bounded Memory & Self-Improving Skills (Active)**.',
         '- Autonomous saving: **' + (autoSave ? 'ACTIVE (AUTOMATIC)' : 'On demand') + '**.',
         '- Agent Name: **' + aiName + '** | User Callsign: **' + userCallsign + '** | Status: **' + (personalityConfigured ? 'CONFIGURED' : 'PENDING_ONBOARDING') + '**.',
         '',
@@ -726,6 +852,8 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         personalitySection,
         '',
         hermesSection,
+        '',
+        hermesLoopSection,
         '',
         proactiveSection,
         '',
@@ -742,16 +870,18 @@ function installSkillAndRules(targetVaultPath, options = {}) {
       ].join('\n')
     : [
         '---',
-        'description: Segundo Cerebro Autonomo, Soul Hermes y Memoria Persistente — Obsidian for Antigravity',
+        'description: Segundo Cerebro Autonomo, Bucle Cerrado Hermes y Memoria Acotada — Obsidian for Antigravity',
         '---',
+        '',
+        bootstrapBlock,
         '',
         '# Protocolo Hermes & Segundo Cerebro — Obsidian for Antigravity',
         '',
         'El usuario tiene conectada su boveda de Obsidian como **Segundo Cerebro y Memoria Persistente**:',
         '- Boveda activa: **' + vaultName + '** (`' + vaultPath + '`).',
-        '- Soul e Identidad: **Hermes Core (Activo)** (`Antigravity/Alma/`).',
+        '- Soul e Identidad: **Hermes Core (Activo)** (`00_Agente/`).',
         '- Skill activa en todos los chats: **`antigravity-obsidian`**.',
-        '- Modo de consulta: **Triage Inteligente de Ultra-Bajo Contexto (Zero Token Waste)**.',
+        '- Bucle Cerrado de Autoaprendizaje: **Memoria Acotada y Skills Vivas (Activo)**.',
         '- Guardado autonomo: **' + (autoSave ? 'ACTIVADO (AUTOMATICO)' : 'Bajo demanda') + '**.',
         '- Nombre del Agente: **' + aiName + '** | Trato hacia ti: **' + userCallsign + '** | Estado: **' + (personalityConfigured ? 'CONFIGURADO' : 'PENDIENTE_ONBOARDING') + '**.',
         '',
@@ -760,6 +890,8 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         personalitySection,
         '',
         hermesSection,
+        '',
+        hermesLoopSection,
         '',
         proactiveSection,
         '',

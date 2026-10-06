@@ -1057,6 +1057,162 @@ switch (cmd) {
     break;
   }
 
+  case 'quotas': {
+    const syncEngine = getSyncEngine();
+    if (syncEngine && typeof syncEngine.getHermesQuotas === 'function') {
+      console.log(JSON.stringify(syncEngine.getHermesQuotas(vault.path), null, 2));
+    }
+    break;
+  }
+
+  case 'bootstrap':
+  case 'hermes-bootstrap': {
+    const syncEngine = getSyncEngine();
+    if (syncEngine && typeof syncEngine.compileHermesBootstrap === 'function') {
+      console.log(syncEngine.compileHermesBootstrap(vault.path));
+    }
+    break;
+  }
+
+  case 'nudge': {
+    console.log(`[INTERNAL NUDGE]: Revisa los turnos recientes de esta conversación.
+1. ¿El usuario corrigió alguna preferencia tuya? -> Llama a memory_update(target="USER.md").
+2. ¿Descubriste una lección técnica o regla del entorno? -> Llama a memory_update(target="MEMORY.md").
+3. ¿Diseñaste o mejoraste un flujo repetible? -> Llama a skill_save(skill_name, content).
+4. Si no hay nada duradero que guardar, responde directamente al usuario sin llamar herramientas de persistencia.`);
+    break;
+  }
+
+  case 'memory':
+  case 'memory-update': {
+    const syncEngine = getSyncEngine();
+    const { flags, positional } = parseFlags(args);
+    const sub = (positional[0] || '').toLowerCase();
+
+    if (sub === 'quotas' || sub === 'quota' || flags.quotas) {
+      if (syncEngine && typeof syncEngine.getHermesQuotas === 'function') {
+        console.log(JSON.stringify(syncEngine.getHermesQuotas(vault.path), null, 2));
+      }
+      break;
+    }
+
+    let target = flags.target;
+    let operation = flags.operation || flags.op;
+    let content = flags.content || flags.c;
+
+    if (!target) {
+      if (['user', 'user.md'].includes(sub)) {
+        target = 'USER.md';
+        const nextPos = positional[1] ? positional[1].toLowerCase() : '';
+        if (['append', 'replace', 'prune'].includes(nextPos)) {
+          operation = operation || nextPos;
+          if (!content) content = positional.slice(2).join(' ');
+        } else {
+          operation = operation || 'append';
+          if (!content) content = positional.slice(1).join(' ');
+        }
+      } else if (['memory', 'memory.md'].includes(sub)) {
+        target = 'MEMORY.md';
+        const nextPos = positional[1] ? positional[1].toLowerCase() : '';
+        if (['append', 'replace', 'prune'].includes(nextPos)) {
+          operation = operation || nextPos;
+          if (!content) content = positional.slice(2).join(' ');
+        } else {
+          operation = operation || 'append';
+          if (!content) content = positional.slice(1).join(' ');
+        }
+      } else if (['append', 'replace', 'prune'].includes(sub)) {
+        operation = operation || sub;
+        target = flags.target || 'MEMORY.md';
+        if (!content) content = positional.slice(1).join(' ');
+      } else {
+        target = 'MEMORY.md';
+        operation = operation || 'append';
+        if (!content) content = positional.join(' ');
+      }
+    }
+
+    operation = operation || 'append';
+    if (!content) {
+      console.error(JSON.stringify({ error: 'Uso: node obsidian.js memory-update --target USER.md|MEMORY.md --operation append|replace|prune --content "..."' }));
+      process.exit(1);
+    }
+
+    if (syncEngine && typeof syncEngine.updateBoundedMemory === 'function') {
+      const res = syncEngine.updateBoundedMemory(vault.path, { target, operation, content });
+      if (res.error) {
+        console.error(JSON.stringify(res, null, 2));
+        process.exit(1);
+      }
+      console.log(JSON.stringify(res, null, 2));
+    } else {
+      console.error(JSON.stringify({ error: 'sync-engine no disponible para updateBoundedMemory' }));
+      process.exit(1);
+    }
+    break;
+  }
+
+  case 'skill-get': {
+    const syncEngine = getSyncEngine();
+    const skillName = args[0];
+    if (!skillName) {
+      console.error(JSON.stringify({ error: 'Uso: node obsidian.js skill-get <nombre-skill>' }));
+      process.exit(1);
+    }
+    if (syncEngine && typeof syncEngine.getSkill === 'function') {
+      const res = syncEngine.getSkill(vault.path, skillName);
+      if (res.error) {
+        console.error(JSON.stringify(res, null, 2));
+        process.exit(1);
+      }
+      console.log(JSON.stringify(res, null, 2));
+    }
+    break;
+  }
+
+  case 'skill-save': {
+    const syncEngine = getSyncEngine();
+    const { flags, positional } = parseFlags(args);
+    const skillName = positional[0] || flags.name;
+    const content = flags.content || flags.instructions || flags.c || positional.slice(1).join(' ');
+    const versionBump = !!(flags['version-bump'] || flags.bump);
+    const triggers = flags.triggers ? flags.triggers.split(',').map(t => t.trim()) : undefined;
+    const description = flags.desc || flags.description;
+
+    if (!skillName || !content) {
+      console.error(JSON.stringify({ error: 'Uso: node obsidian.js skill-save <nombre> --content "..." [--version-bump] [--triggers "..."]' }));
+      process.exit(1);
+    }
+
+    if (syncEngine && typeof syncEngine.saveHermesSkill === 'function') {
+      const res = syncEngine.saveHermesSkill(vault.path, {
+        name: skillName,
+        content,
+        versionBump,
+        triggers,
+        description,
+      });
+      console.log(JSON.stringify(res, null, 2));
+    }
+    break;
+  }
+
+  case 'session-recall': {
+    const syncEngine = getSyncEngine();
+    const { flags, positional } = parseFlags(args);
+    const query = flags.query || flags.q || positional.join(' ');
+    const maxResults = parseInt(flags.limit || flags.max || '5', 10);
+    if (!query) {
+      console.error(JSON.stringify({ error: 'Uso: node obsidian.js session-recall "<terminos>" [--limit 5]' }));
+      process.exit(1);
+    }
+    if (syncEngine && typeof syncEngine.sessionRecall === 'function') {
+      const res = syncEngine.sessionRecall(vault.path, query, maxResults);
+      console.log(JSON.stringify(res, null, 2));
+    }
+    break;
+  }
+
   case 'skill':
   case 'skills':
   case 'list-skills': {
@@ -1107,6 +1263,13 @@ switch (cmd) {
         console.error(JSON.stringify({ error: 'Uso: node obsidian.js skill view <nombre> [--full|--scripts|--files|--json]' }));
         process.exit(1);
       }
+      if (sub === 'get' && syncEngine && typeof syncEngine.getSkill === 'function') {
+        const hSkill = syncEngine.getSkill(vault.path, skillName);
+        if (!hSkill.error) {
+          console.log(JSON.stringify(hSkill, null, 2));
+          break;
+        }
+      }
       const isPeek = sub === 'peek' || flags.peek || (!flags.full && !flags.raw);
       if (syncEngine && typeof syncEngine.getSkillDetails === 'function') {
         const details = syncEngine.getSkillDetails(vault.path, process.cwd(), skillName, {
@@ -1126,6 +1289,31 @@ switch (cmd) {
       } else {
         console.error(JSON.stringify({ error: 'sync-engine no disponible para inspeccionar skill.' }));
         process.exit(1);
+      }
+      break;
+    }
+
+    if (sub === 'save') {
+      const skillName = positional[1] || flags.name;
+      const content = flags.content || flags.instructions || flags.c || positional.slice(2).join(' ');
+      const versionBump = !!(flags['version-bump'] || flags.bump);
+      const triggers = flags.triggers ? flags.triggers.split(',').map(t => t.trim()) : undefined;
+      const description = flags.desc || flags.description;
+
+      if (!skillName || !content) {
+        console.error(JSON.stringify({ error: 'Uso: node obsidian.js skill save <nombre> --content "..." [--version-bump] [--triggers "..."]' }));
+        process.exit(1);
+      }
+
+      if (syncEngine && typeof syncEngine.saveHermesSkill === 'function') {
+        const res = syncEngine.saveHermesSkill(vault.path, {
+          name: skillName,
+          content,
+          versionBump,
+          triggers,
+          description,
+        });
+        console.log(JSON.stringify(res, null, 2));
       }
       break;
     }
@@ -2616,6 +2804,21 @@ ${rows}
       return { count: list.length, sessions: list };
     }
 
+    if (sesSub === 'recall' || sesSub === 'search') {
+      const query = flags.query || flags.q || positional.slice(1).join(' ');
+      const limit = parseInt(flags.limit || flags.max || '5', 10);
+      const syncEngine = getSyncEngine();
+      if (!query) {
+        console.error(JSON.stringify({ error: 'Uso: node obsidian.js session recall "<terminos>" [--limit 5]' }));
+        process.exit(1);
+      }
+      if (syncEngine && typeof syncEngine.sessionRecall === 'function') {
+        const res = syncEngine.sessionRecall(vault.path, query, limit);
+        console.log(JSON.stringify(res, null, 2));
+      }
+      break;
+    }
+
     if (sesSub === 'save' || sesSub === 'checkpoint' || sesSub === 'log') {
       const pName = flags.project || flags.p || positional[1] || path.basename(process.cwd());
       let summary = flags.summary || flags.s || flags.title || '';
@@ -3071,7 +3274,14 @@ ${milestoneBlocks}
   case 'help':
   default:
     console.log(`
-Comandos de Obsidian for Antigravity (Zero Emojis, Ultra-Bajo Contexto):
+Comandos de Obsidian for Antigravity (Zero Emojis, Ultra-Bajo Contexto, Hermes Closed Loop):
+  node obsidian.js memory-update --target USER.md|MEMORY.md --operation append|replace|prune --content "..." (Memoria acotada con límites duros)
+  node obsidian.js quotas               (Consulta consumo de cuota de caracteres de USER.md y MEMORY.md)
+  node obsidian.js bootstrap            (Compila e imprime el bloque de arranque rápido [SYSTEM BOOTSTRAP: HERMES MEMORY ACTIVE])
+  node obsidian.js nudge                (Directiva de empujón interno de reflexión periódica [INTERNAL NUDGE])
+  node obsidian.js skill save <nombre> --content "..." [--version-bump] [--triggers "..."] (Playbook procedural automejorable)
+  node obsidian.js skill get <nombre>   (Recupera procedimiento operativo vivo de una skill)
+  node obsidian.js session recall "<q>" (Búsqueda textual rápida en sesiones y trayectorias)
   node obsidian.js name "<nombre>"      (Cambiar nombre del agente de IA inmediatamente)
   node obsidian.js user "<trato>"       (Cambiar trato hacia el usuario inmediatamente)
   node obsidian.js config [get|set ...] (Consultar o actualizar ajustes de configuracion)

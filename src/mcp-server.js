@@ -178,6 +178,107 @@ const TOOLS = [
       required: ['notePath'],
     },
   },
+  // Hermes Closed Learning Loop Tools (Nous Research Architecture)
+  {
+    name: 'memory_update',
+    description: 'Actualiza la memoria acotada (Bounded Memory) de Hermes en 00_Agente/ (USER.md máx 1500 chars, MEMORY.md máx 2500 chars). Si excede la cuota permitida, rechaza la operación con error de cuota intencionado para forzar al modelo a podar, fusionar o eliminar hechos obsoletos.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        target: { type: 'string', enum: ['USER.md', 'MEMORY.md'], description: 'Destino a actualizar ("USER.md" para preferencias o "MEMORY.md" para hechos del entorno)' },
+        operation: { type: 'string', enum: ['append', 'replace', 'prune'], description: 'Operación: "append" (añadir hecho), "replace" (reemplazar) o "prune" (condensación/poda)' },
+        content: { type: 'string', description: 'Contenido nuevo o versión condensada y podada' },
+      },
+      required: ['target', 'operation', 'content'],
+    },
+  },
+  {
+    name: 'skill_get',
+    description: 'Lee el contenido completo y procedimiento operativo de una skill viva (playbook versionado) desde 01_Skills/.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        skill_name: { type: 'string', description: 'Nombre de la skill a consultar (ej: ssh_sudo_paramiko, build_docker_ssh)' },
+      },
+      required: ['skill_name'],
+    },
+  },
+  {
+    name: 'skill_save',
+    description: 'Crea o auto-repara una habilidad procedural viva en 01_Skills/. Si ya existía, incrementa la versión e incorpora los nuevos aprendizajes y edge cases corregidos.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        skill_name: { type: 'string', description: 'Nombre de la skill en snake_case o kebab-case' },
+        content: { type: 'string', description: 'Contenido completo en Markdown con Procedimiento Operativo y Errores Conocidos y Corrección' },
+        version_bump: { type: 'boolean', description: 'Si es true, incrementa la versión menor (ej: 1.1 -> 1.2)' },
+        triggers: { type: 'array', items: { type: 'string' }, description: 'Palabras clave activadoras (opcional)' },
+      },
+      required: ['skill_name', 'content'],
+    },
+  },
+  {
+    name: 'session_recall',
+    description: 'Búsqueda por texto rápido sobre la carpeta 03_Sesiones/ y Trajectories para recuperar detalles de chats antiguos sin saturar el contexto.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Término, error o proyecto a buscar en las sesiones anteriores' },
+        limit: { type: 'number', description: 'Número máximo de resultados (por defecto 5)' },
+      },
+      required: ['query'],
+    },
+  },
+  // Aliases for obsidian_ prefix
+  {
+    name: 'obsidian_memory_update',
+    description: 'Alias para memory_update.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        target: { type: 'string', enum: ['USER.md', 'MEMORY.md'] },
+        operation: { type: 'string', enum: ['append', 'replace', 'prune'] },
+        content: { type: 'string' },
+      },
+      required: ['target', 'operation', 'content'],
+    },
+  },
+  {
+    name: 'obsidian_skill_get',
+    description: 'Alias para skill_get.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        skill_name: { type: 'string' },
+      },
+      required: ['skill_name'],
+    },
+  },
+  {
+    name: 'obsidian_skill_save',
+    description: 'Alias para skill_save.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        skill_name: { type: 'string' },
+        content: { type: 'string' },
+        version_bump: { type: 'boolean' },
+      },
+      required: ['skill_name', 'content'],
+    },
+  },
+  {
+    name: 'obsidian_session_recall',
+    description: 'Alias para session_recall.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string' },
+        limit: { type: 'number' },
+      },
+      required: ['query'],
+    },
+  },
 ];
 
 // Tool Executors
@@ -505,6 +606,77 @@ async function executeTool(name, args) {
 
         return {
           content: [{ type: 'text', text: `Nota abierta en la app Obsidian: ${uri}` }],
+        };
+      }
+
+      case 'memory_update':
+      case 'obsidian_memory_update': {
+        const result = syncEngine.updateBoundedMemory(vaultPath, args.target, args.operation, args.content);
+        if (result.isError) {
+          return {
+            isError: true,
+            content: [{
+              type: 'text',
+              text: `${result.error}\n\n[CONTEXT FOR CONDENSATION / PRUNING]:\nCurrent characters: ${result.current_chars || 0}/${result.limit}\nAttempted: ${result.attempted_chars || 0} chars (Overflow: +${result.overflow || 0})\n\nCurrent content in ${result.target || args.target}:\n"""\n${result.current_content || ''}\n"""\n\n${result.instruction || 'Condense and prune obsolete facts, then call memory_update with operation="replace" (or "prune").'}`
+            }],
+          };
+        }
+        return {
+          content: [{
+            type: 'text',
+            text: result.message,
+          }],
+        };
+      }
+
+      case 'skill_get':
+      case 'obsidian_skill_get': {
+        const sName = args.skill_name || args.skillName || args.name;
+        const result = syncEngine.getSkill(vaultPath, sName);
+        if (result.isError) {
+          return { isError: true, content: [{ type: 'text', text: result.error }] };
+        }
+        return {
+          content: [{
+            type: 'text',
+            text: result.content,
+          }],
+        };
+      }
+
+      case 'skill_save':
+      case 'obsidian_skill_save': {
+        const result = syncEngine.saveHermesSkill(vaultPath, {
+          skill_name: args.skill_name || args.skillName || args.name,
+          content: args.content,
+          version_bump: args.version_bump !== undefined ? args.version_bump : args.versionBump,
+          triggers: args.triggers,
+        });
+        if (result.isError) {
+          return { isError: true, content: [{ type: 'text', text: result.error }] };
+        }
+        return {
+          content: [{
+            type: 'text',
+            text: result.message || `Skill "${result.skillName}" guardada en 01_Skills/ (v${result.version}).`,
+          }],
+        };
+      }
+
+      case 'session_recall':
+      case 'obsidian_session_recall': {
+        const result = syncEngine.sessionRecall(vaultPath, args.query, args.limit || 5);
+        if (result.isError) {
+          return { isError: true, content: [{ type: 'text', text: result.error }] };
+        }
+        const matchesText = result.results.length > 0
+          ? result.results.map((r, i) => `${i + 1}. [[${r.file}]] (${r.path})\n   ${r.snippet}`).join('\n\n')
+          : `Sin coincidencias en 03_Sesiones/ para "${args.query}".`;
+        return {
+          content: [{
+            type: 'text',
+            text: `[SESSION RECALL: "${result.query}" - ${result.count} coincidencias]\n\n${matchesText}`,
+          }],
         };
       }
 

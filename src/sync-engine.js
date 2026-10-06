@@ -54,28 +54,767 @@ function getAntigravityPaths() {
   };
 }
 
+// -------------------------------------------------------------
+// Hermes Agent Closed Learning Loop (Nous Research Architecture)
+// -------------------------------------------------------------
+const HERMES_USER_MAX_CHARS = 1500;
+const HERMES_MEMORY_MAX_CHARS = 2500;
+
 function ensureVaultStructure(vaultPath) {
   if (!vaultPath || !fs.existsSync(vaultPath)) {
     throw new Error(`El Vault de Obsidian no existe: ${vaultPath}`);
   }
 
-  const baseDir = path.join(vaultPath, 'Antigravity');
-  const dirs = [
-    baseDir,
-    path.join(baseDir, 'Alma'),
-    path.join(baseDir, 'Memoria'),
-    path.join(baseDir, 'Skills'),
-    path.join(baseDir, 'Proyectos'),
-    path.join(baseDir, 'Sesiones'),
+  // 1. Official Hermes Directory Structure
+  const hermesDirs = [
+    path.join(vaultPath, '00_Agente'),
+    path.join(vaultPath, '01_Skills'),
+    path.join(vaultPath, '02_Proyectos'),
+    path.join(vaultPath, '03_Sesiones'),
+    path.join(vaultPath, '03_Sesiones', 'Trajectories'),
   ];
 
-  for (const d of dirs) {
+  // 2. Backward Compatibility Directories
+  const legacyBase = path.join(vaultPath, 'Antigravity');
+  const legacyDirs = [
+    legacyBase,
+    path.join(legacyBase, 'Alma'),
+    path.join(legacyBase, 'Memoria'),
+    path.join(legacyBase, 'Skills'),
+    path.join(legacyBase, 'Proyectos'),
+    path.join(legacyBase, 'Sesiones'),
+  ];
+
+  for (const d of [...hermesDirs, ...legacyDirs]) {
     if (!fs.existsSync(d)) {
       fs.mkdirSync(d, { recursive: true });
     }
   }
 
-  return baseDir;
+  // Initialize Hermes Core notes and ensure seamless auto-migration from legacy versions
+  try {
+    ensureHermesCore(vaultPath);
+    migrateToHermes(vaultPath);
+  } catch (e) {}
+
+  return legacyBase;
+}
+
+function ensureHermesCore(vaultPath, options = {}) {
+  if (!vaultPath || !fs.existsSync(vaultPath)) return null;
+
+  const agenteDir = path.join(vaultPath, '00_Agente');
+  if (!fs.existsSync(agenteDir)) {
+    fs.mkdirSync(agenteDir, { recursive: true });
+  }
+
+  const soulFile = path.join(agenteDir, 'SOUL.md');
+  const userFile = path.join(agenteDir, 'USER.md');
+  const memoryFile = path.join(agenteDir, 'MEMORY.md');
+
+  const now = new Date().toISOString().split('T')[0];
+  const userName = resolveUserName(vaultPath, options.userName);
+  const lang = resolveLanguage(options);
+  const isEn = (lang === 'en');
+
+  // 1. SOUL.md (Inmutable, principios operativos y tono)
+  if (!fs.existsSync(soulFile) || options.forceUpdate) {
+    const soulContent = isEn
+      ? `---
+title: "Hermes Agent Soul"
+type: hermes-soul
+last_updated: ${now}
+---
+
+# Agent Soul — Operational Principles & Identity
+
+> [!NOTE] **Core Identity**
+> You are Antigravity / Hermes: an elite, autonomous, senior software engineer with surgical precision. Pragmatic, direct, and rigorous. Never a passive chatbot.
+
+## Core Non-Negotiable Directives
+1. **Autonomous Execution:** Diagnose root causes, implement complete solutions, verify tests/compilations, and deliver final working results without asking permission for obvious steps.
+2. **Zero Fluff & Zero Friction:** Synthetic, dense technical communication. Zero corporate filler, zero condescension, zero empty apologies. Strictly ZERO EMOJIS at all times.
+3. **Cross-Platform Engineering:** Clean, modular, verified solutions for Windows, Ubuntu (Linux), and macOS.
+4. **Hermes Closed Loop:** Self-correct procedural skills in \`01_Skills/\` when they fail. Keep memory strictly bounded below character quotas.
+`
+      : `---
+title: "Soul de Hermes"
+type: hermes-soul
+last_updated: ${now}
+---
+
+# Soul de Hermes — Identidad y Principios Operativos
+
+> [!NOTE] **Identidad Operativa**
+> Eres Antigravity / Hermes: un ingeniero senior de élite, autónomo, pragmático y de precisión quirúrgica. Socio técnico pair-programming, nunca un chatbot pasivo.
+
+## Principios Inmutables
+1. **Resolución Autónoma:** Diagnostica la causa raíz, implementa código completo verificado y entrega resultados terminados sin pedir permiso para pasos obvios.
+2. **Cero Paja y Cero Fricción:** Comunicación técnica sintética y densa. Cero preámbulos genéricos, cero disculpas vacías y estrictamente CERO EMOJIS en absolutamente todo momento.
+3. **Rigor Multiplataforma:** Soluciones limpias y verificadas para Windows, Ubuntu (Linux) y macOS.
+4. **Bucle Cerrado Hermes:** Auto-repara skills en \`01_Skills/\` cuando fallen y mantén la memoria acotada bajo las cuotas estrictas de caracteres.
+`;
+    fs.writeFileSync(soulFile, soulContent, 'utf8');
+  }
+
+  // 2. USER.md (Bounded to 1,500 chars)
+  if (!fs.existsSync(userFile) || options.forceUpdate) {
+    let initialUserContent = '';
+    const legacyUserPath = path.join(vaultPath, 'Antigravity', 'Alma', '00 Perfil de Usuario.md');
+    const habitBullets = [];
+
+    if (fs.existsSync(legacyUserPath) && !options.forceUpdate) {
+      try {
+        const legacyRaw = fs.readFileSync(legacyUserPath, 'utf8');
+        const lines = legacyRaw.split('\n');
+        let inHabits = false;
+        for (const l of lines) {
+          if (/##\s*(?:Aprendizajes Registrados|Learned Habits|Aprendizajes)/i.test(l)) {
+            inHabits = true;
+            continue;
+          }
+          if (inHabits && /^##\s+/.test(l)) {
+            inHabits = false;
+          }
+          if (inHabits && l.trim().startsWith('-')) {
+            habitBullets.push(l.trim());
+          }
+        }
+      } catch (e) {}
+    }
+
+    const baseUser = isEn
+      ? `---
+user: "${userName}"
+quota: ${HERMES_USER_MAX_CHARS}
+updated: ${now}
+---
+
+# User Profile — ${userName}
+
+## Preferences & Dialectics
+- **Communication:** Dense, technical, direct. Adapt to active language. Zero pleasantries.
+- **Formatting:** Strictly ZERO EMOJIS across all code, notes, and chats.
+- **Verification:** Prefers verified working code over theoretical explanations.
+- **Anti-Noise Filter:** Only record non-trivial breakthroughs, architectural rules, or explicit user directives.`
+      : `---
+user: "${userName}"
+quota: ${HERMES_USER_MAX_CHARS}
+updated: ${now}
+---
+
+# Perfil del Usuario — ${userName}
+
+## Preferencias y Comunicación
+- **Estilo:** Técnico, directo, denso y sintético. Cero relleno corporativo.
+- **Formato:** Estrictamente CERO EMOJIS en explicaciones, código, notas y commits.
+- **Rigor:** Soluciones verificadas y probadas antes de dar por cerrada la tarea.
+- **Filtro Anti-Ruido:** Guardar únicamente soluciones a bloqueos difíciles, condiciones de entorno y directrices explícitas.`;
+
+    let habitsHeader = isEn ? '\n\n## Learned Habits & Project Rules\n' : '\n\n## Aprendizajes Registrados por Antigravity\n';
+    let combinedHabits = habitBullets.join('\n');
+    let candidate = habitBullets.length > 0 ? (baseUser + habitsHeader + combinedHabits) : baseUser;
+
+    if (candidate.length > HERMES_USER_MAX_CHARS) {
+      // Gracefully prune oldest habits to fit within quota
+      while (habitBullets.length > 0 && (baseUser + habitsHeader + habitBullets.join('\n')).length > (HERMES_USER_MAX_CHARS - 30)) {
+        habitBullets.shift();
+      }
+      candidate = habitBullets.length > 0 ? (baseUser + habitsHeader + habitBullets.join('\n')) : baseUser;
+    }
+
+    initialUserContent = candidate.slice(0, HERMES_USER_MAX_CHARS);
+    fs.writeFileSync(userFile, initialUserContent, 'utf8');
+  }
+
+  // 3. MEMORY.md (Bounded to 2,500 chars)
+  if (!fs.existsSync(memoryFile) || options.forceUpdate) {
+    const legacyMemDir = path.join(vaultPath, 'Antigravity', 'Memoria');
+    const memoryFacts = [];
+    if (fs.existsSync(legacyMemDir)) {
+      try {
+        const memFiles = fs.readdirSync(legacyMemDir).filter(f => f.endsWith('.md') && !f.startsWith('00'));
+        for (const mf of memFiles.slice(0, 12)) {
+          try {
+            const mContent = fs.readFileSync(path.join(legacyMemDir, mf), 'utf8');
+            const mTitle = mf.replace(/\.md$/, '');
+            const sumMatch = mContent.match(/>\s*\[!(?:NOTE|ABSTRACT)\][^\r\n]*\r?\n>\s*([^\r\n]+)/i)
+              || mContent.match(/^summary:\s*["']?([^"'\r\n]+)["']?/m);
+            const sum = sumMatch ? sumMatch[1].trim() : mTitle;
+            memoryFacts.push(`- **${mTitle}:** ${sum.slice(0, 110)}`);
+          } catch (e) {}
+        }
+      } catch (e) {}
+    }
+
+    const baseMem = isEn
+      ? `---
+type: core-memory
+quota: ${HERMES_MEMORY_MAX_CHARS}
+updated: ${now}
+---
+
+# Core Environment Memory
+
+## System & Infrastructure Facts
+- **Agent Platform:** Antigravity IDE connected to local Obsidian Vault.
+- **Architecture:** Hermes Closed Learning Loop active (Bounded Memory & Self-Improving Skills).
+- **Rule:** Synthesize and prune obsolete entries whenever approaching the 2500 char quota limit.`
+      : `---
+type: core-memory
+quota: ${HERMES_MEMORY_MAX_CHARS}
+updated: ${now}
+---
+
+# Memoria Central del Entorno (Core Memory)
+
+## Hechos Consolidados del Entorno
+- **Plataforma:** Antigravity IDE conectado a Vault local de Obsidian.
+- **Arquitectura:** Bucle cerrado Hermes activo (Memoria Acotada y Habilidades Procedurales Vivas).
+- **Regla Operativa:** Sintetizar y podar hechos obsoletos cuando el contenido se aproxime al límite de 2500 caracteres.`;
+
+    let factsHeader = isEn ? '\n\n## Consolidated Environment Facts\n' : '\n\n## Hechos Técnicos Heredados del Entorno\n';
+    let candidateMem = memoryFacts.length > 0 ? (baseMem + factsHeader + memoryFacts.join('\n')) : baseMem;
+
+    if (candidateMem.length > HERMES_MEMORY_MAX_CHARS) {
+      while (memoryFacts.length > 0 && (baseMem + factsHeader + memoryFacts.join('\n')).length > (HERMES_MEMORY_MAX_CHARS - 30)) {
+        memoryFacts.pop();
+      }
+      candidateMem = memoryFacts.length > 0 ? (baseMem + factsHeader + memoryFacts.join('\n')) : baseMem;
+    }
+
+    fs.writeFileSync(memoryFile, candidateMem.slice(0, HERMES_MEMORY_MAX_CHARS), 'utf8');
+  }
+
+  return { soulFile, userFile, memoryFile };
+}
+
+function updateBoundedMemory(vaultPath, target, operation, content) {
+  if (!vaultPath || !fs.existsSync(vaultPath)) {
+    return { isError: true, error: 'Vault de Obsidian no disponible.' };
+  }
+  ensureVaultStructure(vaultPath);
+
+  let normalizedTarget = (target || '').trim();
+  let fileName = '';
+  let limit = HERMES_MEMORY_MAX_CHARS;
+
+  if (normalizedTarget.toLowerCase().includes('user')) {
+    fileName = 'USER.md';
+    limit = HERMES_USER_MAX_CHARS;
+  } else if (normalizedTarget.toLowerCase().includes('memory') || normalizedTarget.toLowerCase().includes('memoria')) {
+    fileName = 'MEMORY.md';
+    limit = HERMES_MEMORY_MAX_CHARS;
+  } else {
+    return {
+      isError: true,
+      error: `Destino inválido: "${target}". Debe ser "USER.md" (máx 1500 chars) o "MEMORY.md" (máx 2500 chars).`,
+    };
+  }
+
+  const filePath = path.join(vaultPath, '00_Agente', fileName);
+  let existingContent = '';
+  if (fs.existsSync(filePath)) {
+    existingContent = fs.readFileSync(filePath, 'utf8');
+  }
+
+  const op = (operation || 'append').toLowerCase().trim();
+  let newContent = '';
+  const safeContent = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+
+  if (op === 'append') {
+    newContent = existingContent ? `${existingContent.trim()}\n- ${safeContent.trim()}` : safeContent.trim();
+  } else if (op === 'replace' || op === 'prune') {
+    newContent = safeContent.trim();
+  } else {
+    return {
+      isError: true,
+      error: `Operación no soportada: "${operation}". Usa únicamente "append" (añadir hecho), "replace" (reemplazar contenido) o "prune" (condensación/poda).`,
+    };
+  }
+
+  // ENFORCE HARD QUOTA WITH COMPLETE CONTEXT PAYLOAD
+  if (newContent.length > limit) {
+    return {
+      isError: true,
+      error: `ERROR: Memory quota exceeded (${newContent.length}/${limit} chars for ${fileName}). Must prune, merge, or delete outdated facts before adding new ones.`,
+      current_content: existingContent,
+      current_chars: existingContent.length,
+      attempted_chars: newContent.length,
+      limit,
+      overflow: newContent.length - limit,
+      instruction: `Review 'current_content' above, synthesize and condense the facts to stay under ${limit} characters, and call memory_update(target="${fileName}", operation="replace", content=pruned_content).`,
+    };
+  }
+
+  fs.writeFileSync(filePath, newContent, 'utf8');
+
+  // Mirror USER.md to legacy profile note if present
+  if (fileName === 'USER.md') {
+    try {
+      const legacyPath = path.join(vaultPath, 'Antigravity', 'Alma', '00 Perfil de Usuario.md');
+      if (fs.existsSync(legacyPath)) {
+        fs.writeFileSync(legacyPath, newContent, 'utf8');
+      }
+    } catch (e) {}
+  }
+
+  // Refresh bootstrap rule in Antigravity
+  try {
+    const { installSkillAndRules } = require('./skill-installer');
+    installSkillAndRules(vaultPath);
+  } catch (e) {}
+
+  return {
+    isError: false,
+    target: fileName,
+    currentLength: newContent.length,
+    current_chars: newContent.length,
+    limit,
+    remainingChars: limit - newContent.length,
+    message: `Memoria ${fileName} actualizada correctamente (${newContent.length}/${limit} chars). Bootstrap refrescado.`,
+  };
+}
+
+function getSkill(vaultPath, skillName) {
+  if (!vaultPath || !fs.existsSync(vaultPath)) {
+    return { isError: true, error: 'Vault no encontrado.' };
+  }
+  let cleanName = (skillName || '').trim().replace(/\.md$/, '');
+  const hermesSkillPath = path.join(vaultPath, '01_Skills', `${cleanName}.md`);
+  if (fs.existsSync(hermesSkillPath)) {
+    return {
+      isError: false,
+      skillName: cleanName,
+      path: hermesSkillPath,
+      content: fs.readFileSync(hermesSkillPath, 'utf8'),
+    };
+  }
+
+  const legacySkillPath = path.join(vaultPath, 'Antigravity', 'Skills', `${cleanName}.md`);
+  if (fs.existsSync(legacySkillPath)) {
+    return {
+      isError: false,
+      skillName: cleanName,
+      path: legacySkillPath,
+      content: fs.readFileSync(legacySkillPath, 'utf8'),
+    };
+  }
+
+  const globalSkillPath = path.join(os.homedir(), '.gemini', 'config', 'skills', cleanName, 'SKILL.md');
+  if (fs.existsSync(globalSkillPath)) {
+    return {
+      isError: false,
+      skillName: cleanName,
+      path: globalSkillPath,
+      content: fs.readFileSync(globalSkillPath, 'utf8'),
+    };
+  }
+
+  const wsRoot = resolveWorkspaceRoot();
+  if (wsRoot) {
+    const wsSkillPath = path.join(wsRoot, '.agents', 'skills', cleanName, 'SKILL.md');
+    if (fs.existsSync(wsSkillPath)) {
+      return {
+        isError: false,
+        skillName: cleanName,
+        path: wsSkillPath,
+        content: fs.readFileSync(wsSkillPath, 'utf8'),
+      };
+    }
+  }
+
+  return {
+    isError: true,
+    error: `Skill no encontrada: "${skillName}" en 01_Skills/ ni en registro global.`,
+  };
+}
+
+function saveHermesSkill(vaultPath, options = {}) {
+  if (!vaultPath || !fs.existsSync(vaultPath)) {
+    return { isError: true, error: 'Vault no encontrado.' };
+  }
+  ensureVaultStructure(vaultPath);
+
+  const rawName = (options.skill_name || options.skillName || options.name || '').trim();
+  if (!rawName) {
+    return { isError: true, error: 'Se requiere el nombre de la skill.' };
+  }
+  const safeName = rawName.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-');
+  const hermesSkillDir = path.join(vaultPath, '01_Skills');
+  const targetFile = path.join(hermesSkillDir, `${safeName}.md`);
+
+  const now = new Date().toISOString().split('T')[0];
+  let version = '1.0';
+  let triggers = options.triggers || [safeName];
+
+  let rawContent = (options.content || '').trim();
+
+  if (fs.existsSync(targetFile)) {
+    const oldContent = fs.readFileSync(targetFile, 'utf8');
+    const vMatch = oldContent.match(/^version:\s*([0-9.]+)/m);
+    if (vMatch) {
+      let currentV = parseFloat(vMatch[1]) || 1.0;
+      if (options.version_bump === true || options.versionBump === true || options.version_bump === undefined) {
+        version = (Math.round((currentV + 0.1) * 10) / 10).toFixed(1);
+      } else {
+        version = vMatch[1].trim();
+      }
+    } else {
+      version = '1.1';
+    }
+    const tMatch = oldContent.match(/^triggers:\s*\[(.*?)\]/m);
+    if (tMatch && (!options.triggers || options.triggers.length === 0)) {
+      try {
+        triggers = tMatch[1].split(',').map(s => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
+      } catch (e) {}
+    }
+  }
+
+  let finalMarkdown = '';
+  if (rawContent.startsWith('---')) {
+    finalMarkdown = rawContent
+      .replace(/^version:\s*.*$/m, `version: ${version}`)
+      .replace(/^last_verified:\s*.*$/m, `last_verified: ${now}`);
+  } else {
+    const triggerList = Array.isArray(triggers) ? triggers : [safeName];
+    const triggerStr = JSON.stringify(triggerList);
+    finalMarkdown = `---
+skill: ${safeName}
+version: ${version}
+last_verified: ${now}
+triggers: ${triggerStr}
+---
+
+${rawContent}
+`;
+  }
+
+  if (!finalMarkdown.includes('## Errores Conocidos y Corrección') && !finalMarkdown.includes('## Known Errors')) {
+    finalMarkdown += `\n\n## Errores Conocidos y Corrección (Aprendidos en Ejecución)\n*(Sin errores registrados aún en ejecución)*\n`;
+  }
+
+  fs.writeFileSync(targetFile, finalMarkdown, 'utf8');
+
+  // Also sync to legacy Antigravity/Skills folder
+  try {
+    const legacySkillFile = path.join(vaultPath, 'Antigravity', 'Skills', `${safeName}.md`);
+    fs.writeFileSync(legacySkillFile, finalMarkdown, 'utf8');
+  } catch (e) {}
+
+  // Also sync to Antigravity global skills
+  try {
+    const globalSkillDir = path.join(os.homedir(), '.gemini', 'config', 'skills', safeName);
+    if (!fs.existsSync(globalSkillDir)) {
+      fs.mkdirSync(globalSkillDir, { recursive: true });
+    }
+    const skillMdPath = path.join(globalSkillDir, 'SKILL.md');
+    const skillDesc = options.description || `Playbook operativo Hermes: ${safeName}`;
+    const antigravitySkillMd = `---
+name: ${safeName}
+description: >
+  ${skillDesc}. Version: ${version}. Triggers: ${Array.isArray(triggers) ? triggers.join(', ') : safeName}.
+---
+
+${finalMarkdown}
+`;
+    fs.writeFileSync(skillMdPath, antigravitySkillMd, 'utf8');
+  } catch (e) {}
+
+  // Refresh bootstrap
+  try {
+    const { installSkillAndRules } = require('./skill-installer');
+    installSkillAndRules(vaultPath);
+  } catch (e) {}
+
+  return {
+    isError: false,
+    skillName: safeName,
+    version,
+    path: targetFile,
+    message: `Skill "${safeName}" guardada en 01_Skills/ (v${version}). Disponible en Antigravity y Obsidian.`,
+  };
+}
+
+function sessionRecall(vaultPath, query, limit = 5) {
+  if (!vaultPath || !fs.existsSync(vaultPath)) {
+    return { isError: true, error: 'Vault no encontrado.' };
+  }
+  const cleanQ = (query || '').toLowerCase().trim();
+  if (!cleanQ) {
+    return { isError: true, error: 'Query de búsqueda requerida.' };
+  }
+
+  const searchDirs = [
+    path.join(vaultPath, '03_Sesiones'),
+    path.join(vaultPath, '03_Sesiones', 'Trajectories'),
+    path.join(vaultPath, 'Antigravity', 'Sesiones'),
+  ];
+
+  const results = [];
+  const maxResults = limit || 5;
+
+  for (const dir of searchDirs) {
+    if (!fs.existsSync(dir)) continue;
+    try {
+      const files = fs.readdirSync(dir, { withFileTypes: true });
+      for (const f of files) {
+        if (!f.isFile() || !f.name.endsWith('.md')) continue;
+        const filePath = path.join(dir, f.name);
+        try {
+          const content = fs.readFileSync(filePath, 'utf8');
+          const lower = content.toLowerCase();
+          const matchIdx = lower.indexOf(cleanQ);
+          if (matchIdx !== -1) {
+            const start = Math.max(0, matchIdx - 80);
+            const end = Math.min(content.length, matchIdx + 200);
+            let snippet = content.slice(start, end).replace(/\r?\n/g, ' ').trim();
+            if (start > 0) snippet = '...' + snippet;
+            if (end < content.length) snippet += '...';
+
+            let mtime = 0;
+            try { mtime = fs.statSync(filePath).mtimeMs; } catch (e) {}
+
+            results.push({
+              file: f.name,
+              path: path.relative(vaultPath, filePath).replace(/\\/g, '/'),
+              snippet,
+              mtime,
+            });
+          }
+        } catch (e) {}
+      }
+    } catch (e) {}
+  }
+
+  results.sort((a, b) => (b.mtime || 0) - (a.mtime || 0));
+  const finalResults = results.slice(0, maxResults);
+
+  return {
+    isError: false,
+    query,
+    count: finalResults.length,
+    results: finalResults,
+  };
+}
+
+function compileHermesBootstrap(vaultPath) {
+  if (!vaultPath || !fs.existsSync(vaultPath)) {
+    return '';
+  }
+  ensureVaultStructure(vaultPath);
+
+  const soulFile = path.join(vaultPath, '00_Agente', 'SOUL.md');
+  const userFile = path.join(vaultPath, '00_Agente', 'USER.md');
+  const memoryFile = path.join(vaultPath, '00_Agente', 'MEMORY.md');
+
+  const soulText = fs.existsSync(soulFile) ? fs.readFileSync(soulFile, 'utf8').trim() : 'Senior autonomous engineer, pragmatic, zero fluff.';
+  const userText = fs.existsSync(userFile) ? fs.readFileSync(userFile, 'utf8').trim() : 'User Profile: Direct technical communication, zero emojis.';
+  const memText = fs.existsSync(memoryFile) ? fs.readFileSync(memoryFile, 'utf8').trim() : 'Core Memory: Hermes Closed Learning Loop active.';
+
+  const userChars = userText.length;
+  const memChars = memText.length;
+
+  // Scan 01_Skills/
+  const skillsIndexLines = [];
+  const skillsDir = path.join(vaultPath, '01_Skills');
+  if (fs.existsSync(skillsDir)) {
+    try {
+      const sFiles = fs.readdirSync(skillsDir).filter(f => f.endsWith('.md'));
+      for (const sf of sFiles) {
+        try {
+          const sContent = fs.readFileSync(path.join(skillsDir, sf), 'utf8');
+          const sName = sf.replace(/\.md$/, '');
+          const tMatch = sContent.match(/^triggers:\s*(\[.*?\]|[^\r\n]+)/m);
+          let triggerInfo = '';
+          if (tMatch) triggerInfo = ` (triggers: ${tMatch[1].trim()})`;
+          const vMatch = sContent.match(/^version:\s*([0-9.]+)/m);
+          const vStr = vMatch ? `v${vMatch[1]}` : '';
+          skillsIndexLines.push(`- ${sName} ${vStr}${triggerInfo}`);
+        } catch (e) {}
+      }
+    } catch (e) {}
+  }
+
+  if (skillsIndexLines.length === 0) {
+    const globalSkillsDir = path.join(os.homedir(), '.gemini', 'config', 'skills');
+    if (fs.existsSync(globalSkillsDir)) {
+      try {
+        const dirs = fs.readdirSync(globalSkillsDir, { withFileTypes: true });
+        for (const d of dirs) {
+          if (d.isDirectory() && !d.name.includes('obsidian')) {
+            skillsIndexLines.push(`- ${d.name}: Playbook ejecutable bajo demanda.`);
+          }
+        }
+      } catch (e) {}
+    }
+  }
+
+  const skillsIndexStr = skillsIndexLines.length > 0
+    ? skillsIndexLines.join('\n')
+    : '- (No hay skills guardadas aún en 01_Skills/)';
+
+  return [
+    '══════════════════════════════════════════════════════════════',
+    '[SYSTEM BOOTSTRAP: HERMES MEMORY ACTIVE]',
+    '-- SOUL (Identidad y Directivas)',
+    soulText,
+    '',
+    `-- USER PROFILE [${userChars}/${HERMES_USER_MAX_CHARS} chars]`,
+    userText,
+    '',
+    `-- CORE MEMORY [${memChars}/${HERMES_MEMORY_MAX_CHARS} chars]`,
+    memText,
+    '',
+    '-- SKILLS INDEX (Carga bajo demanda vía skill_get)',
+    skillsIndexStr,
+    '══════════════════════════════════════════════════════════════',
+  ].join('\n');
+}
+
+function getHermesQuotas(vaultPath) {
+  if (!vaultPath || !fs.existsSync(vaultPath)) {
+    return {
+      userChars: 0,
+      userLimit: HERMES_USER_MAX_CHARS,
+      userPercent: 0,
+      memChars: 0,
+      memLimit: HERMES_MEMORY_MAX_CHARS,
+      memPercent: 0,
+      skillsCount: 0,
+    };
+  }
+  ensureVaultStructure(vaultPath);
+
+  const userFile = path.join(vaultPath, '00_Agente', 'USER.md');
+  const memoryFile = path.join(vaultPath, '00_Agente', 'MEMORY.md');
+  const skillsDir = path.join(vaultPath, '01_Skills');
+
+  const userChars = fs.existsSync(userFile) ? fs.readFileSync(userFile, 'utf8').length : 0;
+  const memChars = fs.existsSync(memoryFile) ? fs.readFileSync(memoryFile, 'utf8').length : 0;
+  let skillsCount = 0;
+  if (fs.existsSync(skillsDir)) {
+    try {
+      skillsCount = fs.readdirSync(skillsDir).filter(f => f.endsWith('.md')).length;
+    } catch (e) {}
+  }
+
+  return {
+    userChars,
+    userLimit: HERMES_USER_MAX_CHARS,
+    userPercent: Math.min(100, Math.round((userChars / HERMES_USER_MAX_CHARS) * 100)),
+    memChars,
+    memLimit: HERMES_MEMORY_MAX_CHARS,
+    memPercent: Math.min(100, Math.round((memChars / HERMES_MEMORY_MAX_CHARS) * 100)),
+    skillsCount,
+  };
+}
+
+function migrateToHermes(vaultPath) {
+  if (!vaultPath || !fs.existsSync(vaultPath)) return { migratedSkills: 0, migratedProjects: 0 };
+
+  const hermesDirs = [
+    path.join(vaultPath, '00_Agente'),
+    path.join(vaultPath, '01_Skills'),
+    path.join(vaultPath, '02_Proyectos'),
+    path.join(vaultPath, '03_Sesiones'),
+    path.join(vaultPath, '03_Sesiones', 'Trajectories'),
+  ];
+  for (const d of hermesDirs) {
+    if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+  }
+
+  // 1. Ensure Hermes Core notes (SOUL, USER, MEMORY)
+  ensureHermesCore(vaultPath);
+
+  let migratedSkills = 0;
+  let migratedProjects = 0;
+
+  // 2. Migrate legacy skills to 01_Skills with full Hermes living playbook schema
+  const legacySkillsDir = path.join(vaultPath, 'Antigravity', 'Skills');
+  const hermesSkillsDir = path.join(vaultPath, '01_Skills');
+  if (fs.existsSync(legacySkillsDir)) {
+    try {
+      const files = fs.readdirSync(legacySkillsDir).filter(f => f.endsWith('.md') && !f.startsWith('00'));
+      for (const f of files) {
+        const skillName = f.replace(/\.md$/, '');
+        const dest = path.join(hermesSkillsDir, f);
+        const legacyPath = path.join(legacySkillsDir, f);
+        const legacyContent = fs.readFileSync(legacyPath, 'utf8');
+
+        // Check if destination exists and already has Hermes metadata
+        const needsHermesWrap = !fs.existsSync(dest) || !legacyContent.includes('version:');
+
+        if (needsHermesWrap) {
+          // Extract description / tags / content
+          const tagMatches = legacyContent.match(/tags:\s*\[(.*?)\]/) || legacyContent.match(/tags:\s*\n((?:\s*-\s*[^\n]+\n?)+)/);
+          let triggers = [skillName];
+          if (tagMatches) {
+            const rawTags = tagMatches[1].replace(/-\s*/g, '').replace(/antigravity\/skill/g, '').split(/[\n,]/).map(t => t.trim()).filter(Boolean);
+            triggers = [...new Set([...triggers, ...rawTags])];
+          }
+
+          let body = legacyContent.replace(/^---[\s\S]*?---\s*/, '').trim();
+          let procedure = body;
+          let errorsSection = '- Sin incidencias iniciales registradas en ejecución.';
+
+          if (body.includes('## Instrucciones')) {
+            const parts = body.split('## Instrucciones');
+            procedure = (parts[1] || body).trim();
+          }
+
+          const hermesSkill = [
+            '---',
+            `skill: ${skillName}`,
+            'version: 1.0',
+            `last_verified: ${new Date().toISOString().split('T')[0]}`,
+            `triggers: ${JSON.stringify(triggers)}`,
+            '---',
+            '',
+            '## Procedimiento Operativo',
+            procedure || 'Procedimiento operativo ejecutable.',
+            '',
+            '## Errores Conocidos y Corrección (Aprendidos en Ejecución)',
+            errorsSection,
+            ''
+          ].join('\n');
+
+          fs.writeFileSync(dest, hermesSkill, 'utf8');
+          // Also update the legacy mirror so both remain compatible
+          fs.writeFileSync(legacyPath, hermesSkill, 'utf8');
+          migratedSkills++;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 3. Migrate projects to 02_Proyectos/[Project]/ARCHITECTURE.md + WORKFLOW.md
+  const legacyProjDir = path.join(vaultPath, 'Antigravity', 'Proyectos');
+  const hermesProjDir = path.join(vaultPath, '02_Proyectos');
+  if (fs.existsSync(legacyProjDir)) {
+    try {
+      const pFiles = fs.readdirSync(legacyProjDir).filter(f => f.endsWith('.md') && !f.startsWith('00'));
+      for (const pf of pFiles) {
+        const pName = pf.replace(/\.md$/, '');
+        const pFolder = path.join(hermesProjDir, pName);
+        if (!fs.existsSync(pFolder)) {
+          fs.mkdirSync(pFolder, { recursive: true });
+        }
+        const archFile = path.join(pFolder, 'ARCHITECTURE.md');
+        const workFile = path.join(pFolder, 'WORKFLOW.md');
+        if (!fs.existsSync(archFile)) {
+          const pContent = fs.readFileSync(path.join(legacyProjDir, pf), 'utf8');
+          fs.writeFileSync(archFile, pContent, 'utf8');
+          migratedProjects++;
+        }
+        if (!fs.existsSync(workFile)) {
+          fs.writeFileSync(workFile, `# Workflow — ${pName}\n\nComandos reales probados y funcionales para este proyecto.\n\n## Comandos Frecuentes\n- \`npm test\` / \`npm run build\`\n`, 'utf8');
+        }
+      }
+    } catch (e) {}
+  }
+
+  return { migratedSkills, migratedProjects };
 }
 
 // -------------------------------------------------------------
@@ -2154,6 +2893,65 @@ ${skillsSection}
 
   fs.writeFileSync(obsFile, content, 'utf8');
 
+  // Also create/update Hermes 02_Proyectos/${projectName}/ARCHITECTURE.md & WORKFLOW.md
+  try {
+    const hermesProjFolder = path.join(vaultPath, '02_Proyectos', sanitizeFilename(projectName));
+    if (!fs.existsSync(hermesProjFolder)) {
+      fs.mkdirSync(hermesProjFolder, { recursive: true });
+    }
+    const archFile = path.join(hermesProjFolder, 'ARCHITECTURE.md');
+    const workFile = path.join(hermesProjFolder, 'WORKFLOW.md');
+    
+    const archContent = `---
+project: "${projectName}"
+type: hermes-architecture
+updated: ${now}
+stack: "${detected.stack}"
+---
+
+# Arquitectura — ${projectName}
+
+## Stack Tecnológico y Entorno
+- **Ruta local**: \`${workspaceRoot}\`
+- **Stack**: ${detected.stack}
+- **Framework / Core**: \`${detected.framework || detected.stack}\`
+- **Versión**: \`${detected.version}\`
+- **Dependencias clave**: ${detected.dependencies.slice(0, 15).map(d => `\`${d}\``).join(', ') || 'Ninguna'}
+
+## Decisiones de Diseño y Estructura
+${detected.description}
+
+## Reglas y Condiciones Obligatorias
+${existingRules || '*(Sin reglas obligatorias adicionales registradas)*'}
+`;
+    fs.writeFileSync(archFile, archContent, 'utf8');
+
+    if (!fs.existsSync(workFile)) {
+      const scripts = detected.packageScripts || {};
+      const scriptsList = Object.keys(scripts).length > 0
+        ? Object.entries(scripts).map(([k, v]) => `- \`npm run ${k}\`: \`${v}\``).join('\n')
+        : '- `npm test`: Ejecutar suite de pruebas\n- `npm run dev`: Iniciar entorno local';
+
+      const workContent = `---
+project: "${projectName}"
+type: hermes-workflow
+updated: ${now}
+---
+
+# Workflow — ${projectName}
+
+## Comandos Reales Probados y Funcionales
+${scriptsList}
+
+## Flujo de Trabajo Operativo
+1. Verificar estado con \`git status\`.
+2. Ejecutar verificaciones antes de confirmar cambios.
+3. Al resolver errores o crear procedimientos, auto-reparar skills en \`01_Skills/\`.
+`;
+      fs.writeFileSync(workFile, workContent, 'utf8');
+    }
+  } catch (e) {}
+
   // Automatically update the unified projects index
   syncProjectsIndex(vaultPath, options);
 
@@ -3038,6 +3836,7 @@ function catalogContext(vaultPath) {
 function syncAll(vaultPath, workspaceRoot, options = {}) {
   ensureVaultStructure(vaultPath);
   ensureSoulAndProfile(vaultPath, options);
+  migrateToHermes(vaultPath);
   const skills = syncSkillsToVault(vaultPath, workspaceRoot);
   const memories = syncKnowledgeToVault(vaultPath);
   const project = workspaceRoot ? syncProject(vaultPath, workspaceRoot) : null;
@@ -4006,4 +4805,14 @@ module.exports = {
   enableMcpServer,
   uninstallMcpServer,
   syncProjectRulesToWorkspace,
+  HERMES_USER_MAX_CHARS,
+  HERMES_MEMORY_MAX_CHARS,
+  updateBoundedMemory,
+  getSkill,
+  saveHermesSkill,
+  sessionRecall,
+  compileHermesBootstrap,
+  getHermesQuotas,
+  migrateToHermes,
+  ensureHermesCore,
 };

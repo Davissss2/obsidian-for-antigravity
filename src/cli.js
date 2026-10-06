@@ -503,9 +503,121 @@ async function main() {
       break;
     }
 
+    case 'quotas': {
+      console.log(JSON.stringify(syncEngine.getHermesQuotas(vaultPath), null, 2));
+      break;
+    }
+
+    case 'bootstrap':
+    case 'hermes-bootstrap': {
+      console.log(syncEngine.compileHermesBootstrap(vaultPath));
+      break;
+    }
+
+    case 'nudge': {
+      console.log(`[INTERNAL NUDGE]: Revisa los turnos recientes de esta conversación.
+1. ¿El usuario corrigió alguna preferencia tuya? -> Llama a memory_update(target="USER.md").
+2. ¿Descubriste una lección técnica o regla del entorno? -> Llama a memory_update(target="MEMORY.md").
+3. ¿Diseñaste o mejoraste un flujo repetible? -> Llama a skill_save(skill_name, content).
+4. Si no hay nada duradero que guardar, responde directamente al usuario sin llamar herramientas de persistencia.`);
+      break;
+    }
+
+    case 'memory':
+    case 'memory-update': {
+      const params = parseNamedArgs(args);
+      let target = params.target || (['user', 'user.md', 'USER.md'].includes(args[0]) ? 'USER.md' : 'MEMORY.md');
+      let operation = params.operation || params.op || 'append';
+      let content = params.content || params.c;
+
+      if (!content) {
+        if (['append', 'replace', 'prune'].includes(args[1])) {
+          operation = args[1];
+          content = args.slice(2).join(' ');
+        } else if (['append', 'replace', 'prune'].includes(args[0])) {
+          operation = args[0];
+          content = args.slice(1).join(' ');
+        } else {
+          content = args.filter(a => !a.startsWith('--')).join(' ');
+        }
+      }
+
+      if (!content) {
+        console.error(JSON.stringify({ error: 'Se requiere --content o texto para actualizar memoria acotada.' }));
+        process.exit(1);
+      }
+
+      const res = syncEngine.updateBoundedMemory(vaultPath, { target, operation, content });
+      if (res.error) {
+        console.error(JSON.stringify(res, null, 2));
+        process.exit(1);
+      }
+      console.log(JSON.stringify(res, null, 2));
+      break;
+    }
+
+    case 'skill-get': {
+      const skillName = args[0];
+      if (!skillName) {
+        console.error(JSON.stringify({ error: 'Uso: node cli.js skill-get <nombre-skill>' }));
+        process.exit(1);
+      }
+      const res = syncEngine.getSkill(vaultPath, skillName);
+      if (res.error) {
+        console.error(JSON.stringify(res, null, 2));
+        process.exit(1);
+      }
+      console.log(JSON.stringify(res, null, 2));
+      break;
+    }
+
+    case 'skill-save': {
+      const params = parseNamedArgs(args);
+      const skillName = params.name || args.find(a => !a.startsWith('--'));
+      const content = params.content || params.instructions || params.c;
+      const versionBump = !!(params['version-bump'] || params.bump);
+      const triggers = params.triggers ? params.triggers.split(',').map(t => t.trim()) : undefined;
+      const description = params.desc || params.description;
+
+      if (!skillName || !content) {
+        console.error(JSON.stringify({ error: 'Uso: node cli.js skill-save <nombre> --content "..." [--version-bump] [--triggers "..."]' }));
+        process.exit(1);
+      }
+
+      const res = syncEngine.saveHermesSkill(vaultPath, {
+        name: skillName,
+        content,
+        versionBump,
+        triggers,
+        description,
+      });
+      console.log(JSON.stringify(res, null, 2));
+      break;
+    }
+
+    case 'session-recall': {
+      const params = parseNamedArgs(args);
+      const query = params.query || params.q || args.filter(a => !a.startsWith('--')).join(' ');
+      const limit = parseInt(params.limit || params.max || '5', 10);
+      if (!query) {
+        console.error(JSON.stringify({ error: 'Uso: node cli.js session-recall "<terminos>" [--limit 5]' }));
+        process.exit(1);
+      }
+      const res = syncEngine.sessionRecall(vaultPath, query, limit);
+      console.log(JSON.stringify(res, null, 2));
+      break;
+    }
+
     default:
       console.log(`
-Uso de Antigravity Obsidian CLI (Zero Emojis, Bajo Contexto):
+Uso de Antigravity Obsidian CLI (Hermes Closed Loop, Zero Emojis, Bajo Contexto):
+  node cli.js memory-update --target USER.md|MEMORY.md --operation append|replace|prune --content "..."
+  node cli.js quotas                (Cuota de caracteres de memoria acotada)
+  node cli.js bootstrap             (Compilación de arranque rápido [SYSTEM BOOTSTRAP: HERMES MEMORY ACTIVE])
+  node cli.js nudge                 (Directiva interna invisible de reflexión [INTERNAL NUDGE])
+  node cli.js skill-save <name> --content "..." [--version-bump] (Playbook vivo procedural)
+  node cli.js skill-get <name>      (Procedimiento operativo de una skill)
+  node cli.js session-recall "<q>"  (Búsqueda textual rápida en sesiones y trajectories)
   node cli.js triage "<query>"      (Triage ultra-compacto: Skill vs Memoria)
   node cli.js peek "<nombre-nota>"  (Solucion directa sin contaminar contexto)
   node cli.js save --title "..." --content "..." [--summary "..."] (Guardado atomico)

@@ -5,6 +5,29 @@ All notable changes to the **Obsidian for Antigravity** extension will be docume
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-10-06
+
+### Added
+- **Hermes Closed Learning Loop Architecture (Nous Research Integration)**:
+  - **Bounded Memory with Hard Limits:** Enforced hard character quotas on `00_Agente/USER.md` (max 1,500 chars) and `00_Agente/MEMORY.md` (max 2,500 chars). When quota is exceeded, `memory_update` intentionally rejects the operation with an actionable payload forcing the agent to prune, condense, or delete obsolete facts.
+  - **Self-Improving Living Skills:** Procedural playbooks stored in `01_Skills/[name].md` equipped with automatic semantic versioning (`1.0` -> `1.1`), activation triggers, operational procedures, and a mandatory auto-repair section (`## Errores Conocidos y Corrección (Aprendidos en Ejecución)`).
+  - **Lifecycle Hooks & Internal Nudges:** Injected `[SYSTEM BOOTSTRAP: HERMES MEMORY ACTIVE]` fast bootstrap block into `rules/obsidian-brain.md` (System Prompt) and integrated invisible periodic reflection nudges (`[INTERNAL NUDGE]`) at task boundaries.
+  - **Native Hermes MCP Tools & Prefixed Aliases:** Exposed `memory_update` (`append`, `replace`, `prune`), `skill_get`, `skill_save` (with version bump and edge cases), and `session_recall` (sub-millisecond FTS search over sessions and trajectories). Registered both standard and `obsidian_` prefixed schemas in `~/.gemini/antigravity-ide/mcp/antigravity-obsidian/`.
+  - **Hermes Vault Hierarchy:** Standardized directory layout into `00_Agente/` (`SOUL.md`, `USER.md`, `MEMORY.md`), `01_Skills/`, `02_Proyectos/[Project]/` (`ARCHITECTURE.md` + `WORKFLOW.md`), and `03_Sesiones/Trajectories/`.
+- **Seamless Auto-Migration from Legacy Versions**:
+  - Implemented `migrateToHermes` in `src/sync-engine.js` automatically invoked on extension activation, vault synchronization, panel rendering, and CLI commands.
+  - Automatically parses and migrates legacy `Antigravity/Alma/00 Perfil de Usuario.md` to `00_Agente/USER.md` without losing any previously learned user habits.
+  - Seeds `00_Agente/MEMORY.md` from top technical memories in `Antigravity/Memoria/`.
+  - Wraps legacy skills in `Antigravity/Skills/` into versioned Hermes playbooks in `01_Skills/` while preserving full backward compatibility.
+  - Converts existing projects into modular `ARCHITECTURE.md` and `WORKFLOW.md` blueprints.
+- **Webview Panel Visual Quota Meters**:
+  - Integrated dynamic visual meters in the sidebar webview panel displaying real-time character consumption and percentages for `00_Agente/USER.md` (1500 limit) and `00_Agente/MEMORY.md` (2500 limit).
+  - Added direct quick-access buttons to open `USER.md`, `MEMORY.md`, and `SOUL.md` directly in Obsidian Desktop.
+- **CLI Command Suite Expansion**:
+  - Added dedicated CLI commands to both `obsidian.js` and `cli.js`: `memory-update`, `quotas`, `bootstrap`, `nudge`, `skill-get`, `skill-save`, and `session-recall`.
+
+---
+
 ## [1.7.5] - 2026-10-06
 
 ### Added

@@ -392,7 +392,14 @@ class ObsidianPanelProvider {
     let graphData = { nodes: [], links: [] };
     let isVaultGit = false;
 
+    let hermesQuotas = { userChars: 0, userLimit: 1500, userPercent: 0, memChars: 0, memLimit: 2500, memPercent: 0, skillsCount: 0 };
+
     if (vault && vault.path && fs.existsSync(vault.path)) {
+      try {
+        syncEngine.migrateToHermes(vault.path);
+        hermesQuotas = syncEngine.getHermesQuotas(vault.path);
+      } catch (e) {}
+
       stats = syncEngine.getVaultStats(vault.path);
       sessionList = syncEngine.listSessions(vault.path, { limit: 40 });
       projectList = syncEngine.listProjects(vault.path);
@@ -422,20 +429,28 @@ class ObsidianPanelProvider {
           });
       }
 
-      // Read skill list
-      const skiFolder = path.join(vault.path, 'Antigravity', 'Skills');
-      if (fs.existsSync(skiFolder)) {
-        skillList = fs.readdirSync(skiFolder)
+      // Read skill list (both 01_Skills and Antigravity/Skills)
+      const skiFolder = path.join(vault.path, '01_Skills');
+      const legacySkiFolder = path.join(vault.path, 'Antigravity', 'Skills');
+      const targetSkiFolder = fs.existsSync(skiFolder) && fs.readdirSync(skiFolder).filter(f => f.endsWith('.md')).length > 0
+        ? skiFolder
+        : legacySkiFolder;
+
+      if (fs.existsSync(targetSkiFolder)) {
+        skillList = fs.readdirSync(targetSkiFolder)
           .filter(f => f.endsWith('.md') && !f.startsWith('00'))
           .map(f => {
-            const fp = path.join(skiFolder, f);
+            const fp = path.join(targetSkiFolder, f);
             const content = fs.readFileSync(fp, 'utf8');
             const title = f.replace(/\.md$/, '');
+            const versionMatch = content.match(/version:\s*([0-9.]+)/);
+            const vStr = versionMatch ? ` (v${versionMatch[1]})` : '';
             const scopeMatch = content.match(/scope:\s*(\w+)/);
             const scope = scopeMatch ? scopeMatch[1] : 'global';
-            const descMatch = content.match(/> - \*\*Descripción\*\*:\s*([^\n]+)/);
-            const desc = descMatch ? descMatch[1] : 'Skill activa';
-            return { title, desc, scope, relPath: `Antigravity/Skills/${title}` };
+            const descMatch = content.match(/> - \*\*Descripción\*\*:\s*([^\n]+)/) || content.match(/## Procedimiento Operativo\s*\n([^\n]+)/);
+            const desc = (descMatch ? descMatch[1] : 'Skill viva automejorable') + vStr;
+            const relPath = targetSkiFolder === skiFolder ? `01_Skills/${title}.md` : `Antigravity/Skills/${title}`;
+            return { title, desc, scope, relPath };
           });
       }
     }
@@ -648,6 +663,65 @@ class ObsidianPanelProvider {
         </button>
         <button class="btn-open-link btn-open-note" data-note="Antigravity/Alma/00 Perfil de Usuario.md">
           ${SVGS.open} <span data-i18n="soul_view_profile">Ver Perfil</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Hermes Closed Learning Loop & Bounded Memory Card -->
+    <div class="soul-card" style="margin-top:10px;">
+      <div class="soul-header">
+        <div class="soul-badge-wrap">
+          ${SVGS.brain}
+          <span class="soul-title">Hermes Closed Loop — Memoria Acotada</span>
+        </div>
+        <span class="status-badge" style="background:rgba(99,102,241,0.15);color:#818cf8;border:1px solid rgba(99,102,241,0.3);">V2 Activo</span>
+      </div>
+      <div class="soul-body">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">
+          Límites estrictos de cuota para prevenir saturación de contexto y playbooks procedimentales vivos.
+        </div>
+        
+        <!-- USER.md Meter -->
+        <div style="margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">
+            <span><strong>00_Agente/USER.md</strong></span>
+            <span style="color:${hermesQuotas.userPercent > 90 ? '#ef4444' : (hermesQuotas.userPercent > 70 ? '#f59e0b' : '#10b981')};font-family:monospace;">
+              ${hermesQuotas.userChars} / ${hermesQuotas.userLimit} (${hermesQuotas.userPercent}%)
+            </span>
+          </div>
+          <div style="height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;">
+            <div style="height:100%;width:${hermesQuotas.userPercent}%;background:${hermesQuotas.userPercent > 90 ? '#ef4444' : (hermesQuotas.userPercent > 70 ? '#f59e0b' : '#10b981')};border-radius:3px;"></div>
+          </div>
+        </div>
+
+        <!-- MEMORY.md Meter -->
+        <div style="margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">
+            <span><strong>00_Agente/MEMORY.md</strong></span>
+            <span style="color:${hermesQuotas.memPercent > 90 ? '#ef4444' : (hermesQuotas.memPercent > 70 ? '#f59e0b' : '#10b981')};font-family:monospace;">
+              ${hermesQuotas.memChars} / ${hermesQuotas.memLimit} (${hermesQuotas.memPercent}%)
+            </span>
+          </div>
+          <div style="height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;">
+            <div style="height:100%;width:${hermesQuotas.memPercent}%;background:${hermesQuotas.memPercent > 90 ? '#ef4444' : (hermesQuotas.memPercent > 70 ? '#f59e0b' : '#10b981')};border-radius:3px;"></div>
+          </div>
+        </div>
+
+        <!-- Skills Count Badge -->
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.06);">
+          <span><strong>01_Skills/ (Playbooks Vivos):</strong></span>
+          <span class="tag-badge" style="background:rgba(99,102,241,0.15);color:#818cf8;">${hermesQuotas.skillsCount} skills versionadas</span>
+        </div>
+      </div>
+      <div class="soul-actions" style="margin-top:8px;">
+        <button class="btn-open-link btn-open-note" data-note="00_Agente/USER.md">
+          ${SVGS.open} <span>USER.md</span>
+        </button>
+        <button class="btn-open-link btn-open-note" data-note="00_Agente/MEMORY.md">
+          ${SVGS.open} <span>MEMORY.md</span>
+        </button>
+        <button class="btn-open-link btn-open-note" data-note="00_Agente/SOUL.md">
+          ${SVGS.open} <span>SOUL.md</span>
         </button>
       </div>
     </div>
@@ -1043,7 +1117,11 @@ function activate(context) {
   // 2. Automatically install skill, global rules, and run full sync
   try {
     const pConfig = vscode.workspace.getConfiguration('antigravityObsidian');
-    const pConfigured = pConfig.get('personalityConfigured');
+    if (vault && vault.exists) {
+      try {
+        syncEngine.migrateToHermes(vault.path);
+      } catch (e) {}
+    }
     installSkillAndRules(vault ? vault.path : null, {
       personalityConfigured: pConfigured ? true : undefined,
     });
