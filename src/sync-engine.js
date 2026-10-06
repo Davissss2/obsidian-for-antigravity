@@ -1394,7 +1394,13 @@ function createSkill(vaultPath, workspaceRoot, options = {}) {
   if (!safeName) throw new Error(`Nombre de skill no válido: "${name}"`);
 
   const scope = (options.scope || 'global').toLowerCase() === 'project' ? 'project' : 'global';
-  const description = (options.description || options.desc || `Skill técnica ${safeName}`).trim();
+  let description = (options.description || options.desc || `Skill técnica ${safeName}`).trim();
+  if (options.triggers && Array.isArray(options.triggers) && options.triggers.length > 0) {
+    const triggerText = `Activar cuando el usuario solicite tareas relacionadas con: ${options.triggers.join(', ')}.`;
+    if (!description.includes('Activar cuando')) {
+      description = `${description} ${triggerText}`;
+    }
+  }
   const content = (options.content || options.instructions || `# ${safeName}\n\nInstrucciones operativas para el agente.`).trim();
 
   const effectiveWs = resolveWorkspaceRoot(options.workspacePath || workspaceRoot || process.cwd());
@@ -1740,13 +1746,15 @@ function viewRule(vaultPath, workspaceRoot, ruleName) {
   };
 }
 
-// Backward compatible saveSkill
+// Enhanced saveSkill with scope & triggers support
 function saveSkill(vaultPath, skillData) {
+  const scope = (skillData.scope || 'global').toLowerCase() === 'project' ? 'project' : 'global';
   return createSkill(vaultPath, process.cwd(), {
     name: skillData.name,
     description: skillData.description,
-    content: skillData.instructions,
-    scope: 'global',
+    content: skillData.instructions || skillData.content,
+    scope: scope,
+    triggers: skillData.triggers,
     overwrite: true,
   });
 }

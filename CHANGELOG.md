@@ -5,6 +5,19 @@ All notable changes to the **Obsidian for Antigravity** extension will be docume
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.5] - 2026-10-06
+
+### Added
+- **Intelligent Skill Scoping (Global vs Project) & Activation Triggers**:
+  - Enhanced `createSkill` and `saveSkill` in `sync-engine.js` as well as `obsidian_save_skill` in `mcp-server.js` with explicit `scope` (`global` vs `project`) and `triggers` parameters.
+  - Global / General Skills (transversal technologies like Roblox, Luau, Docker, Flutter, Tailwind) are automatically saved to `~/.gemini/config/skills/`, ensuring they load in **ALL** workspaces and projects across Antigravity.
+  - Project Skills (repo-specific APIs and database workflows) are saved locally to `<workspace>/.agents/skills/`.
+  - Automatically enriches `SKILL.md` frontmatter descriptions with trigger clauses (`Activar cuando el usuario solicite tareas relacionadas con: ...`), enabling Antigravity to automatically match user prompts (e.g. "hazme un juego de roblox") and display the skill for activation.
+- **Proactive Skill Activation Directive**:
+  - Updated AI system directives in `rules/obsidian-brain.md` ordering the assistant to check `<skills>` on every technical request, inspect relevant `SKILL.md` files with `view_file` BEFORE writing code, and adhere to procedures and helper scripts.
+
+---
+
 ## [1.7.4] - 2026-10-06
 
 ### Added

@@ -605,7 +605,7 @@ function installSkillAndRules(targetVaultPath, options = {}) {
 
   const skillsManagementSection = isEn
     ? [
-        '### 2b. DUAL OPERATION MODE & MCP-FIRST PROTOCOL:',
+        '### 2b. DUAL OPERATION MODE, SKILLS CATEGORIZATION & MCP-FIRST PROTOCOL:',
         '- **PRIORITY 1 — NATIVE MCP TOOLS (call_mcp_tool):**',
         '  When the `antigravity-obsidian` MCP server is enabled, ALWAYS execute operations via `call_mcp_tool` (`obsidian_session_save`, `obsidian_learn`, `obsidian_triage`, `obsidian_peek`, `obsidian_save_memory`, `obsidian_save_skill`, `obsidian_status`, `obsidian_session_last`, `obsidian_session_list`, `obsidian_search`, `obsidian_sync_all`, `obsidian_read_note`).',
         '  DO NOT execute subshell commands (`run_command` with `node obsidian.js`) when an equivalent MCP tool is available and active.',
@@ -613,11 +613,17 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '  Use `run_command` with `node "' + normalizedScriptPath + '" ...` ONLY IF:',
         '  1. The MCP server is disabled (`disabled: true` in `mcp_config.json`) or offline.',
         '  2. The command is a CLI management command without an MCP tool (`name`, `user`, `config`, `mcp`, `export`, `import`, `project backlog`, `project antipattern`).',
+        '- **SKILL CATEGORIZATION (GLOBAL VS PROJECT):**',
+        '  - **Global / General Skills (`~/.gemini/config/skills/`):** Transversal technologies, engines, frameworks, and programming patterns (e.g. Roblox, Docker, Luau, Tailwind, ThreeJS, Flutter). Available in ALL projects and workspaces.',
+        '  - **Project Skills (`<workspace>/.agents/skills/`):** Private APIs, internal architectures, or workflows exclusive to the active repository.',
+        '  - **Auto-Categorization:** When creating skills via `obsidian_save_skill` (or `node obsidian.js skill create`), specify `scope: "global"` for general technologies so they load across all projects. Always specify explicit `triggers` (e.g. `["roblox", "juego de roblox", "luau"]`) so the description contains clear activation keywords.',
+        '- **PROACTIVE SKILL ACTIVATION (MANDATORY BEFORE CODING):**',
+        '  Whenever the user requests a task matching an installed skill (e.g. "hazme un juego de roblox", "despliega con docker", "crea un componente"), inspect `<skills>`, read the relevant `SKILL.md` with `view_file` BEFORE writing code, and strictly follow its procedures and helper scripts.',
         '- **Reading & Managing Skills:** Antigravity discovers skills in `<skills>`, `~/.gemini/config/skills/`, builtin IDE skills, and `.agents/skills/`. You may read skill instructions directly with native `view_file` on `SKILL.md`. To create, edit, or list skills with Obsidian vault mirroring, use MCP tool `obsidian_save_skill` or CLI `node "' + normalizedScriptPath + '" skill [list|view|create|edit|delete]`.',
         '- **MCP Server Safe Management:** `node "' + normalizedScriptPath + '" mcp [status|install|disable|enable|uninstall]`.'
       ].join('\n')
     : [
-        '### 2b. MODO DE OPERACION DUAL Y PROTOCOLO MCP FIRST:',
+        '### 2b. MODO DE OPERACION DUAL, CATEGORIZACION DE SKILLS Y PROTOCOLO MCP FIRST:',
         '- **PRIORIDAD 1 — HERRAMIENTAS MCP NATIVAS (call_mcp_tool):**',
         '  Cuando el servidor MCP `antigravity-obsidian` este activo, ejecuta SIEMPRE las operaciones mediante `call_mcp_tool` (`obsidian_session_save`, `obsidian_learn`, `obsidian_triage`, `obsidian_peek`, `obsidian_save_memory`, `obsidian_save_skill`, `obsidian_status`, `obsidian_session_last`, `obsidian_session_list`, `obsidian_search`, `obsidian_sync_all`, `obsidian_read_note`).',
         '  NO ejecutes subprocesos de shell (`run_command` con `node obsidian.js`) si dispones de una herramienta MCP equivalente activa.',
@@ -625,6 +631,12 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '  Usa `run_command` con `node "' + normalizedScriptPath + '" ...` UNICAMENTE SI:',
         '  1. El servidor MCP esta desactivado (`disabled: true` en `mcp_config.json`) o fuera de linea.',
         '  2. El comando es de gestion y no dispone de herramienta MCP (`name`, `user`, `config`, `mcp`, `export`, `import`, `project backlog`, `project antipattern`).',
+        '- **CATEGORIZACION DE SKILLS (GLOBAL VS PROYECTO):**',
+        '  - **Skills Generales / Globales (`~/.gemini/config/skills/`):** Tecnologias, motores, frameworks y patrones transversales (ej: Roblox, Docker, Luau, Tailwind, ThreeJS, Flutter). Disponibles automaticamente en TODOS los proyectos y workspaces.',
+        '  - **Skills de Proyecto (`<workspace>/.agents/skills/`):** APIs privadas, logica interna de base de datos o flujos exclusivos del repositorio actual.',
+        '  - **Auto-Categorizacion:** Al crear skills mediante `obsidian_save_skill` (o `node obsidian.js skill create`), asigna `scope: "global"` para tecnologias generales de modo que esten disponibles en cualquier proyecto. Define siempre `triggers` activadores (ej: `["roblox", "juego de roblox", "luau"]`) para que la descripcion contenga disparadores claros.',
+        '- **ACTIVACION PROACTIVA DE SKILLS (OBLIGATORIA ANTES DE ESCRIBIR CODIGO):**',
+        '  Siempre que el usuario solicite una tarea relacionada con una skill instalada (ej: "hazme un juego de roblox", "despliega con docker", "crea un componente"), comprueba `<skills>`, lee el `SKILL.md` de la skill relevante con `view_file` ANTES de programar o generar archivos, y sigue al pie de la letra sus directivas y scripts.',
         '- **Lectura y Gestion de Skills:** Antigravity descubre skills en `<skills>`, `~/.gemini/config/skills/`, builtins del IDE y `.agents/skills/`. Puedes leer las instrucciones de skills directamente con `view_file` sobre `SKILL.md`. Para crear, modificar o sincronizar skills en la boveda de Obsidian, usa la herramienta MCP `obsidian_save_skill` o el CLI `node "' + normalizedScriptPath + '" skill [list|view|create|edit|delete]`.',
         '- **Gestion del Servidor MCP:** `node "' + normalizedScriptPath + '" mcp [status|install|disable|enable|uninstall]`.'
       ].join('\n');

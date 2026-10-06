@@ -92,13 +92,23 @@ const TOOLS = [
   },
   {
     name: 'obsidian_save_skill',
-    description: 'Registra o actualiza una skill: escribe el SKILL.md operativo en Antigravity y su ficha documental vinculada en el Vault de Obsidian (sin duplicar ejecutables).',
+    description: 'Registra o actualiza una skill: escribe el SKILL.md operativo en Antigravity y su ficha documental vinculada en el Vault de Obsidian. Permite categorizar como "global" (general para todos los proyectos, ej: roblox, docker) o "project" (local de este proyecto).',
     inputSchema: {
       type: 'object',
       properties: {
-        name: { type: 'string', description: 'Identificador único de la skill (ej: mi-herramienta)' },
-        description: { type: 'string', description: 'Descripción corta de lo que hace la skill' },
-        instructions: { type: 'string', description: 'Instrucciones completas en markdown para el agente' },
+        name: { type: 'string', description: 'Identificador único de la skill en minúsculas y guiones (ej: roblox, flutter, tailwind)' },
+        description: { type: 'string', description: 'Descripción clara de las capacidades técnicas de la skill' },
+        instructions: { type: 'string', description: 'Instrucciones completas en formato Markdown para el agente' },
+        scope: {
+          type: 'string',
+          enum: ['global', 'project'],
+          description: 'Categorización de ámbito: "global" (general, disponible en TODOS los proyectos y carpetas) o "project" (local, exclusiva del workspace actual). Por defecto "global".',
+        },
+        triggers: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Palabras clave o frases activadoras para que el modelo sepa cuándo leer y utilizar esta skill (ej: ["roblox", "juego de roblox", "luau"]).',
+        },
       },
       required: ['name', 'description', 'instructions'],
     },
@@ -315,13 +325,20 @@ async function executeTool(name, args) {
       }
 
       case 'obsidian_save_skill': {
-        const result = syncEngine.saveSkill(vaultPath, args);
+        const result = syncEngine.saveSkill(vaultPath, {
+          name: args.name,
+          description: args.description,
+          instructions: args.instructions,
+          scope: args.scope || 'global',
+          triggers: args.triggers,
+        });
         syncEngine.syncSkillsToVault(vaultPath, process.cwd());
         syncEngine.generateHub(vaultPath, process.cwd());
+        const scopeLabel = (args.scope || 'global') === 'project' ? 'local de este proyecto (.agents/skills/)' : 'global (disponible en TODOS los proyectos en ~/.gemini/config/skills/)';
         return {
           content: [{
             type: 'text',
-            text: `✅ Skill "${result.name}" guardada y sincronizada tanto en Obsidian como en Antigravity (~/.gemini/config/skills/${result.name}/SKILL.md).`,
+            text: `Skill "${result.name}" guardada y categorizada como ${scopeLabel}. Ficha vinculada en Obsidian y ejecutable disponible en Antigravity.`,
           }],
         };
       }
