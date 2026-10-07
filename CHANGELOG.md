@@ -5,6 +5,12 @@ All notable changes to the **Obsidian for Antigravity** extension will be docume
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.3] - 2026-10-07
+
+### Fixed
+- **Extension Host Infinite Loading on Startup**: Fixed SyntaxError in `extension.js` `activate()` caused by an unclosed `context.subscriptions.push()` on `setPersonality` command registration, which prevented the extension from activating and caused the sidebar Webview to be stuck in an infinite loading state.
+- **Null Safety in Skills Folder Resolution**: Added safe null check for `targetSkiFolder` in `_getHtmlForWebview()` preventing deprecation warnings or runtime crashes when skill folders do not yet exist.
+
 ## [1.8.2] - 2026-10-07
 
 ### Added
