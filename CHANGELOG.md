@@ -5,6 +5,14 @@ All notable changes to the **Obsidian for Antigravity** extension will be docume
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.2] - 2026-10-07
+
+### Added
+- **Agent Identity & Callsign Personalization UI**: Added dedicated Webview settings card and VS Code command (`Obsidian: Configure AI Identity & User Callsign`) to configure Agent Name (`aiName`) and User Callsign (`userCallsign`), ensuring the AI addresses the user directly by name across all chats.
+- **Interactive Force-Directed Graph Engine Overhaul**: Continuous Pointer Capture (`setPointerCapture`) preventing drag freezes when cursor leaves canvas or window, alpha-cooling velocity Verlet physics simulation, responsive flex viewport sizing, Auto-Fit to View (`fitGraphToView`), dedicated zoom buttons, and live node search filtering.
+- **Hermes Graph Data Extraction**: Updated `getGraphData` to crawl `00_Agente/`, `01_Skills/`, `02_Proyectos/`, and `03_Sesiones/`, generating accurate wikilink connections across the vault.
+- **Complete Workflow Documentation**: Overhauled `README.md` with step-by-step instructions, Hermes closed-loop architecture diagrams, and MCP/CLI reference.
+
 ## [1.8.1] - 2026-10-07
 
 ### Fixed
