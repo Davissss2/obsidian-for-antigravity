@@ -479,7 +479,7 @@ class ObsidianPanelProvider {
         ? skiFolder
         : legacySkiFolder;
 
-      if (fs.existsSync(targetSkiFolder)) {
+      if (targetSkiFolder && fs.existsSync(targetSkiFolder)) {
         skillList = fs.readdirSync(targetSkiFolder)
           .filter(f => f.endsWith('.md') && !f.startsWith('00'))
           .map(f => {
@@ -1407,9 +1407,11 @@ function activate(context) {
       }
     }
     vscode.window.showInformationMessage(`Identidad guardada: Agente "${newAiName}" | Trato hacia ti: "${newCallsign}"`);
-  });
+    })
+  );
 
-  vscode.commands.registerCommand('antigravityObsidian.syncNow', () => {
+  context.subscriptions.push(
+    vscode.commands.registerCommand('antigravityObsidian.syncNow', () => {
       const activeVault = getActiveOrConfiguredVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
       if (activeVault && activeVault.exists) {
         syncEngine.syncAll(activeVault.path, getWorkspaceRoot());
