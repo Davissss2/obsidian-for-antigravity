@@ -21,6 +21,28 @@ function getVaultPath() {
 // Tool definitions for MCP
 const TOOLS = [
   {
+    name: 'obsidian_add_antipattern',
+    description: 'Registra un anti-patrón, trampa técnica o error recurrente a evitar para un proyecto en Obsidian y lo sincroniza de inmediato con las reglas obligatorias del workspace (.agents/rules/project-rules.md).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        rule: { type: 'string', description: 'Regla o error prohibido a no repetir (ej: "Nunca reducir el delay anti-ban de escaneo", "No usar toggleChatFocus")' },
+        project: { type: 'string', description: 'Nombre del proyecto (opcional, detectado automáticamente)' },
+      },
+      required: ['rule'],
+    },
+  },
+  {
+    name: 'obsidian_list_antipatterns',
+    description: 'Lista los anti-patrones y trampas prohibidas registradas para un proyecto.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project: { type: 'string', description: 'Nombre del proyecto (opcional)' },
+      },
+    },
+  },
+  {
     name: 'obsidian_triage',
     description: 'Triage de ultra-bajo contexto (<100 tokens). Determina si existe una Skill o Memoria previa para una tarea o error sin gastar tokens.',
     inputSchema: {
@@ -293,6 +315,32 @@ async function executeTool(name, args) {
 
   try {
     switch (name) {
+    case 'obsidian_add_antipattern': {
+      const pName = args.project || (syncEngine.detectWorkspaceStack(process.cwd()).name);
+      const result = syncEngine.addProjectAntipattern(vaultPath, pName, args.rule);
+      return {
+        content: [{
+          type: 'text',
+          text: result.error
+            ? `Error: ${result.error}`
+            : `Anti-patron registrado en Obsidian y sincronizado en .agents/rules/project-rules.md para "${pName}":\n- PROHIBIDO: ${args.rule}`,
+        }],
+      };
+    }
+
+    case 'obsidian_list_antipatterns': {
+      const pName = args.project || (syncEngine.detectWorkspaceStack(process.cwd()).name);
+      const list = syncEngine.listProjectAntipatterns(vaultPath, pName);
+      return {
+        content: [{
+          type: 'text',
+          text: list.length > 0
+            ? `Anti-patrones registrados para "${pName}":\n${list.map(r => `- ${r}`).join('\n')}`
+            : `No hay anti-patrones registrados aún para "${pName}".`,
+        }],
+      };
+    }
+
       case 'obsidian_triage': {
         const result = syncEngine.triageContext(vaultPath, args.query);
         return {
@@ -336,8 +384,8 @@ async function executeTool(name, args) {
         const query = (args.query || '').toLowerCase();
         const folder = args.folder && args.folder !== 'Todas' ? args.folder : null;
         const baseSearchDir = folder 
-          ? path.join(vaultPath, 'Antigravity', folder)
-          : path.join(vaultPath, 'Antigravity');
+          ? path.join(vaultPath, folder)
+          : vaultPath;
 
         if (!fs.existsSync(baseSearchDir)) {
           return { content: [{ type: 'text', text: 'No se encontraron notas en la ubicación especificada.' }] };
@@ -397,7 +445,7 @@ async function executeTool(name, args) {
               }
             }
           }
-          find(path.join(vaultPath, 'Antigravity'));
+          find(vaultPath);
           targetFile = found;
         }
 
@@ -474,7 +522,7 @@ async function executeTool(name, args) {
 
       case 'obsidian_session_last': {
         const pName = args.project || '';
-        const sesFolder = path.join(vaultPath, 'Antigravity', 'Sesiones');
+        const sesFolder = path.join(vaultPath, '03_Sesiones');
         if (!fs.existsSync(sesFolder)) {
           return { content: [{ type: 'text', text: 'No hay sesiones registradas.' }] };
         }
@@ -548,7 +596,7 @@ async function executeTool(name, args) {
         let target = '';
 
         if (isGlobal) {
-          const userFile = path.join(vaultPath, 'Antigravity', 'Alma', '00 Perfil de Usuario.md');
+          const userFile = path.join(vaultPath, '00_Agente', 'USER.md');
           if (fs.existsSync(userFile)) {
             let uContent = fs.readFileSync(userFile, 'utf8');
             if (uContent.includes('## 4. Aprendizajes y Preferencias Dinámicas Acumuladas')) {
@@ -560,7 +608,7 @@ async function executeTool(name, args) {
           }
           target = '00 Perfil de Usuario.md';
         } else {
-          const projDir = path.join(vaultPath, 'Antigravity', 'Proyectos');
+          const projDir = path.join(vaultPath, '02_Proyectos');
           if (!fs.existsSync(projDir)) fs.mkdirSync(projDir, { recursive: true });
           const projFile = path.join(projDir, `${project}.md`);
           if (fs.existsSync(projFile)) {

@@ -15,15 +15,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Replaced vault calls in `src/mcp-server.js` and `src/cli.js` with `ensureOrCreateDefaultVault`, completely eliminating the error `No se encontró ningún Vault de Obsidian activo en el sistema`.
 - **Windows Spanish Locale Auto-Detection**:
   - Fixed locale resolution in `src/sync-engine.js` where `VSCODE_NLS_CONFIG` reported `userLocale: "en-us"` on Windows despite the system language being Spanish (`osLocale: "es-es"`). Now checks `Intl.DateTimeFormat().resolvedOptions().locale`, `process.env.LANG`, and `nls.osLocale`, correctly defaulting to Spanish.
-- **Personality Update Rule Regeneration**:
-- **Cross-Language Skills & Indexes Deduplication**:
-  - Normalized skill names in `01_Skills/` to strip language-dependent prefixes (such as `[Proyecto]` or `[Project]`), preventing duplicate skill notes from accumulating.
-  - Automatically unlinks old language index notes (such as `00 Projects Index.md` <-> `00 Indice de Proyectos.md`) when language is toggled in the extension or bridge config.
-  - Fixed literal `\n` line break escaping in `00 Indice de Skills.md` markdown table generation.
-  - Enforced strict zero-emoji policy across all MCP server responses.
-- **Proactive Memory & Session Recall Directives**:
-  - Rewrote Section 1 in `rules/obsidian-brain.md` from negative filters (`DO NOT query on...`) to positive, proactive directives: the AI is instructed to consult `session_recall` / `obsidian_session_last` when starting or resuming work to maintain workflow continuity, and use `obsidian_triage` for architecture decisions and unknown errors.
-  - Updated `SKILL.md` frontmatter descriptions in both English and Spanish to declare an always-active technical second brain and persistent memory for all development tasks, ensuring Antigravity triggers memory capabilities across normal coding prompts rather than restricting it to slash commands.
+- **Purged Legacy Directory and Unification**:
+  - Removed all code creating or referencing the legacy `Antigravity/` folder (`Alma`, `Skills`, `Memoria`, `Proyectos`, `Sesiones`).
+  - Standardized all operations onto the Hermes hierarchy (`00_Agente/`, `01_Skills/`, `02_Proyectos/`, `03_Sesiones/`).
+  - Consolidated fragmented account project variants into a single unified `antigravity-account` project.
+- **Fixed Anti-pattern CLI Argument Parser**:
+  - Fixed parser in `src/obsidian-runner.js` where `project antipattern add` was treating the action keyword `add` as a directory path.
+  - Added native MCP server tools `obsidian_add_antipattern` and `obsidian_list_antipatterns`.
+- **Interactive Force-Directed Graph Engine Overhaul**:
+  - Rewrote canvas graph engine with continuous Pointer Capture (`setPointerCapture`), resolving node freezing and stuck drag when the cursor leaves the canvas or VS Code window.
+  - Replaced hardcoded tick limit with an alpha-cooling velocity Verlet physics simulation with smooth damping and spring relaxation.
+  - Added responsive flex viewport sizing, Auto-Fit to View (`fitGraphToView`), dedicated zoom in/out buttons, reset button, and live search node highlighting.
+- **Agent Identity & User Callsign Personalization**:
+  - Added dedicated configuration inputs in sidebar settings and quick-access button in panel for Agent Name (`aiName`) and User Callsign (`userCallsign`).
+  - Added VS Code Command Palette command: `Obsidian: Configure AI Identity & User Callsign` (`antigravityObsidian.setPersonality`).
+  - Synchronized personal identity directly to `00_Agente/00 Personalidad de la IA.md` and global rules so the AI addresses the user by their name in every chat.
+- **Comprehensive Documentation Rewrite**:
+  - Overhauled `README.md` explaining the complete step-by-step workflow, Hermes architecture, identity calibration, responsive graph navigation, and CLI/MCP command reference.
 
 ## [1.8.0] - 2026-10-06
 

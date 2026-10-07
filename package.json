@@ -161,6 +161,11 @@
         "icon": "$(server-process)"
       },
       {
+        "command": "antigravityObsidian.setPersonality",
+        "title": "Obsidian: Configure AI Identity & User Callsign",
+        "icon": "$(person)"
+      },
+      {
         "command": "antigravityObsidian.resetData",
         "title": "Obsidian: Wipe All Data & Start Fresh",
         "icon": "$(trash)"

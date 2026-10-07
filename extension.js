@@ -19,7 +19,7 @@ function getWorkspaceRoot() {
 
 function openInObsidianApp(vaultName, notePath) {
   const encVault = encodeURIComponent(vaultName);
-  let cleanNote = (notePath || 'Antigravity/00 Antigravity Hub').replace(/\\/g, '/');
+  let cleanNote = (notePath || '00_Agente/SOUL').replace(/\\/g, '/');
   if (cleanNote.endsWith('.md')) cleanNote = cleanNote.slice(0, -3);
   const encFile = encodeURIComponent(cleanNote);
   const uri = `obsidian://open?vault=${encVault}&file=${encFile}`;
@@ -187,7 +187,7 @@ class ObsidianPanelProvider {
 
         case 'openHub': {
           if (currentVault && currentVault.path) {
-            openInObsidianApp(currentVault.name, 'Antigravity/00 Antigravity Hub');
+            openInObsidianApp(currentVault.name, '00_Agente/SOUL');
           }
           break;
         }
@@ -195,6 +195,49 @@ class ObsidianPanelProvider {
         case 'openNote': {
           if (currentVault && currentVault.path && message.path) {
             openInObsidianApp(currentVault.name, message.path);
+          }
+          break;
+        }
+
+        case 'savePersonality': {
+          const { userCallsign, aiName, personality } = message;
+          const currentConfig = vscode.workspace.getConfiguration('antigravityObsidian');
+          if (userCallsign) {
+            await currentConfig.update('userCallsign', userCallsign, vscode.ConfigurationTarget.Global);
+            await currentConfig.update('userName', userCallsign, vscode.ConfigurationTarget.Global);
+          }
+          if (aiName) {
+            await currentConfig.update('aiName', aiName, vscode.ConfigurationTarget.Global);
+          }
+          if (personality) {
+            await currentConfig.update('personality', personality, vscode.ConfigurationTarget.Global);
+          }
+          await currentConfig.update('personalityConfigured', true, vscode.ConfigurationTarget.Global);
+
+          if (currentVault && currentVault.path) {
+            syncEngine.ensurePersonality(currentVault.path, {
+              userCallsign: userCallsign || activeUser,
+              aiName: aiName || 'Pedro',
+              personality,
+              personalityConfigured: true,
+              forceUpdate: true
+            });
+            installSkillAndRules(currentVault.path, {
+              userCallsign: userCallsign || activeUser,
+              aiName: aiName || 'Pedro',
+              personality,
+              personalityConfigured: true,
+              userName: userCallsign || activeUser,
+              language: activeLang
+            });
+            syncEngine.syncAll(currentVault.path, currentRoot, {
+              userCallsign: userCallsign || activeUser,
+              aiName: aiName || 'Pedro',
+              userName: userCallsign || activeUser,
+              language: activeLang
+            });
+            updateView();
+            vscode.window.showInformationMessage(`Identidad configurada: Agente: "${aiName || 'Pedro'}" | Trato hacia ti: "${userCallsign || 'David'}"`);
           }
           break;
         }
@@ -287,11 +330,11 @@ class ObsidianPanelProvider {
 
         case 'showSessions': {
           if (currentVault && currentVault.path) {
-            const idx = path.join(currentVault.path, 'Antigravity', 'Sesiones', '00 Indice de Sesiones.md');
+            const idx = path.join(currentVault.path, '03_Sesiones', '00 Indice de Sesiones.md');
             if (fs.existsSync(idx)) {
               vscode.workspace.openTextDocument(idx).then(doc => vscode.window.showTextDocument(doc, { preview: false }));
             } else {
-              openInObsidianApp(currentVault.name, 'Antigravity/Sesiones/00 Indice de Sesiones');
+              openInObsidianApp(currentVault.name, '03_Sesiones/00 Indice de Sesiones');
             }
           }
           break;
@@ -299,11 +342,11 @@ class ObsidianPanelProvider {
 
         case 'showProjects': {
           if (currentVault && currentVault.path) {
-            const idx = path.join(currentVault.path, 'Antigravity', 'Proyectos', '00 Indice de Proyectos.md');
+            const idx = path.join(currentVault.path, '02_Proyectos', '00 Indice de Proyectos.md');
             if (fs.existsSync(idx)) {
               vscode.workspace.openTextDocument(idx).then(doc => vscode.window.showTextDocument(doc, { preview: false }));
             } else {
-              openInObsidianApp(currentVault.name, 'Antigravity/Proyectos/00 Indice de Proyectos');
+              openInObsidianApp(currentVault.name, '02_Proyectos/00 Indice de Proyectos');
             }
           }
           break;
@@ -407,7 +450,7 @@ class ObsidianPanelProvider {
       isVaultGit = fs.existsSync(path.join(vault.path, '.git'));
 
       // Read memory list
-      const memFolder = path.join(vault.path, 'Antigravity', 'Memoria');
+      const memFolder = path.join(vault.path, '00_Agente', 'Memorias');
       if (fs.existsSync(memFolder)) {
         memoryList = fs.readdirSync(memFolder)
           .filter(f => f.endsWith('.md') && !f.startsWith('00'))
@@ -425,13 +468,13 @@ class ObsidianPanelProvider {
             const fileStat = fs.statSync(fp);
             const dateStr = fileStat.mtime.toISOString().split('T')[0];
 
-            return { title, summary, category, date: dateStr, relPath: `Antigravity/Memoria/${title}` };
+            return { title, summary, category, date: dateStr, relPath: `00_Agente/Memorias/${title}` };
           });
       }
 
       // Read skill list (both 01_Skills and Antigravity/Skills)
       const skiFolder = path.join(vault.path, '01_Skills');
-      const legacySkiFolder = path.join(vault.path, 'Antigravity', 'Skills');
+      const legacySkiFolder = null;
       const targetSkiFolder = fs.existsSync(skiFolder) && fs.readdirSync(skiFolder).filter(f => f.endsWith('.md')).length > 0
         ? skiFolder
         : legacySkiFolder;
@@ -449,7 +492,7 @@ class ObsidianPanelProvider {
             const scope = scopeMatch ? scopeMatch[1] : 'global';
             const descMatch = content.match(/> - \*\*Descripción\*\*:\s*([^\n]+)/) || content.match(/## Procedimiento Operativo\s*\n([^\n]+)/);
             const desc = (descMatch ? descMatch[1] : 'Skill viva automejorable') + vStr;
-            const relPath = targetSkiFolder === skiFolder ? `01_Skills/${title}.md` : `Antigravity/Skills/${title}`;
+            const relPath = `01_Skills/${title}.md`;
             return { title, desc, scope, relPath };
           });
       }
@@ -478,6 +521,12 @@ class ObsidianPanelProvider {
       ? (ideLang.startsWith('en') ? 'en' : (ideLang.startsWith('es') ? 'es' : 'en'))
       : configuredLang;
     const effectiveUser = syncEngine.resolveUserName(vault ? vault.path : null, configuredUser);
+    const personalityInfo = syncEngine.resolvePersonality(vault ? vault.path : null, {
+      userName: configuredUser,
+      aiName: config.get('aiName'),
+      userCallsign: config.get('userCallsign'),
+      personality: config.get('personality')
+    });
     const mcpStatus = syncEngine.getMcpStatus(vault ? vault.path : null);
 
     return `<!DOCTYPE html>
@@ -643,26 +692,31 @@ class ObsidianPanelProvider {
       <div class="soul-header">
         <div class="soul-badge-wrap">
           ${SVGS.brain}
-          <span class="soul-title" data-i18n="soul_title">Hermes Core — Alma & Perfil</span>
+          <span class="soul-title" data-i18n="soul_title">Hermes Core — Identidad del Agente</span>
         </div>
         <span class="status-badge" style="background:rgba(16,185,129,0.15);color:#34d399;border:1px solid rgba(16,185,129,0.3);" data-i18n="soul_status_active">Activo</span>
       </div>
       <div class="soul-body">
         <div class="soul-row">
-          <strong data-i18n="soul_label">Soul de Antigravity:</strong>
-          <span data-i18n="soul_desc">Ingeniero de software senior autónomo, resolutivo, sin rodeos y CERO emojis.</span>
+          <strong data-i18n="soul_label">Agente de IA:</strong>
+          <span style="color:#a855f7;font-weight:600;">${personalityInfo.aiName || 'Pedro'}</span>
+          <span style="font-size:10px;color:var(--text-dim);">— Ingeniero senior autónomo, resolutivo, sin rodeos y CERO emojis</span>
         </div>
         <div class="soul-row">
-          <strong><span data-i18n="profile_label_prefix">Perfil de Usuario</span> (${effectiveUser}):</strong>
-          <span data-i18n="profile_desc">Español/Inglés directo según entorno, filtro anti-ruido estricto y rigor multiplataforma (Windows/Ubuntu/Mac).</span>
+          <strong>Trato hacia ti:</strong>
+          <span style="color:#34d399;font-weight:600;">${personalityInfo.userCallsign || effectiveUser || 'David'}</span>
+          <span style="font-size:10px;color:var(--text-dim);">(La IA siempre te llamará por este nombre en cada chat)</span>
         </div>
       </div>
       <div class="soul-actions">
-        <button class="btn-open-link btn-open-note" data-note="Antigravity/Alma/00 Soul de Antigravity.md">
-          ${SVGS.open} <span data-i18n="soul_view_soul">Ver Soul</span>
+        <button class="btn-open-link" id="btn-edit-personality">
+          ${SVGS.settings} <span>Editar Identidad</span>
         </button>
-        <button class="btn-open-link btn-open-note" data-note="Antigravity/Alma/00 Perfil de Usuario.md">
-          ${SVGS.open} <span data-i18n="soul_view_profile">Ver Perfil</span>
+        <button class="btn-open-link btn-open-note" data-note="00_Agente/00 Personalidad de la IA.md">
+          ${SVGS.open} <span>Personalidad</span>
+        </button>
+        <button class="btn-open-link btn-open-note" data-note="00_Agente/USER.md">
+          ${SVGS.open} <span data-i18n="soul_view_profile">USER.md</span>
         </button>
       </div>
     </div>
@@ -836,7 +890,7 @@ class ObsidianPanelProvider {
       <button class="btn-action btn-gradient" id="btn-new-session-tab" style="flex:1;">
         ${SVGS.history} <span data-i18n="btn_save_session">Guardar Checkpoint</span>
       </button>
-      <button class="btn-action btn-outline btn-open-note" data-note="Antigravity/Sesiones/00 Indice de Sesiones.md" style="flex:1;">
+      <button class="btn-action btn-outline btn-open-note" data-note="03_Sesiones/00 Indice de Sesiones.md" style="flex:1;">
         ${SVGS.open} <span data-i18n="btn_open_index">Ver Índice</span>
       </button>
     </div>
@@ -877,7 +931,7 @@ class ObsidianPanelProvider {
       <button class="btn-action btn-gradient" id="btn-scan-project-tab" style="flex:1;">
         ${SVGS.search} <span data-i18n="btn_scan_project">Escanear Workspace</span>
       </button>
-      <button class="btn-action btn-outline btn-open-note" data-note="Antigravity/Proyectos/00 Indice de Proyectos.md" style="flex:1;">
+      <button class="btn-action btn-outline btn-open-note" data-note="02_Proyectos/00 Indice de Proyectos.md" style="flex:1;">
         ${SVGS.open} <span data-i18n="btn_open_index">Ver Índice</span>
       </button>
     </div>
@@ -915,9 +969,14 @@ class ObsidianPanelProvider {
   <!-- TAB: GRAFO INTERACTIVO -->
   <div class="tab-pane" id="pane-grafo">
     <div class="graph-controls-bar">
-      <input type="text" class="search-input" id="search-graph-nodes" data-i18n-ph="search_graph" placeholder="Buscar nodo en el grafo..." style="flex:1;">
-      <button class="btn-open-link" id="btn-reset-graph" title="Centrar grafo">${SVGS.sync} Reset</button>
-      <button class="btn-open-link btn-open-note" data-note="Antigravity/00 Antigravity Hub.md" title="Abrir en Obsidian">${SVGS.open}</button>
+      <input type="text" class="search-input" id="search-graph-nodes" data-i18n-ph="search_graph" placeholder="Buscar nodo..." style="flex:1;">
+      <div class="graph-btn-group">
+        <button class="graph-btn" id="btn-fit-graph" title="Ajustar y centrar en pantalla">${SVGS.dashboard} Ajustar</button>
+        <button class="graph-btn" id="btn-zoom-in" title="Acercar">+</button>
+        <button class="graph-btn" id="btn-zoom-out" title="Alejar">−</button>
+        <button class="graph-btn" id="btn-reset-graph" title="Reiniciar simulación">${SVGS.sync}</button>
+        <button class="graph-btn btn-open-note" data-note="00_Agente/SOUL.md" title="Abrir en Obsidian">${SVGS.open}</button>
+      </div>
     </div>
 
     <div class="graph-legend">
@@ -934,7 +993,7 @@ class ObsidianPanelProvider {
       <div id="graph-tooltip" class="graph-tooltip"></div>
     </div>
     <div style="font-size:10px;color:var(--text-dim);text-align:center;margin-top:6px;" data-i18n="graph_instructions">
-      Arrastra nodos o el fondo | Rueda para zoom | Clic en un nodo para abrir la nota
+      Arrastra nodos o el fondo | Doble clic para ajustar | Rueda para zoom | Clic en un nodo para abrir nota
     </div>
   </div>
 
@@ -995,6 +1054,34 @@ class ObsidianPanelProvider {
     </div>
 
     <!-- AI Conversations Proactive Memory Settings -->
+    <div class="settings-section">
+      <div class="settings-section-title">
+        ${SVGS.crystal} <span>Identidad del Agente y Trato Personalizado:</span>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;line-height:1.5;">
+        Configura el nombre de tu agente de IA y cómo debe dirigirse a ti en todas las conversaciones técnicas.
+      </div>
+
+      <div class="field">
+        <label>Tu Nombre / Callsign (cómo te llama la IA):</label>
+        <input type="text" class="input-ctrl" id="setting-user-callsign" value="${personalityInfo.userCallsign || 'David'}" placeholder="Ej: David, Jefe, Socio...">
+      </div>
+
+      <div class="field" style="margin-top:8px;">
+        <label>Nombre del Agente de IA:</label>
+        <input type="text" class="input-ctrl" id="setting-ai-name" value="${personalityInfo.aiName || 'Pedro'}" placeholder="Ej: Pedro, Hermes, Jarvis...">
+      </div>
+
+      <div class="field" style="margin-top:8px;">
+        <label>Rasgos y Comportamiento:</label>
+        <textarea class="textarea-ctrl" id="setting-personality" rows="2" placeholder="Estilo y comportamiento...">${personalityInfo.personality || 'Completamente autónomo y resolutivo: soluciona problemas de raíz, directo y sin rodeos.'}</textarea>
+      </div>
+
+      <button class="btn-action btn-gradient" id="btn-save-personality" style="margin-top:8px;">
+        ${SVGS.check} <span>Guardar Identidad y Trato</span>
+      </button>
+    </div>
+
     <div class="settings-section">
       <div class="settings-section-title">
         ${SVGS.brain} <span data-i18n="settings_ai_title">Comportamiento en Conversaciones de IA:</span>
@@ -1263,7 +1350,7 @@ function activate(context) {
             }
           });
         } else {
-          openInObsidianApp(activeVault.name, 'Antigravity/00 Antigravity Hub');
+          openInObsidianApp(activeVault.name, '00_Agente/SOUL');
         }
       } else {
         vscode.window.showWarningMessage('No hay ninguna bóveda de Obsidian conectada.');
@@ -1272,7 +1359,57 @@ function activate(context) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('antigravityObsidian.syncNow', () => {
+    vscode.commands.registerCommand('antigravityObsidian.setPersonality', async () => {
+    const config = vscode.workspace.getConfiguration('antigravityObsidian');
+    const currentName = config.get('aiName') || 'Pedro';
+    const currentCallsign = config.get('userCallsign') || 'David';
+    const currentPersona = config.get('personality') || 'Completamente autónomo y resolutivo: soluciona problemas de raíz, directo y sin rodeos.';
+
+    const newCallsign = await vscode.window.showInputBox({
+      prompt: '¿Cómo quieres que te llame la IA? (Tu nombre o trato preferido)',
+      value: currentCallsign,
+      placeHolder: 'Ej: David, Jefe, Comandante...'
+    });
+    if (newCallsign === undefined) return;
+
+    const newAiName = await vscode.window.showInputBox({
+      prompt: '¿Qué nombre deseas asignarle al agente de IA?',
+      value: currentName,
+      placeHolder: 'Ej: Pedro, Hermes, Jarvis...'
+    });
+    if (newAiName === undefined) return;
+
+    await config.update('userCallsign', newCallsign.trim() || 'David', vscode.ConfigurationTarget.Global);
+    await config.update('userName', newCallsign.trim() || 'David', vscode.ConfigurationTarget.Global);
+    await config.update('aiName', newAiName.trim() || 'Pedro', vscode.ConfigurationTarget.Global);
+    await config.update('personalityConfigured', true, vscode.ConfigurationTarget.Global);
+
+    const { ensureOrCreateDefaultVault } = require('./src/vault-detector');
+    const v = ensureOrCreateDefaultVault(config.get('vaultPath'));
+    if (v && v.exists) {
+      syncEngine.ensurePersonality(v.path, {
+        userCallsign: newCallsign.trim() || 'David',
+        aiName: newAiName.trim() || 'Pedro',
+        personality: currentPersona,
+        personalityConfigured: true,
+        forceUpdate: true
+      });
+      installSkillAndRules(v.path, {
+        userCallsign: newCallsign.trim() || 'David',
+        aiName: newAiName.trim() || 'Pedro',
+        userName: newCallsign.trim() || 'David',
+        personality: currentPersona,
+        personalityConfigured: true
+      });
+      syncEngine.syncAll(v.path, getWorkspaceRoot());
+      if (currentWebviewView) {
+        currentWebviewView.webview.html = provider._getHtmlForWebview(currentWebviewView.webview);
+      }
+    }
+    vscode.window.showInformationMessage(`Identidad guardada: Agente "${newAiName}" | Trato hacia ti: "${newCallsign}"`);
+  });
+
+  vscode.commands.registerCommand('antigravityObsidian.syncNow', () => {
       const activeVault = getActiveOrConfiguredVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
       if (activeVault && activeVault.exists) {
         syncEngine.syncAll(activeVault.path, getWorkspaceRoot());
@@ -1380,7 +1517,7 @@ function activate(context) {
         vscode.window.showWarningMessage('No hay ninguna bóveda de Obsidian conectada.');
         return;
       }
-      const idxFile = path.join(activeVault.path, 'Antigravity', 'Skills', '00 Indice de Skills.md');
+      const idxFile = path.join(activeVault.path, '01_Skills', '00 Indice de Skills.md');
       if (fs.existsSync(idxFile)) {
         const doc = await vscode.workspace.openTextDocument(idxFile);
         await vscode.window.showTextDocument(doc, { preview: false });
@@ -1397,7 +1534,7 @@ function activate(context) {
         vscode.window.showWarningMessage('No hay ninguna bóveda de Obsidian conectada.');
         return;
       }
-      const almaDir = path.join(activeVault.path, 'Antigravity', 'Alma');
+      const almaDir = path.join(activeVault.path, '00_Agente');
       const soulPath = path.join(almaDir, '00 Soul de Antigravity.md');
       const userPath = path.join(almaDir, '00 Perfil de Usuario.md');
       const personalityPath = fs.existsSync(path.join(almaDir, '00 AI Personality.md'))
@@ -1517,7 +1654,7 @@ function activate(context) {
         vscode.window.showWarningMessage('No hay ninguna bóveda de Obsidian conectada.');
         return;
       }
-      const idxFile = path.join(activeVault.path, 'Antigravity', 'Proyectos', '00 Indice de Proyectos.md');
+      const idxFile = path.join(activeVault.path, '02_Proyectos', '00 Indice de Proyectos.md');
       if (fs.existsSync(idxFile)) {
         const doc = await vscode.workspace.openTextDocument(idxFile);
         await vscode.window.showTextDocument(doc, { preview: false });
@@ -1687,12 +1824,12 @@ function activate(context) {
         vscode.window.showWarningMessage('No hay ninguna bóveda de Obsidian conectada.');
         return;
       }
-      const idxFile = path.join(activeVault.path, 'Antigravity', 'Sesiones', '00 Indice de Sesiones.md');
+      const idxFile = path.join(activeVault.path, '03_Sesiones', '00 Indice de Sesiones.md');
       if (fs.existsSync(idxFile)) {
         const doc = await vscode.workspace.openTextDocument(idxFile);
         await vscode.window.showTextDocument(doc, { preview: false });
       } else {
-        openInObsidianApp(activeVault.name, 'Antigravity/Sesiones/00 Indice de Sesiones');
+        openInObsidianApp(activeVault.name, '03_Sesiones/00 Indice de Sesiones');
       }
     })
   );
@@ -1704,7 +1841,7 @@ function activate(context) {
         vscode.window.showWarningMessage('Obsidian: Desconectado. No se encontró ninguna bóveda activa.');
         return;
       }
-      const manifestPath = path.join(activeVault.path, 'Antigravity', 'context-manifest.json');
+      const manifestPath = path.join(activeVault.path, 'context-manifest.json');
       let statsText = '';
       if (fs.existsSync(manifestPath)) {
         try {
@@ -1729,7 +1866,7 @@ function activate(context) {
     vscode.commands.registerCommand('antigravityObsidian.openGraph', () => {
       const activeVault = getActiveOrConfiguredVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
       if (activeVault && activeVault.exists) {
-        openInObsidianApp(activeVault.name, 'Antigravity/00 Antigravity Hub');
+        openInObsidianApp(activeVault.name, '00_Agente/SOUL');
       } else {
         vscode.window.showWarningMessage('No hay ninguna bóveda de Obsidian conectada.');
       }

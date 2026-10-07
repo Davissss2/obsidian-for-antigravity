@@ -68,36 +68,34 @@ function ensureVaultStructure(vaultPath) {
   // 1. Official Hermes Directory Structure
   const hermesDirs = [
     path.join(vaultPath, '00_Agente'),
+    path.join(vaultPath, '00_Agente', 'Memorias'),
     path.join(vaultPath, '01_Skills'),
     path.join(vaultPath, '02_Proyectos'),
     path.join(vaultPath, '03_Sesiones'),
     path.join(vaultPath, '03_Sesiones', 'Trajectories'),
   ];
 
-  // 2. Backward Compatibility Directories
-  const legacyBase = path.join(vaultPath, 'Antigravity');
-  const legacyDirs = [
-    legacyBase,
-    path.join(legacyBase, 'Alma'),
-    path.join(legacyBase, 'Memoria'),
-    path.join(legacyBase, 'Skills'),
-    path.join(legacyBase, 'Proyectos'),
-    path.join(legacyBase, 'Sesiones'),
-  ];
-
-  for (const d of [...hermesDirs, ...legacyDirs]) {
+  for (const d of hermesDirs) {
     if (!fs.existsSync(d)) {
       fs.mkdirSync(d, { recursive: true });
     }
   }
 
-  // Initialize Hermes Core notes and ensure seamless auto-migration from legacy versions
+  // 2. Clean and purge legacy Antigravity directory completely
+  const legacyBase = path.join(vaultPath, 'Antigravity');
+  if (fs.existsSync(legacyBase)) {
+    try {
+      migrateToHermes(vaultPath);
+      fs.rmSync(legacyBase, { recursive: true, force: true });
+    } catch (e) {}
+  }
+
+  // Initialize Hermes Core notes
   try {
     ensureHermesCore(vaultPath);
-    migrateToHermes(vaultPath);
   } catch (e) {}
 
-  return legacyBase;
+  return vaultPath;
 }
 
 function ensureHermesCore(vaultPath, options = {}) {
@@ -160,7 +158,7 @@ last_updated: ${now}
   // 2. USER.md (Bounded to 1,500 chars)
   if (!fs.existsSync(userFile) || options.forceUpdate) {
     let initialUserContent = '';
-    const legacyUserPath = path.join(vaultPath, 'Antigravity', 'Alma', '00 Perfil de Usuario.md');
+    const legacyUserPath = path.join(vaultPath, '00_Agente', 'USER.md');
     const habitBullets = [];
 
     if (fs.existsSync(legacyUserPath) && !options.forceUpdate) {
@@ -229,7 +227,7 @@ updated: ${now}
 
   // 3. MEMORY.md (Bounded to 2,500 chars)
   if (!fs.existsSync(memoryFile) || options.forceUpdate) {
-    const legacyMemDir = path.join(vaultPath, 'Antigravity', 'Memoria');
+    const legacyMemDir = path.join(vaultPath, '00_Agente', 'Memorias');
     const memoryFacts = [];
     if (fs.existsSync(legacyMemDir)) {
       try {
@@ -352,7 +350,7 @@ function updateBoundedMemory(vaultPath, target, operation, content) {
   // Mirror USER.md to legacy profile note if present
   if (fileName === 'USER.md') {
     try {
-      const legacyPath = path.join(vaultPath, 'Antigravity', 'Alma', '00 Perfil de Usuario.md');
+      const legacyPath = path.join(vaultPath, '00_Agente', 'USER.md');
       if (fs.existsSync(legacyPath)) {
         fs.writeFileSync(legacyPath, newContent, 'utf8');
       }
@@ -548,7 +546,7 @@ function sessionRecall(vaultPath, query, limit = 5) {
   const searchDirs = [
     path.join(vaultPath, '03_Sesiones'),
     path.join(vaultPath, '03_Sesiones', 'Trajectories'),
-    path.join(vaultPath, 'Antigravity', 'Sesiones'),
+    path.join(vaultPath, '03_Sesiones'),
   ];
 
   const results = [];
@@ -731,7 +729,7 @@ function migrateToHermes(vaultPath) {
   let migratedProjects = 0;
 
   // 2. Migrate legacy skills to 01_Skills with full Hermes living playbook schema
-  const legacySkillsDir = path.join(vaultPath, 'Antigravity', 'Skills');
+  const legacySkillsDir = path.join(vaultPath, '01_Skills');
   const hermesSkillsDir = path.join(vaultPath, '01_Skills');
   if (fs.existsSync(legacySkillsDir)) {
     try {
@@ -795,7 +793,7 @@ function migrateToHermes(vaultPath) {
   }
 
   // 3. Migrate projects to 02_Proyectos/[Project]/ARCHITECTURE.md + WORKFLOW.md
-  const legacyProjDir = path.join(vaultPath, 'Antigravity', 'Proyectos');
+  const legacyProjDir = path.join(vaultPath, '02_Proyectos');
   const hermesProjDir = path.join(vaultPath, '02_Proyectos');
   if (fs.existsSync(legacyProjDir)) {
     try {
@@ -844,7 +842,7 @@ function resolveUserName(vaultPath, explicitUserName) {
   }
   // Check existing user profile in vault
   if (vaultPath) {
-    const userPath = path.join(vaultPath, 'Antigravity', 'Alma', '00 Perfil de Usuario.md');
+    const userPath = path.join(vaultPath, '00_Agente', 'USER.md');
     if (fs.existsSync(userPath)) {
       try {
         const content = fs.readFileSync(userPath, 'utf8');
@@ -950,7 +948,7 @@ function resolvePersonality(vaultPath, explicitOptions = {}) {
 
   // Check vault note if still missing fields or if configured status is recorded there
   if (vaultPath) {
-    const almaDir = path.join(vaultPath, 'Antigravity', 'Alma');
+    const almaDir = path.join(vaultPath, '00_Agente');
     const pFile = path.join(almaDir, '00 Personalidad de la IA.md');
     const pFileEn = path.join(almaDir, '00 AI Personality.md');
     let targetFile = null;
@@ -1020,7 +1018,7 @@ function ensurePersonality(vaultPath, options = {}) {
   if (!vaultPath || !fs.existsSync(vaultPath)) return null;
   ensureVaultStructure(vaultPath);
 
-  const almaDir = path.join(vaultPath, 'Antigravity', 'Alma');
+  const almaDir = path.join(vaultPath, '00_Agente');
   if (!fs.existsSync(almaDir)) {
     fs.mkdirSync(almaDir, { recursive: true });
   }
@@ -1146,7 +1144,7 @@ function savePersonality(vaultPath, data = {}, options = {}) {
 function getPersonality(vaultPath, options = {}) {
   if (!vaultPath || !fs.existsSync(vaultPath)) return null;
   const { aiName, userCallsign, personality, configured } = resolvePersonality(vaultPath, options);
-  const almaDir = path.join(vaultPath, 'Antigravity', 'Alma');
+  const almaDir = path.join(vaultPath, '00_Agente');
   const lang = resolveLanguage(options);
   const pFileName = (lang === 'en') ? '00 AI Personality.md' : '00 Personalidad de la IA.md';
   const personalityPath = path.join(almaDir, pFileName);
@@ -1164,7 +1162,7 @@ function ensureSoulAndProfile(vaultPath, options = {}) {
   if (!vaultPath || !fs.existsSync(vaultPath)) return null;
   ensureVaultStructure(vaultPath);
 
-  const almaDir = path.join(vaultPath, 'Antigravity', 'Alma');
+  const almaDir = path.join(vaultPath, '00_Agente');
   if (!fs.existsSync(almaDir)) {
     fs.mkdirSync(almaDir, { recursive: true });
   }
@@ -1370,7 +1368,7 @@ function getSoulAndProfile(vaultPath, options = {}) {
   if (!vaultPath || !fs.existsSync(vaultPath)) return null;
   ensureSoulAndProfile(vaultPath, options);
 
-  const almaDir = path.join(vaultPath, 'Antigravity', 'Alma');
+  const almaDir = path.join(vaultPath, '00_Agente');
   const soulPath = path.join(almaDir, '00 Soul de Antigravity.md');
   const userPath = path.join(almaDir, '00 Perfil de Usuario.md');
 
@@ -1405,7 +1403,7 @@ function recordUserLearning(vaultPath, learningText, options = {}) {
   const entry = `- \`[${now}]\` ${cleanLearning}`;
 
   if (isGlobal) {
-    const userPath = path.join(vaultPath, 'Antigravity', 'Alma', '00 Perfil de Usuario.md');
+    const userPath = path.join(vaultPath, '00_Agente', 'USER.md');
     if (!fs.existsSync(userPath)) return null;
 
     let content = fs.readFileSync(userPath, 'utf8');
@@ -1426,7 +1424,7 @@ function recordUserLearning(vaultPath, learningText, options = {}) {
     fs.writeFileSync(userPath, content, 'utf8');
     return { updated: true, entry, target: userPath, scope: 'global' };
   } else {
-    const projDir = path.join(vaultPath, 'Antigravity', 'Proyectos');
+    const projDir = path.join(vaultPath, '02_Proyectos');
     if (!fs.existsSync(projDir)) fs.mkdirSync(projDir, { recursive: true });
 
     let projFile = path.join(projDir, `${sanitizeFilename(project)}.md`);
@@ -1527,7 +1525,7 @@ function parseSkillMd(filePath) {
 function syncSkillsToVault(vaultPath, workspaceRoot) {
   ensureVaultStructure(vaultPath);
   const { globalSkillsDir } = getAntigravityPaths();
-  const skillsFolder = path.join(vaultPath, 'Antigravity', 'Skills');
+  const skillsFolder = path.join(vaultPath, '01_Skills');
   const syncedSkills = [];
   const activeFilenames = new Set(['00 Indice de Skills.md']);
   const seenSkillNames = new Set();
@@ -1722,7 +1720,7 @@ Total de skills activas sincronizadas: **${syncedSkills.length}**
 function syncKnowledgeToVault(vaultPath) {
   ensureVaultStructure(vaultPath);
   const { knowledgeDir } = getAntigravityPaths();
-  const memoriaFolder = path.join(vaultPath, 'Antigravity', 'Memoria');
+  const memoriaFolder = path.join(vaultPath, '00_Agente', 'Memorias');
   const syncedMemories = [];
 
   if (fs.existsSync(knowledgeDir)) {
@@ -1857,7 +1855,7 @@ Total de memorias y bases de conocimiento registradas: **${syncedMemories.length
 
 function saveNewMemory(vaultPath, memoryData) {
   ensureVaultStructure(vaultPath);
-  const memoriaFolder = path.join(vaultPath, 'Antigravity', 'Memoria');
+  const memoriaFolder = path.join(vaultPath, '00_Agente', 'Memorias');
   const title = memoryData.title || `Memoria ${new Date().toISOString().slice(0, 10)}`;
   const cleanTitle = sanitizeFilename(title);
   const obsFile = path.join(memoriaFolder, `${cleanTitle}.md`);
@@ -2045,7 +2043,7 @@ function listAllSkills(vaultPath, workspaceRoot, options = {}) {
 
   // 3. Include vault notes if not found in disk
   if (vaultPath) {
-    const vSkills = path.join(vaultPath, 'Antigravity', 'Skills');
+    const vSkills = path.join(vaultPath, '01_Skills');
     if (fs.existsSync(vSkills)) {
       try {
         for (const vf of fs.readdirSync(vSkills)) {
@@ -2219,7 +2217,7 @@ function createSkill(vaultPath, workspaceRoot, options = {}) {
   let obsFile = null;
   if (vaultPath && fs.existsSync(vaultPath)) {
     ensureVaultStructure(vaultPath);
-    const skillsFolder = path.join(vaultPath, 'Antigravity', 'Skills');
+    const skillsFolder = path.join(vaultPath, '01_Skills');
     const fileName = scope === 'project' ? `[Proyecto] ${sanitizeFilename(safeName)}.md` : `${sanitizeFilename(safeName)}.md`;
     obsFile = path.join(skillsFolder, fileName);
     const nowStr = new Date().toISOString().split('T')[0];
@@ -2257,7 +2255,7 @@ function createSkill(vaultPath, workspaceRoot, options = {}) {
     // 4. If project scope, update project note in Antigravity/Proyectos
     if (scope === 'project') {
       try {
-        const projDir = path.join(vaultPath, 'Antigravity', 'Proyectos');
+        const projDir = path.join(vaultPath, '02_Proyectos');
         const projNote = path.join(projDir, `${path.basename(effectiveWs)}.md`);
         if (fs.existsSync(projNote)) {
           let pTxt = fs.readFileSync(projNote, 'utf8');
@@ -2482,7 +2480,7 @@ function listRules(vaultPath, workspaceRoot) {
 
   let dynamicLearningsCount = 0;
   if (vaultPath) {
-    const uProfile = path.join(vaultPath, 'Antigravity', 'Alma', '00 Perfil de Usuario.md');
+    const uProfile = path.join(vaultPath, '00_Agente', 'USER.md');
     if (fs.existsSync(uProfile)) {
       try {
         const uTxt = fs.readFileSync(uProfile, 'utf8');
@@ -2713,7 +2711,7 @@ function findAssociatedSkill(projectName, workspaceRoot, vaultPath) {
 
   // 3. Vault skills
   if (vaultPath) {
-    const vaultSkillsDir = path.join(vaultPath, 'Antigravity', 'Skills');
+    const vaultSkillsDir = path.join(vaultPath, '01_Skills');
     if (fs.existsSync(vaultSkillsDir)) {
       try {
         const list = fs.readdirSync(vaultSkillsDir);
@@ -2735,7 +2733,7 @@ function syncProjectsIndex(vaultPath, options = {}) {
   ensureVaultStructure(vaultPath);
   const lang = resolveLanguage(options);
   const isEn = (lang === 'en');
-  const projFolder = path.join(vaultPath, 'Antigravity', 'Proyectos');
+  const projFolder = path.join(vaultPath, '02_Proyectos');
   const indexFile = path.join(projFolder, isEn ? '00 Projects Index.md' : '00 Indice de Proyectos.md');
   const otherIndexFile = path.join(projFolder, isEn ? '00 Indice de Proyectos.md' : '00 Projects Index.md');
   if (fs.existsSync(otherIndexFile)) {
@@ -2746,33 +2744,44 @@ function syncProjectsIndex(vaultPath, options = {}) {
   const projects = [];
 
   if (fs.existsSync(projFolder)) {
-    const files = fs.readdirSync(projFolder);
-    for (const f of files) {
-      if (!f.endsWith('.md') || f.startsWith('00')) continue;
-      const fp = path.join(projFolder, f);
+    const entries = fs.readdirSync(projFolder, { withFileTypes: true });
+    for (const ent of entries) {
+      if (ent.name.startsWith('.') || ent.name.startsWith('00')) continue;
+      let fp = null;
+      let baseName = ent.name;
+      if (ent.isDirectory()) {
+        const arch = path.join(projFolder, ent.name, 'ARCHITECTURE.md');
+        if (fs.existsSync(arch)) fp = arch;
+      } else if (ent.isFile() && ent.name.endsWith('.md')) {
+        fp = path.join(projFolder, ent.name);
+        baseName = ent.name.replace(/\.md$/, '');
+      }
+      if (!fp) continue;
       try {
         const content = fs.readFileSync(fp, 'utf8');
-        const baseName = f.replace(/\.md$/, '');
         let name = baseName;
         let localPath = '—';
         let stack = '—';
         let summary = '—';
         let skill = '—';
 
-        const nameMatch = content.match(/>\s*-\s*\*\*Nombre\*\*:\s*`([^`]+)`/i) || content.match(/^title:\s*"Proyecto:\s*([^"\r\n]+)"/m);
+        const nameMatch = content.match(/^project:\s*"([^"\r\n]+)"/m) || content.match(/>\s*-\s*\*\*Nombre\*\*:\s*`([^`]+)`/i) || content.match(/^title:\s*"Proyecto:\s*([^"\r\n]+)"/m);
         if (nameMatch) name = nameMatch[1].trim();
 
-        const pathMatch = content.match(/>\s*-\s*\*\*Ruta local\*\*:\s*`([^`]+)`/i);
+        const pathMatch = content.match(/>\s*-\s*\*\*Ruta local\*\*:\s*`([^`]+)`/i) || content.match(/-\s*\*\*Ruta local\*\*:\s*`([^`]+)`/i);
         if (pathMatch) localPath = pathMatch[1].trim();
 
-        const stackMatch = content.match(/>\s*-\s*\*\*Stack\*\*:\s*([^\r\n]+)/i) || content.match(/###\s*Stack Tecnológico[^\r\n]*\r?\n([^\r\n#]+)/i);
+        const stackMatch = content.match(/^stack:\s*"([^"\r\n]+)"/m) || content.match(/>\s*-\s*\*\*Stack\*\*:\s*([^\r\n]+)/i) || content.match(/-\s*\*\*Stack\*\*:\s*([^\r\n]+)/i);
         if (stackMatch) stack = stackMatch[1].replace(/[`*]/g, '').trim();
 
-        const sumMatch = content.match(/>\s*-\s*\*\*Resumen\*\*:\s*([^\r\n]+)/i) || content.match(/>\s*\[!(?:INFO|ABSTRACT)\][^\r\n]*\r?\n>\s*([^\r\n]+)/i);
+        const sumMatch = content.match(/## Decisiones de Diseño y Estructura[^\r\n]*\r?\n([^\r\n#]+)/i) || content.match(/>\s*-\s*\*\*Resumen\*\*:\s*([^\r\n]+)/i);
         if (sumMatch) summary = sumMatch[1].trim();
 
-        const skillMatch = content.match(/>\s*-\s*\*\*Skill Asociada\*\*:\s*\[\[?([^\]\r\n]+)\]\]?/i) || content.match(/##\s*Skills de Proyecto[^\r\n]*\r?\n\[\[([^\]]+)\]\]/i);
-        if (skillMatch) skill = skillMatch[1].replace(/^\[\[|\]\]$/g, '').trim();
+        const skillMatch = content.match(/\[\[(antigravity-[a-z0-9_-]+|seo|qr-[a-z0-9_-]+)\]\]/i);
+        if (skillMatch) skill = skillMatch[1];
+        else skill = findAssociatedSkill(name, localPath, vaultPath);
+
+        if (name === 'Antigravity IDE' && localPath.includes('AppData')) continue;
 
         projects.push({
           name,
@@ -2790,21 +2799,19 @@ function syncProjectsIndex(vaultPath, options = {}) {
 
   let tableRows = '';
   if (projects.length === 0) {
-    tableRows = isEn
-      ? '| *No projects registered yet* | — | — | — | — | — |\n'
-      : '| *Aún no hay proyectos registrados* | — | — | — | — | — |\n';
+    tableRows = '| *Aún no hay proyectos registrados* | — | — | — | — | — |\n';
   } else {
     for (const p of projects) {
       tableRows += `| **${p.name}** | \`${p.localPath}\` | ${p.stack} | ${p.summary} | ${p.skill} | [[${p.file}]] |\n`;
     }
   }
 
-  const content = isEn
+  const indexContent = isEn
     ? `---
 title: "Projects Index — Antigravity"
 type: antigravity-index
 tags:
-  - antigravity/proyectos
+  - antigravity/projects
   - antigravity/index
 created: ${now}
 updated: ${now}
@@ -2813,14 +2820,13 @@ updated: ${now}
 # Unified Projects Index — Antigravity
 
 > [!INFO] **Consolidated Projects Registry**
-> High-density unified registry of all workspace projects tracked by Antigravity and Obsidian.
-> This single index prevents token waste across chat sessions by aggregating project metadata, paths, and skills.
+> Unified high-density registry of all workspace projects linked to Antigravity and Obsidian.
 
 | Project | Local Path | Tech Stack | Summary | Associated Skill | Note |
 |---|---|---|---|---|---|
 ${tableRows}
 ---
-*Graph Connections:* [[00 Antigravity Hub]] | [[00 Indice de Memoria]]
+*Graph Connections:* [[00 Antigravity Hub]] | [[00 Projects Index]]
 `
     : `---
 title: "Índice de Proyectos — Antigravity"
@@ -2836,16 +2842,36 @@ updated: ${now}
 
 > [!INFO] **Registro Consolidado de Proyectos**
 > Registro unificado de alta densidad de todos los proyectos de workspace vinculados a Antigravity y Obsidian.
-> Este índice único evita el consumo excesivo de tokens al consolidar rutas, stack y skills asociadas en una sola memoria.
 
 | Proyecto | Ruta Local | Stack Tecnológico | Resumen | Skill Asociada | Ficha |
 |---|---|---|---|---|---|
 ${tableRows}
 ---
-*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Indice de Memoria]]
+*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Indice de Proyectos]]
 `;
 
-  fs.writeFileSync(indexFile, content, 'utf8');
+  fs.writeFileSync(indexFile, indexContent, 'utf8');
+
+  // Single consolidated Knowledge Item
+  try {
+    const { knowledgeDir } = getAntigravityPaths();
+    if (fs.existsSync(knowledgeDir)) {
+      const targetDir = path.join(knowledgeDir, 'proyectos-antigravity');
+      const artifactsDir = path.join(targetDir, 'artifacts');
+      if (!fs.existsSync(artifactsDir)) fs.mkdirSync(artifactsDir, { recursive: true });
+      const meta = {
+        title: 'Proyectos Registrados — Antigravity',
+        summary: 'Registro consolidado de proyectos vinculados en Antigravity con ruta, stack tecnológico y skills asociadas.',
+        source: 'obsidian-vault',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        references: [],
+      };
+      fs.writeFileSync(path.join(targetDir, 'metadata.json'), JSON.stringify(meta, null, 2), 'utf8');
+      fs.writeFileSync(path.join(artifactsDir, '00 Indice de Proyectos.md'), indexContent, 'utf8');
+    }
+  } catch (e) {}
+
   return { indexPath: indexFile, count: projects.length, projects };
 }
 
@@ -2855,97 +2881,30 @@ function syncProject(vaultPath, workspaceRoot, options = {}) {
   ensureVaultStructure(vaultPath);
   const detected = detectWorkspaceStack(workspaceRoot);
   const projectName = detected.name || path.basename(workspaceRoot);
-  const projFolder = path.join(vaultPath, 'Antigravity', 'Proyectos');
-  const obsFile = path.join(projFolder, `${sanitizeFilename(projectName)}.md`);
+  const safeProj = sanitizeFilename(projectName);
+  const hermesProjFolder = path.join(vaultPath, '02_Proyectos', safeProj);
+  if (!fs.existsSync(hermesProjFolder)) fs.mkdirSync(hermesProjFolder, { recursive: true });
+
+  const archFile = path.join(hermesProjFolder, 'ARCHITECTURE.md');
+  const workFile = path.join(hermesProjFolder, 'WORKFLOW.md');
   const now = new Date().toISOString().split('T')[0];
   const associatedSkill = findAssociatedSkill(projectName, workspaceRoot, vaultPath);
 
-  // Remove any legacy note for the same workspace path if name changed (e.g. obsi.md vs obsidian-for-antigravity.md)
-  try {
-    for (const f of fs.readdirSync(projFolder)) {
-      if (!f.endsWith('.md') || f.startsWith('00') || f === `${sanitizeFilename(projectName)}.md`) continue;
-      const oldFp = path.join(projFolder, f);
-      const oldTxt = fs.readFileSync(oldFp, 'utf8');
-      const mP = oldTxt.match(/>\s*-\s*\*\*Ruta local\*\*:\s*`([^`]+)`/i);
-      if (mP && path.resolve(mP[1]).toLowerCase() === path.resolve(workspaceRoot).toLowerCase()) {
-        try { fs.unlinkSync(oldFp); } catch (e) {}
-      }
-    }
-  } catch (e) {}
-
   let existingRules = '';
-  let existingMemories = '';
-  let existingSkills = '';
-  if (fs.existsSync(obsFile)) {
+  let existingAntiPatterns = '';
+  if (fs.existsSync(archFile)) {
     try {
-      const existing = fs.readFileSync(obsFile, 'utf8');
-      const rulesMatch = existing.match(/##\s*(?:Reglas y Condiciones Obligatorias del Proyecto|Project Rules & Constraints)[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
-      if (rulesMatch && rulesMatch[1].trim()) {
-        existingRules = rulesMatch[1].trim();
-      }
-      const memMatch = existing.match(/##\s*Memorias y Decisiones Vinculadas[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
-      if (memMatch && memMatch[1].trim() && !memMatch[1].includes('<!-- Agrega enlaces')) {
-        existingMemories = memMatch[1].trim();
-      }
-      const skiMatch = existing.match(/##\s*Skills de Proyecto[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
-      if (skiMatch && skiMatch[1].trim() && !skiMatch[1].includes('<!-- Agrega skills')) {
-        existingSkills = skiMatch[1].trim();
-      }
+      const ex = fs.readFileSync(archFile, 'utf8');
+      const rM = ex.match(/##\s*(?:Reglas y Condiciones Obligatorias(?: del Proyecto)?)[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
+      if (rM && rM[1].trim() && !rM[1].includes('<!--')) existingRules = rM[1].trim();
+      const apM = ex.match(/##\s*(?:Anti-Patrones y Trampas Prohibidas(?: del Proyecto)?)[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
+      if (apM && apM[1].trim() && !apM[1].includes('<!--')) existingAntiPatterns = apM[1].trim();
     } catch (e) {}
   }
 
   const skillLink = associatedSkill !== '—' ? `[[${associatedSkill}]]` : '—';
-  const skillsSection = existingSkills || (associatedSkill !== '—' ? `- Skill vinculada: [[${associatedSkill}]]` : '<!-- Agrega skills específicas usando enlaces [[Skill]] -->');
 
-  const content = `---
-title: "Proyecto: ${projectName}"
-type: antigravity-project
-tags:
-  - antigravity/proyecto
-created: ${now}
-updated: ${now}
----
-
-# Proyecto: ${projectName}
-
-> [!INFO] **Ficha del Proyecto**
-> - **Nombre**: \`${projectName}\`
-> - **Ruta local**: \`${workspaceRoot}\`
-> - **Stack**: ${detected.stack}
-> - **Resumen**: ${detected.description}
-> - **Skill Asociada**: ${skillLink}
-> - **Última sincronización**: ${now}
-
-### Detalles Técnicos Detectados
-- **Versión**: \`${detected.version}\`
-- **Framework / Core**: \`${detected.framework || detected.stack}\`
-- **Dependencias clave**: ${detected.dependencies.slice(0, 15).map(d => `\`${d}\``).join(', ') || 'Ninguna'}
-
-## Reglas y Condiciones Obligatorias del Proyecto
-${existingRules || '<!-- Reglas operativas y condiciones obligatorias para este proyecto (commits, empaquetado, workflows, etc.) -->'}
-
-## Memorias y Decisiones Vinculadas
-${existingMemories || '<!-- Agrega enlaces [[Nombre de la Memoria]] para conectar este proyecto con el grafo de Antigravity -->'}
-
-## Skills de Proyecto
-${skillsSection}
-
----
-*Conexiones del Grafo:* [[00 Antigravity Hub]] | [[00 Indice de Proyectos]]
-`;
-
-  fs.writeFileSync(obsFile, content, 'utf8');
-
-  // Also create/update Hermes 02_Proyectos/${projectName}/ARCHITECTURE.md & WORKFLOW.md
-  try {
-    const hermesProjFolder = path.join(vaultPath, '02_Proyectos', sanitizeFilename(projectName));
-    if (!fs.existsSync(hermesProjFolder)) {
-      fs.mkdirSync(hermesProjFolder, { recursive: true });
-    }
-    const archFile = path.join(hermesProjFolder, 'ARCHITECTURE.md');
-    const workFile = path.join(hermesProjFolder, 'WORKFLOW.md');
-    
-    const archContent = `---
+  const archContent = `---
 project: "${projectName}"
 type: hermes-architecture
 updated: ${now}
@@ -2959,51 +2918,36 @@ stack: "${detected.stack}"
 - **Stack**: ${detected.stack}
 - **Framework / Core**: \`${detected.framework || detected.stack}\`
 - **Versión**: \`${detected.version}\`
-- **Dependencias clave**: ${detected.dependencies.slice(0, 15).map(d => `\`${d}\``).join(', ') || 'Ninguna'}
+- **Dependencias clave**: ${detected.dependencies.slice(0, 15).map(d => '`' + d + '`').join(', ') || 'Ninguna'}
+- **Skill Asociada**: ${skillLink}
 
 ## Decisiones de Diseño y Estructura
-${detected.description}
+${detected.description || `Proyecto en desarrollo (${detected.stack})`}
 
-## Reglas y Condiciones Obligatorias
-${existingRules || '*(Sin reglas obligatorias adicionales registradas)*'}
+## Reglas y Condiciones Obligatorias del Proyecto
+${existingRules || '<!-- Reglas operativas y condiciones obligatorias para este proyecto (commits, empaquetado, workflows, etc.) -->'}
+
+## Anti-Patrones y Trampas Prohibidas del Proyecto
+${existingAntiPatterns || '<!-- Trampas técnicas, errores a evitar y prácticas prohibidas en este repositorio -->'}
 `;
-    fs.writeFileSync(archFile, archContent, 'utf8');
 
-    if (!fs.existsSync(workFile)) {
-      const scripts = detected.packageScripts || {};
-      const scriptsList = Object.keys(scripts).length > 0
-        ? Object.entries(scripts).map(([k, v]) => `- \`npm run ${k}\`: \`${v}\``).join('\n')
-        : '- `npm test`: Ejecutar suite de pruebas\n- `npm run dev`: Iniciar entorno local';
+  fs.writeFileSync(archFile, archContent, 'utf8');
 
-      const workContent = `---
-project: "${projectName}"
-type: hermes-workflow
-updated: ${now}
----
+  if (!fs.existsSync(workFile)) {
+    const workContent = `# Workflow — ${projectName}
 
-# Workflow — ${projectName}
-
-## Comandos Reales Probados y Funcionales
-${scriptsList}
-
-## Flujo de Trabajo Operativo
-1. Verificar estado con \`git status\`.
-2. Ejecutar verificaciones antes de confirmar cambios.
-3. Al resolver errores o crear procedimientos, auto-reparar skills en \`01_Skills/\`.
+## Comandos Operativos Frecuentes
+- Compilar: \`npm run build\`
+- Probar: \`npm test\`
 `;
-      fs.writeFileSync(workFile, workContent, 'utf8');
-    }
-  } catch (e) {}
+    fs.writeFileSync(workFile, workContent, 'utf8');
+  }
 
-  // Automatically update the unified projects index
-  syncProjectsIndex(vaultPath, options);
-
-  // Sync project rules to workspace .agents/rules/project-rules.md
   syncProjectRulesToWorkspace(vaultPath, workspaceRoot, projectName);
 
   return {
     projectName,
-    path: obsFile,
+    path: archFile,
     stack: detected.stack,
     summary: detected.description,
     skill: associatedSkill,
@@ -3015,38 +2959,38 @@ function syncProjectRulesToWorkspace(vaultPath, workspaceRoot, projectName) {
   const effectiveWs = resolveWorkspaceRoot(workspaceRoot || process.cwd());
   if (!effectiveWs || !fs.existsSync(effectiveWs)) return null;
 
-  const projFolder = path.join(vaultPath, 'Antigravity', 'Proyectos');
+  const projFolder = path.join(vaultPath, '02_Proyectos');
   if (!fs.existsSync(projFolder)) return null;
 
   let pName = projectName;
   let projFile = null;
 
   if (pName) {
+    const archCandidate = path.join(projFolder, sanitizeFilename(pName), 'ARCHITECTURE.md');
+    if (fs.existsSync(archCandidate)) projFile = archCandidate;
     const directFile = path.join(projFolder, `${sanitizeFilename(pName)}.md`);
-    if (fs.existsSync(directFile)) projFile = directFile;
+    if (!projFile && fs.existsSync(directFile)) projFile = directFile;
   }
 
   if (!projFile) {
-    for (const f of fs.readdirSync(projFolder)) {
-      if (!f.endsWith('.md') || f.startsWith('00')) continue;
-      const fp = path.join(projFolder, f);
-      try {
-        const txt = fs.readFileSync(fp, 'utf8');
-        const m = txt.match(/>\s*-\s*\*\*Ruta local\*\*:\s*`([^`]+)`/i);
-        if (m && path.resolve(m[1]).toLowerCase() === path.resolve(effectiveWs).toLowerCase()) {
-          projFile = fp;
-          pName = f.replace(/\.md$/, '');
-          break;
-        }
-      } catch (e) {}
-    }
-  }
-
-  if (!projFile && pName) {
-    for (const f of fs.readdirSync(projFolder)) {
-      if (f.toLowerCase() === `${pName.toLowerCase()}.md`) {
-        projFile = path.join(projFolder, f);
-        break;
+    for (const ent of fs.readdirSync(projFolder, { withFileTypes: true })) {
+      let cand = null;
+      if (ent.isDirectory() && !ent.name.startsWith('.')) {
+        const arch = path.join(projFolder, ent.name, 'ARCHITECTURE.md');
+        if (fs.existsSync(arch)) cand = arch;
+      } else if (ent.isFile() && ent.name.endsWith('.md') && !ent.name.startsWith('00')) {
+        cand = path.join(projFolder, ent.name);
+      }
+      if (cand) {
+        try {
+          const txt = fs.readFileSync(cand, 'utf8');
+          const m = txt.match(/>\s*-\s*\*\*Ruta local\*\*:\s*`([^`]+)`/i) || txt.match(/-\s*\*\*Ruta local\*\*:\s*`([^`]+)`/i);
+          if (m && path.resolve(m[1]).toLowerCase() === path.resolve(effectiveWs).toLowerCase()) {
+            projFile = cand;
+            pName = ent.name.replace(/\.md$/, '');
+            break;
+          }
+        } catch (e) {}
       }
     }
   }
@@ -3054,12 +2998,18 @@ function syncProjectRulesToWorkspace(vaultPath, workspaceRoot, projectName) {
   if (!projFile || !fs.existsSync(projFile)) return null;
 
   const txt = fs.readFileSync(projFile, 'utf8');
-  const rulesMatch = txt.match(/##\s*(?:Reglas y Condiciones Obligatorias del Proyecto|Project Rules & Constraints)[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
-  if (!rulesMatch) return null;
+  const rulesMatch = txt.match(/##\s*(?:Reglas y Condiciones Obligatorias(?: del Proyecto)?|Project Rules & Constraints)[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
+  const apMatch = txt.match(/##\s*(?:Anti-Patrones y Trampas Prohibidas(?: del Proyecto)?|Anti-Patterns & Forbidden Traps)[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
 
-  const rawRules = rulesMatch[1].trim();
+  const rawRules = rulesMatch ? rulesMatch[1].trim() : '';
   const cleanRules = rawRules.replace(/<!--[\s\S]*?-->/g, '').trim();
-  if (!cleanRules) return null;
+
+  let cleanAntiPatterns = '';
+  if (apMatch && apMatch[1].trim()) {
+    cleanAntiPatterns = apMatch[1].replace(/<!--[\s\S]*?-->/g, '').trim();
+  }
+
+  if (!cleanRules && !cleanAntiPatterns) return null;
 
   const agentsRulesDir = path.join(effectiveWs, '.agents', 'rules');
   if (!fs.existsSync(agentsRulesDir)) {
@@ -3070,23 +3020,24 @@ function syncProjectRulesToWorkspace(vaultPath, workspaceRoot, projectName) {
   const ruleFilePath = path.join(agentsRulesDir, 'project-rules.md');
   const ruleContent = [
     '---',
-    `description: Reglas y Condiciones Obligatorias del Proyecto — ${resolvedName}`,
+    `description: Reglas Obligatorias y Anti-Patrones — ${resolvedName}`,
     '---',
     '',
     `# Reglas Obligatorias del Proyecto (${resolvedName})`,
     '',
     'Estas reglas han sido registradas en Obsidian Second Brain y son de OBLIGATORIO CUMPLIMIENTO en cada intervencion del agente en este workspace:',
     '',
-    cleanRules,
-    ''
-  ].join('\n');
+    cleanRules ? `## Condiciones y Flujo de Trabajo\n${cleanRules}\n` : '',
+    cleanAntiPatterns ? `## Anti-Patrones y Trampas Prohibidas (Errores Recurrentes)\n${cleanAntiPatterns}\n` : '',
+  ].filter(Boolean).join('\n');
 
   fs.writeFileSync(ruleFilePath, ruleContent, 'utf8');
-  return { ruleFilePath, rulesCount: cleanRules.split('\n').filter(l => l.trim().startsWith('-')).length, project: resolvedName };
+  const totalCount = (cleanRules + '\n' + cleanAntiPatterns).split('\n').filter(l => l.trim().startsWith('-')).length;
+  return { ruleFilePath, rulesCount: totalCount, project: resolvedName };
 }
 
 function getProjectsRegistry(vaultPath) {
-  const projFolder = path.join(vaultPath, 'Antigravity', 'Proyectos');
+  const projFolder = path.join(vaultPath, '02_Proyectos');
   const list = [];
   if (!fs.existsSync(projFolder)) return list;
 
@@ -3159,7 +3110,7 @@ function isProjectRegistered(vaultPath, workspaceRoot) {
 
 function generateHub(vaultPath, workspaceRoot, options = {}) {
   ensureVaultStructure(vaultPath);
-  const hubFile = path.join(vaultPath, 'Antigravity', '00 Antigravity Hub.md');
+  const hubFile = path.join(vaultPath, '00 Antigravity Hub.md');
   const now = new Date().toISOString().split('T')[0];
   const projectName = workspaceRoot ? path.basename(workspaceRoot) : null;
   const userName = resolveUserName(vaultPath, options.userName);
@@ -3310,22 +3261,39 @@ function getVaultStats(vaultPath) {
     return { memories: 0, skills: 0, projects: 0, sessions: 0, hubExists: false, soulActive: false, personalityActive: false, personalityConfigured: false, aiName: 'Hermes', userCallsign: '' };
   }
 
-  const baseDir = path.join(vaultPath, 'Antigravity');
   const countMd = (dir) => {
     if (!fs.existsSync(dir)) return 0;
-    return fs.readdirSync(dir).filter(f => f.endsWith('.md') && !f.startsWith('00 ')).length;
+    return fs.readdirSync(dir).filter(f => f.endsWith('.md') && !f.startsWith('00')).length;
+  };
+
+  const countProjects = (dir) => {
+    if (!fs.existsSync(dir)) return 0;
+    return fs.readdirSync(dir, { withFileTypes: true }).filter(ent => {
+      if (ent.isDirectory() && !ent.name.startsWith('.')) return true;
+      if (ent.isFile() && ent.name.endsWith('.md') && !ent.name.startsWith('00')) return true;
+      return false;
+    }).length;
   };
 
   const personalityInfo = resolvePersonality(vaultPath);
-  const personalityActive = fs.existsSync(path.join(baseDir, 'Alma', '00 Personalidad de la IA.md')) || fs.existsSync(path.join(baseDir, 'Alma', '00 AI Personality.md'));
+  const memDir = path.join(vaultPath, '00_Agente', 'Memorias');
+  const memoriesCount = countMd(memDir);
+  const skillsCount = countMd(path.join(vaultPath, '01_Skills'));
+  const projectsCount = countProjects(path.join(vaultPath, '02_Proyectos'));
+  const sessionsCount = countMd(path.join(vaultPath, '03_Sesiones'));
+
+  const hubExists = fs.existsSync(path.join(vaultPath, '00 Antigravity Hub.md')) ||
+                    fs.existsSync(path.join(vaultPath, '00_Agente', '00 Antigravity Hub.md'));
+  const soulActive = fs.existsSync(path.join(vaultPath, '00_Agente', 'SOUL.md'));
+  const personalityActive = personalityInfo.configured;
 
   return {
-    memories: countMd(path.join(baseDir, 'Memoria')),
-    skills: countMd(path.join(baseDir, 'Skills')),
-    projects: countMd(path.join(baseDir, 'Proyectos')),
-    sessions: countMd(path.join(baseDir, 'Sesiones')),
-    hubExists: fs.existsSync(path.join(baseDir, '00 Antigravity Hub.md')),
-    soulActive: fs.existsSync(path.join(baseDir, 'Alma', '00 Soul de Antigravity.md')),
+    memories: memoriesCount,
+    skills: skillsCount,
+    projects: projectsCount,
+    sessions: sessionsCount,
+    hubExists,
+    soulActive,
     personalityActive,
     personalityConfigured: personalityInfo.configured,
     aiName: personalityInfo.aiName,
@@ -3349,8 +3317,8 @@ function syncVaultToKnowledge(vaultPath) {
     fs.mkdirSync(knowledgeDir, { recursive: true });
   }
 
-  const memoriaDir = path.join(vaultPath, 'Antigravity', 'Memoria');
-  const proyectosDir = path.join(vaultPath, 'Antigravity', 'Proyectos');
+  const memoriaDir = path.join(vaultPath, '00_Agente', 'Memorias');
+  const proyectosDir = path.join(vaultPath, '02_Proyectos');
 
   function sanitizeId(name) {
     return name.toLowerCase()
@@ -3465,9 +3433,9 @@ function syncVaultToKnowledge(vaultPath) {
 
 function buildContextManifest(vaultPath) {
   ensureVaultStructure(vaultPath);
-  const memDir = path.join(vaultPath, 'Antigravity', 'Memoria');
-  const skiDir = path.join(vaultPath, 'Antigravity', 'Skills');
-  const proDir = path.join(vaultPath, 'Antigravity', 'Proyectos');
+  const memDir = path.join(vaultPath, '00_Agente', 'Memorias');
+  const skiDir = path.join(vaultPath, '01_Skills');
+  const proDir = path.join(vaultPath, '02_Proyectos');
 
   const memories = [];
   if (fs.existsSync(memDir)) {
@@ -3554,7 +3522,7 @@ function buildContextManifest(vaultPath) {
     }
   }
 
-  const sesDir = path.join(vaultPath, 'Antigravity', 'Sesiones');
+  const sesDir = path.join(vaultPath, '03_Sesiones');
   const sessions = [];
   if (fs.existsSync(sesDir)) {
     for (const f of fs.readdirSync(sesDir)) {
@@ -3574,7 +3542,7 @@ function buildContextManifest(vaultPath) {
   };
 
   try {
-    const manifestFile = path.join(vaultPath, 'Antigravity', 'context-manifest.json');
+    const manifestFile = path.join(vaultPath, 'context-manifest.json');
     fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2), 'utf8');
   } catch (e) {}
 
@@ -3582,7 +3550,7 @@ function buildContextManifest(vaultPath) {
 }
 
 function getContextManifest(vaultPath, forceRebuild = false) {
-  const manifestFile = path.join(vaultPath, 'Antigravity', 'context-manifest.json');
+  const manifestFile = path.join(vaultPath, 'context-manifest.json');
   if (!forceRebuild && fs.existsSync(manifestFile)) {
     try {
       const data = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
@@ -3903,9 +3871,9 @@ function resetAllData(vaultPath, workspaceRoot) {
   }
 
   const baseDir = path.join(vaultPath, 'Antigravity');
-  const memDir = path.join(baseDir, 'Memoria');
-  const skiDir = path.join(baseDir, 'Skills');
-  const proDir = path.join(baseDir, 'Proyectos');
+  const memDir = path.join(vaultPath, '00_Agente', 'Memorias');
+  const skiDir = path.join(vaultPath, '01_Skills');
+  const proDir = path.join(vaultPath, '02_Proyectos');
   const sesDir = path.join(baseDir, 'Sesiones');
   const manifestFile = path.join(baseDir, 'context-manifest.json');
 
@@ -4028,7 +3996,7 @@ Total de memorias registradas: **0**
 // -------------------------------------------------------------
 
 function syncSessionsIndex(vaultPath) {
-  const sesFolder = path.join(vaultPath, 'Antigravity', 'Sesiones');
+  const sesFolder = path.join(vaultPath, '03_Sesiones');
   if (!fs.existsSync(sesFolder)) return { count: 0, sessions: [] };
 
   const files = fs.readdirSync(sesFolder).filter(f => f.endsWith('.md') && !f.startsWith('00'));
@@ -4117,9 +4085,8 @@ ${rows}
 }
 
 function saveSessionCheckpoint(vaultPath, options = {}) {
-  const baseDir = path.join(vaultPath, 'Antigravity');
-  const sesFolder = path.join(baseDir, 'Sesiones');
-  const projFolder = path.join(baseDir, 'Proyectos');
+  const sesFolder = path.join(vaultPath, '03_Sesiones');
+  const projFolder = path.join(vaultPath, '02_Proyectos');
   if (!fs.existsSync(sesFolder)) fs.mkdirSync(sesFolder, { recursive: true });
 
   const pName = options.project || 'General';
@@ -4254,18 +4221,24 @@ function listSessions(vaultPath, options = {}) {
 // -------------------------------------------------------------
 
 function getProjectNotePath(vaultPath, projectName) {
-  const projFolder = path.join(vaultPath, 'Antigravity', 'Proyectos');
+  const projFolder = path.join(vaultPath, '02_Proyectos');
   return path.join(projFolder, `${sanitizeFilename(projectName)}.md`);
 }
 
 function addProjectAntipattern(vaultPath, projectName, ruleText) {
-  const noteFile = getProjectNotePath(vaultPath, projectName);
-  if (!fs.existsSync(noteFile)) return { error: `Proyecto no encontrado: ${projectName}` };
+  const safeName = sanitizeFilename(projectName);
+  const pFolder = path.join(vaultPath, '02_Proyectos', safeName);
+  if (!fs.existsSync(pFolder)) fs.mkdirSync(pFolder, { recursive: true });
+  const noteFile = path.join(pFolder, 'ARCHITECTURE.md');
+  if (!fs.existsSync(noteFile)) {
+    fs.writeFileSync(noteFile, `# Arquitectura — ${projectName}\n\n## Anti-Patrones y Trampas Prohibidas\n`, 'utf8');
+  }
+
   let content = fs.readFileSync(noteFile, 'utf8');
   const line = `- **PROHIBIDO:** ${ruleText.trim()}`;
   if (content.includes('## Anti-Patrones y Trampas Prohibidas')) {
     content = content.replace(/(## Anti-Patrones y Trampas Prohibidas[^\r\n]*\r?\n)([\s\S]*?)(\r?\n##|$)/, (m, h, body, nextH) => {
-      const cleanBody = body.replace(/<!-- Trampas técnicas[^\r\n]*-->/g, '').trim();
+      const cleanBody = body.replace(/<!--[\s\S]*?-->/g, '').trim();
       const updated = cleanBody ? `${cleanBody}\n${line}` : line;
       return `${h}${updated}\n${nextH}`;
     });
@@ -4273,6 +4246,15 @@ function addProjectAntipattern(vaultPath, projectName, ruleText) {
     content += `\n\n## Anti-Patrones y Trampas Prohibidas\n${line}\n`;
   }
   fs.writeFileSync(noteFile, content, 'utf8');
+
+  // Immediately mirror to workspace rules
+  try {
+    let ws = null;
+    const mP = content.match(/>\s*-\s*\*\*Ruta local\*\*:\s*`([^`]+)`/i) || content.match(/-\s*\*\*Ruta local\*\*:\s*`([^`]+)`/i);
+    if (mP && fs.existsSync(mP[1].trim())) ws = mP[1].trim();
+    syncProjectRulesToWorkspace(vaultPath, ws, projectName);
+  } catch (e) {}
+
   return { status: 'ok', project: projectName, rule: ruleText };
 }
 
@@ -4460,7 +4442,7 @@ function gitCommitVault(vaultPath, message) {
 }
 
 function listProjects(vaultPath) {
-  const projFolder = path.join(vaultPath, 'Antigravity', 'Proyectos');
+  const projFolder = path.join(vaultPath, '02_Proyectos');
   const results = [];
   if (!fs.existsSync(projFolder)) return results;
   const files = fs.readdirSync(projFolder);
@@ -4528,13 +4510,13 @@ function getGraphData(vaultPath) {
   const nodes = [];
   const links = [];
   const nodeMap = new Map();
-  const baseDir = path.join(vaultPath, 'Antigravity');
-  if (!fs.existsSync(baseDir)) return { nodes, links };
+  if (!vaultPath || !fs.existsSync(vaultPath)) return { nodes, links };
 
   function addNode(id, label, group, relPath) {
+    if (!id) return null;
     const key = id.toLowerCase();
     if (!nodeMap.has(key)) {
-      const node = { id, label, group, relPath };
+      const node = { id, label: label || id, group: group || 'default', relPath };
       nodeMap.set(key, node);
       nodes.push(node);
       return node;
@@ -4542,46 +4524,154 @@ function getGraphData(vaultPath) {
     return nodeMap.get(key);
   }
 
-  addNode('00 Antigravity Hub', 'Hub Principal', 'hub', 'Antigravity/00 Antigravity Hub.md');
-
-  const groups = [
-    { folder: 'Alma', group: 'soul' },
-    { folder: 'Skills', group: 'skill' },
-    { folder: 'Memoria', group: 'memory' },
-    { folder: 'Proyectos', group: 'project' },
-    { folder: 'Sesiones', group: 'session' },
-  ];
-
   const fileContents = [];
-  for (const g of groups) {
-    const d = path.join(baseDir, g.folder);
-    if (!fs.existsSync(d)) continue;
-    for (const f of fs.readdirSync(d)) {
-      if (!f.endsWith('.md')) continue;
-      const base = f.replace(/\.md$/, '');
-      const fp = path.join(d, f);
-      const isIndex = f.startsWith('00');
-      const relPath = `Antigravity/${g.folder}/${f}`;
-      addNode(base, base.replace(/^\[Proyecto\]\s*/, ''), isIndex ? 'index' : g.group, relPath);
+
+  // 1. Agent Core (00_Agente)
+  const agenteDir = path.join(vaultPath, '00_Agente');
+  if (fs.existsSync(agenteDir)) {
+    addNode('Hermes Core', 'Hermes Core', 'hub', '00_Agente/SOUL.md');
+
+    for (const item of fs.readdirSync(agenteDir)) {
+      const fp = path.join(agenteDir, item);
+      if (item.endsWith('.md')) {
+        const base = item.replace(/\.md$/, '');
+        const relPath = '00_Agente/' + item;
+        const isSoul = item.includes('SOUL') || item.includes('USER') || item.includes('Personalidad');
+        addNode(base, base, isSoul ? 'soul' : 'memory', relPath);
+        try {
+          fileContents.push({ id: base, content: fs.readFileSync(fp, 'utf8') });
+        } catch (e) {}
+      }
+    }
+
+    const memDir = path.join(agenteDir, 'Memorias');
+    if (fs.existsSync(memDir)) {
+      for (const item of fs.readdirSync(memDir)) {
+        if (!item.endsWith('.md') || item.startsWith('00')) continue;
+        const base = item.replace(/\.md$/, '');
+        const relPath = '00_Agente/Memorias/' + item;
+        addNode(base, base, 'memory', relPath);
+        try {
+          fileContents.push({ id: base, content: fs.readFileSync(path.join(memDir, item), 'utf8') });
+        } catch (e) {}
+      }
+    }
+  }
+
+  // 2. Skills (01_Skills)
+  const skillsDir = path.join(vaultPath, '01_Skills');
+  if (fs.existsSync(skillsDir)) {
+    for (const item of fs.readdirSync(skillsDir)) {
+      if (!item.endsWith('.md') || item.startsWith('00')) continue;
+      const base = item.replace(/\.md$/, '');
+      const relPath = '01_Skills/' + item;
+      addNode(base, base, 'skill', relPath);
       try {
-        const c = fs.readFileSync(fp, 'utf8');
-        fileContents.push({ id: base, content: c });
+        fileContents.push({ id: base, content: fs.readFileSync(path.join(skillsDir, item), 'utf8') });
       } catch (e) {}
     }
   }
 
+  // 3. Projects (02_Proyectos)
+  const proyectosDir = path.join(vaultPath, '02_Proyectos');
+  if (fs.existsSync(proyectosDir)) {
+    for (const item of fs.readdirSync(proyectosDir)) {
+      const fp = path.join(proyectosDir, item);
+      const isDir = fs.statSync(fp).isDirectory();
+      if (isDir) {
+        const archFile = path.join(fp, 'ARCHITECTURE.md');
+        if (fs.existsSync(archFile)) {
+          const relPath = '02_Proyectos/' + item + '/ARCHITECTURE.md';
+          addNode(item, item, 'project', relPath);
+          try {
+            fileContents.push({ id: item, content: fs.readFileSync(archFile, 'utf8') });
+          } catch (e) {}
+        }
+      } else if (item.endsWith('.md') && !item.startsWith('00')) {
+        const base = item.replace(/\.md$/, '');
+        const cleanName = base.replace(/^\[Proyecto\]\s*/, '');
+        const relPath = '02_Proyectos/' + item;
+        addNode(cleanName, cleanName, 'project', relPath);
+        nodeMap.set(base.toLowerCase(), nodeMap.get(cleanName.toLowerCase()));
+        try {
+          fileContents.push({ id: cleanName, content: fs.readFileSync(fp, 'utf8') });
+        } catch (e) {}
+      }
+    }
+  }
+
+  // 4. Sessions (03_Sesiones)
+  const sesionesDir = path.join(vaultPath, '03_Sesiones');
+  if (fs.existsSync(sesionesDir)) {
+    for (const item of fs.readdirSync(sesionesDir)) {
+      if (!item.endsWith('.md') || item.startsWith('00')) continue;
+      const base = item.replace(/\.md$/, '');
+      const relPath = '03_Sesiones/' + item;
+      addNode(base, base, 'session', relPath);
+      try {
+        fileContents.push({ id: base, content: fs.readFileSync(path.join(sesionesDir, item), 'utf8') });
+      } catch (e) {}
+    }
+  }
+
+  // Fallback to legacy Antigravity directory if Hermes structure is absent
+  const legacyDir = path.join(vaultPath, 'Antigravity');
+  if (nodes.length <= 1 && fs.existsSync(legacyDir)) {
+    const legacyGroups = [
+      { folder: 'Alma', group: 'soul' },
+      { folder: 'Skills', group: 'skill' },
+      { folder: 'Memoria', group: 'memory' },
+      { folder: 'Proyectos', group: 'project' },
+      { folder: 'Sesiones', group: 'session' },
+    ];
+    for (const g of legacyGroups) {
+      const d = path.join(legacyDir, g.folder);
+      if (!fs.existsSync(d)) continue;
+      for (const f of fs.readdirSync(d)) {
+        if (!f.endsWith('.md')) continue;
+        const base = f.replace(/\.md$/, '');
+        const fp = path.join(d, f);
+        const relPath = 'Antigravity/' + g.folder + '/' + f;
+        addNode(base, base.replace(/^\[Proyecto\]\s*/, ''), g.group, relPath);
+        try {
+          fileContents.push({ id: base, content: fs.readFileSync(fp, 'utf8') });
+        } catch (e) {}
+      }
+    }
+  }
+
+  // Resolve links from wikilinks [[Target]]
   const linkSet = new Set();
+  const hubNode = nodeMap.get('hermes core') || nodeMap.get('00 antigravity hub');
+
   for (const item of fileContents) {
     const matches = item.content.matchAll(/\[\[([^\]|#]+)(?:\|[^\]]+)?\]\]/g);
     for (const m of matches) {
       const targetName = m[1].trim();
       const targetId = targetName.endsWith('.md') ? targetName.slice(0, -3) : targetName;
-      if (nodeMap.has(targetId.toLowerCase())) {
-        const key = `${item.id}->${targetId}`;
-        const revKey = `${targetId}->${item.id}`;
+      const cleanTarget = targetId.replace(/^\[Proyecto\]\s*/, '');
+      const resolvedTarget = nodeMap.get(cleanTarget.toLowerCase()) || nodeMap.get(targetId.toLowerCase());
+      if (resolvedTarget && resolvedTarget.id !== item.id) {
+        const key = item.id + '->' + resolvedTarget.id;
+        const revKey = resolvedTarget.id + '->' + item.id;
         if (!linkSet.has(key) && !linkSet.has(revKey)) {
           linkSet.add(key);
-          links.push({ source: item.id, target: targetId });
+          links.push({ source: item.id, target: resolvedTarget.id });
+        }
+      }
+    }
+  }
+
+  // Link floating root items to Hub if hub exists
+  if (hubNode) {
+    for (const node of nodes) {
+      if (node.id === hubNode.id) continue;
+      if (node.group === 'soul' || node.group === 'project') {
+        const key = hubNode.id + '->' + node.id;
+        const revKey = node.id + '->' + hubNode.id;
+        if (!linkSet.has(key) && !linkSet.has(revKey)) {
+          linkSet.add(key);
+          links.push({ source: hubNode.id, target: node.id });
         }
       }
     }

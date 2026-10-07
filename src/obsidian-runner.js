@@ -312,12 +312,12 @@ function ensureDirs(vaultPath) {
     path.join(vaultPath, '02_Proyectos'),
     path.join(vaultPath, '03_Sesiones'),
     path.join(vaultPath, '03_Sesiones', 'Trajectories'),
-    path.join(vaultPath, 'Antigravity'),
+    vaultPath,
     path.join(vaultPath, 'Antigravity', 'Alma'),
-    path.join(vaultPath, 'Antigravity', 'Memoria'),
-    path.join(vaultPath, 'Antigravity', 'Skills'),
-    path.join(vaultPath, 'Antigravity', 'Proyectos'),
-    path.join(vaultPath, 'Antigravity', 'Sesiones'),
+    path.join(vaultPath, '00_Agente', 'Memorias'),
+    path.join(vaultPath, '01_Skills'),
+    path.join(vaultPath, '02_Proyectos'),
+    path.join(vaultPath, '03_Sesiones'),
   ];
   for (const d of dirs) {
     if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
@@ -358,13 +358,13 @@ function getAntigravityPaths() {
 // -------------------------------------------------------------
 // Manifest Cache & Compact Index
 // -------------------------------------------------------------
-const MANIFEST_FILE = path.join(vault.path, 'Antigravity', 'context-manifest.json');
+const MANIFEST_FILE = path.join(vault.path, 'context-manifest.json');
 
 function buildManifest(vaultPath) {
   ensureDirs(vaultPath);
-  const memDir = path.join(vaultPath, 'Antigravity', 'Memoria');
-  const skiDir = path.join(vaultPath, 'Antigravity', 'Skills');
-  const proDir = path.join(vaultPath, 'Antigravity', 'Proyectos');
+  const memDir = path.join(vaultPath, '00_Agente', 'Memorias');
+  const skiDir = path.join(vaultPath, '01_Skills');
+  const proDir = path.join(vaultPath, '02_Proyectos');
 
   const memories = [];
   if (fs.existsSync(memDir)) {
@@ -408,7 +408,7 @@ function buildManifest(vaultPath) {
           summary: summary.slice(0, 180),
           tags,
           bodyExcerpt: bodyClean.slice(0, 2000),
-          relPath: `Antigravity/Memoria/${f}`,
+          relPath: `00_Agente/Memorias/${f}`,
           updated: stat.mtime.toISOString().split('T')[0],
         });
       } catch (e) {}
@@ -435,7 +435,7 @@ function buildManifest(vaultPath) {
           name,
           scope,
           description: description.slice(0, 130),
-          relPath: `Antigravity/Skills/${f}`,
+          relPath: `01_Skills/${f}`,
         });
       } catch (e) {}
     }
@@ -443,13 +443,17 @@ function buildManifest(vaultPath) {
 
   const projects = [];
   if (fs.existsSync(proDir)) {
-    for (const f of fs.readdirSync(proDir)) {
-      if (!f.endsWith('.md') || f.startsWith('00')) continue;
-      projects.push(f.replace(/\.md$/, ''));
+    for (const ent of fs.readdirSync(proDir, { withFileTypes: true })) {
+      if (ent.name.startsWith('.') || ent.name.startsWith('00')) continue;
+      if (ent.isDirectory()) {
+        projects.push(ent.name);
+      } else if (ent.isFile() && ent.name.endsWith('.md')) {
+        projects.push(ent.name.replace(/\.md$/, ''));
+      }
     }
   }
 
-  const sesDir = path.join(vaultPath, 'Antigravity', 'Sesiones');
+  const sesDir = path.join(vaultPath, '03_Sesiones');
   const sessions = [];
   if (fs.existsSync(sesDir)) {
     for (const f of fs.readdirSync(sesDir)) {
@@ -624,7 +628,7 @@ function runPeek(vaultPath, noteName) {
       }
       return null;
     }
-    target = find(path.join(vaultPath, 'Antigravity'));
+    target = find(vaultPath);
   }
 
   if (!target || !fs.existsSync(target)) {
@@ -721,7 +725,7 @@ function runSaveMemory(vaultPath, argsList) {
   }
 
   ensureDirs(vaultPath);
-  const memFolder = path.join(vaultPath, 'Antigravity', 'Memoria');
+  const memFolder = path.join(vaultPath, '00_Agente', 'Memorias');
   const cleanTitle = sanitize(title);
   const filePath = path.join(memFolder, cleanTitle + '.md');
   const now = new Date().toISOString().split('T')[0];
@@ -859,7 +863,7 @@ function runCatalog(vaultPath) {
 // Shared Personality & Identity Updater
 // -------------------------------------------------------------
 function applyPersonalityUpdate(options = {}) {
-  const almaDir = path.join(vault.path, 'Antigravity', 'Alma');
+  const almaDir = path.join(vault.path, '00_Agente');
   if (!fs.existsSync(almaDir)) fs.mkdirSync(almaDir, { recursive: true });
 
   const cfgFile = path.join(os.homedir(), '.gemini', 'config', 'antigravity-obsidian.json');
@@ -1599,7 +1603,7 @@ switch (cmd) {
     }
 
     if (!sub || sub === 'get' || sub === 'show' || sub === 'status') {
-      const almaDir = path.join(vault.path, 'Antigravity', 'Alma');
+      const almaDir = path.join(vault.path, '00_Agente');
       const pFile = getPersonalityFile(almaDir, cfg.language);
       let curAi = cfg.aiName || 'Hermes';
       let curCall = cfg.userCallsign || cfg.userName || process.env.USERNAME || 'User';
@@ -1670,7 +1674,7 @@ switch (cmd) {
   }
 
   case 'personality': {
-    const almaDir = path.join(vault.path, 'Antigravity', 'Alma');
+    const almaDir = path.join(vault.path, '00_Agente');
     const cfgFile = path.join(os.homedir(), '.gemini', 'config', 'antigravity-obsidian.json');
     let existingCfg = {};
     if (fs.existsSync(cfgFile)) {
@@ -1743,7 +1747,7 @@ switch (cmd) {
   }
 
   case 'soul': {
-    const almaDir = path.join(vault.path, 'Antigravity', 'Alma');
+    const almaDir = path.join(vault.path, '00_Agente');
     const soulFile = path.join(almaDir, '00 Soul de Antigravity.md');
     const userFile = path.join(almaDir, '00 Perfil de Usuario.md');
 
@@ -1822,7 +1826,7 @@ switch (cmd) {
 
     if (isGlobal) {
       // ONLY update 00 Perfil de Usuario.md
-      const almaDir = path.join(vault.path, 'Antigravity', 'Alma');
+      const almaDir = path.join(vault.path, '00_Agente');
       if (!fs.existsSync(almaDir)) fs.mkdirSync(almaDir, { recursive: true });
       const userFile = path.join(almaDir, '00 Perfil de Usuario.md');
 
@@ -1856,7 +1860,7 @@ switch (cmd) {
       userNoteUpdated = userFile;
     } else {
       // Scoped to project: ONLY update the Project note (Antigravity/Proyectos/<Project>.md)
-      const projDir = path.join(vault.path, 'Antigravity', 'Proyectos');
+      const projDir = path.join(vault.path, '02_Proyectos');
       if (!fs.existsSync(projDir)) fs.mkdirSync(projDir, { recursive: true });
       let projFile = path.join(projDir, `${project}.md`);
       if (!fs.existsSync(projFile)) {
@@ -1937,7 +1941,7 @@ ${entry}
 
   case 'status': {
     const manifest = getManifest(vault.path);
-    const almaDir = path.join(vault.path, 'Antigravity', 'Alma');
+    const almaDir = path.join(vault.path, '00_Agente');
 
     let langPref = 'auto';
     let cfgAi = null;
@@ -1991,10 +1995,10 @@ ${entry}
   }
 
   case 'reset': {
-    const memDir = path.join(vault.path, 'Antigravity', 'Memoria');
-    const skiDir = path.join(vault.path, 'Antigravity', 'Skills');
-    const proDir = path.join(vault.path, 'Antigravity', 'Proyectos');
-    const sesDir = path.join(vault.path, 'Antigravity', 'Sesiones');
+    const memDir = path.join(vault.path, '00_Agente', 'Memorias');
+    const skiDir = path.join(vault.path, '01_Skills');
+    const proDir = path.join(vault.path, '02_Proyectos');
+    const sesDir = path.join(vault.path, '03_Sesiones');
 
     if (fs.existsSync(memDir)) {
       for (const f of fs.readdirSync(memDir)) {
@@ -2102,8 +2106,8 @@ ${entry}
   case 'project': {
     const { flags: pFlags, positional: pPos } = parseFlags(args);
     const sub = (pPos[0] || 'list').toLowerCase();
-    const targetDir = pPos[1] ? path.resolve(pPos[1]) : (pFlags.path ? path.resolve(pFlags.path) : process.cwd());
-    const projFolder = path.join(vault.path, 'Antigravity', 'Proyectos');
+    const targetDir = ['scan', 'register', 'update'].includes(sub) && pPos[1] ? path.resolve(pPos[1]) : (pFlags.path ? path.resolve(pFlags.path) : process.cwd());
+    const projFolder = path.join(vault.path, '02_Proyectos');
     if (!fs.existsSync(projFolder)) fs.mkdirSync(projFolder, { recursive: true });
 
     function scanProjectStructure(wsPath) {
@@ -2398,26 +2402,36 @@ ${entry}
     function getRegistry() {
       const list = [];
       if (!fs.existsSync(projFolder)) return list;
-      for (const f of fs.readdirSync(projFolder)) {
-        if (!f.endsWith('.md') || f.startsWith('00')) continue;
+      for (const ent of fs.readdirSync(projFolder, { withFileTypes: true })) {
+        if (ent.name.startsWith('.') || ent.name.startsWith('00')) continue;
+        let fp = null;
+        let base = ent.name;
+        if (ent.isDirectory()) {
+          const arch = path.join(projFolder, ent.name, 'ARCHITECTURE.md');
+          if (fs.existsSync(arch)) fp = arch;
+        } else if (ent.isFile() && ent.name.endsWith('.md')) {
+          fp = path.join(projFolder, ent.name);
+          base = ent.name.replace(/\.md$/, '');
+        }
+        if (!fp) continue;
         try {
-          const content = fs.readFileSync(path.join(projFolder, f), 'utf8');
-          const base = f.replace(/\.md$/, '');
+          const content = fs.readFileSync(fp, 'utf8');
           let name = base;
           let pPath = '—';
           let stack = '—';
           let summary = '—';
           let skill = '—';
-          const mN = content.match(/>\s*-\s*\*\*Nombre\*\*:\s*`([^`]+)`/i);
+          const mN = content.match(/^project:\s*"([^"\r\n]+)"/m) || content.match(/>\s*-\s*\*\*Nombre\*\*:\s*`([^`]+)`/i);
           if (mN) name = mN[1].trim();
-          const mP = content.match(/>\s*-\s*\*\*Ruta local\*\*:\s*`([^`]+)`/i);
+          const mP = content.match(/>\s*-\s*\*\*Ruta local\*\*:\s*`([^`]+)`/i) || content.match(/-\s*\*\*Ruta local\*\*:\s*`([^`]+)`/i);
           if (mP) pPath = mP[1].trim();
-          const mS = content.match(/>\s*-\s*\*\*Stack\*\*:\s*([^\r\n]+)/i);
+          const mS = content.match(/^stack:\s*"([^"\r\n]+)"/m) || content.match(/>\s*-\s*\*\*Stack\*\*:\s*([^\r\n]+)/i) || content.match(/-\s*\*\*Stack\*\*:\s*([^\r\n]+)/i);
           if (mS) stack = mS[1].trim();
-          const mSum = content.match(/>\s*-\s*\*\*Resumen\*\*:\s*([^\r\n]+)/i);
+          const mSum = content.match(/## Decisiones de Diseño y Estructura[^\r\n]*\r?\n([^\r\n#]+)/i) || content.match(/>\s*-\s*\*\*Resumen\*\*:\s*([^\r\n]+)/i);
           if (mSum) summary = mSum[1].trim();
-          const mSk = content.match(/>\s*-\s*\*\*Skill Asociada\*\*:\s*\[\[?([^\]\r\n]+)\]\]?/i);
-          if (mSk) skill = mSk[1].replace(/^\[\[|\]\]$/g, '').trim();
+          const mSk = content.match(/\[\[(antigravity-[a-z0-9_-]+|seo|qr-[a-z0-9_-]+)\]\]/i);
+          if (mSk) skill = mSk[1];
+          else skill = findSkill(name, pPath);
           list.push({ name, path: pPath, stack, summary, skill: skill !== '—' ? `[[${skill}]]` : '—', note: base });
         } catch (e) {}
       }
@@ -2616,12 +2630,39 @@ ${skillsSection}
 
     if (sub === 'antipattern' || sub === 'antipatterns' || sub === 'trampa' || sub === 'trampas') {
       const action = (pPos[1] || 'list').toLowerCase();
-      const pName = pFlags.project || pFlags.p || path.basename(targetDir);
+      let pName = pFlags.project || pFlags.p;
+      if (!pName) {
+        const cur = process.cwd();
+        const detected = detectProject(cur);
+        pName = detected.name || path.basename(cur);
+      }
       const safeTitle = sanitize(pName);
-      const noteFile = path.join(projFolder, `${safeTitle}.md`);
+      let noteFile = path.join(vault.path, '02_Proyectos', safeTitle, 'ARCHITECTURE.md');
       if (!fs.existsSync(noteFile)) {
-        console.error(JSON.stringify({ error: `Proyecto no encontrado en Obsidian: ${pName}` }));
-        process.exit(1);
+        noteFile = path.join(vault.path, '02_Proyectos', `${safeTitle}.md`);
+      }
+      if (!fs.existsSync(noteFile)) {
+        const pFolder = path.join(vault.path, '02_Proyectos');
+        if (fs.existsSync(pFolder)) {
+          for (const ent of fs.readdirSync(pFolder, { withFileTypes: true })) {
+            if (ent.name.toLowerCase() === safeTitle.toLowerCase() || ent.name.toLowerCase().replace(/[^a-z0-9]/g, '') === safeTitle.toLowerCase().replace(/[^a-z0-9]/g, '')) {
+              if (ent.isDirectory()) {
+                const cand = path.join(pFolder, ent.name, 'ARCHITECTURE.md');
+                if (fs.existsSync(cand)) { noteFile = cand; pName = ent.name; break; }
+              } else {
+                noteFile = path.join(pFolder, ent.name);
+                pName = ent.name.replace(/\.md$/, '');
+                break;
+              }
+            }
+          }
+        }
+      }
+      if (!fs.existsSync(noteFile)) {
+        const pFolder = path.join(vault.path, '02_Proyectos', safeTitle);
+        if (!fs.existsSync(pFolder)) fs.mkdirSync(pFolder, { recursive: true });
+        noteFile = path.join(pFolder, 'ARCHITECTURE.md');
+        fs.writeFileSync(noteFile, `# Arquitectura — ${pName}\n\n## Anti-Patrones y Trampas Prohibidas\n`, 'utf8');
       }
       let content = fs.readFileSync(noteFile, 'utf8');
       if (action === 'add') {
@@ -2630,20 +2671,30 @@ ${skillsSection}
           console.error(JSON.stringify({ error: 'Uso: node obsidian.js project antipattern add "<regla o trampa a evitar>"' }));
           process.exit(1);
         }
-        const bullet = `- PROHIBIDO / TRAMPA: ${cleanText(ruleText)}`;
-        if (content.includes('## Anti-Patrones y Trampas Prohibidas del Proyecto')) {
-          content = content.replace(/(## Anti-Patrones y Trampas Prohibidas del Proyecto[^\r\n]*\r?\n)([\s\S]*?)(\r?\n##|$)/, (m, h, body, nextH) => {
+        const bullet = `- **PROHIBIDO:** ${cleanText(ruleText)}`;
+        if (content.includes('## Anti-Patrones y Trampas Prohibidas')) {
+          content = content.replace(/(## Anti-Patrones y Trampas Prohibidas[^\r\n]*\r?\n)([\s\S]*?)(\r?\n##|$)/, (m, h, body, nextH) => {
             const cleanBody = body.replace(/<!--[\s\S]*?-->/g, '').trim();
             const newBody = cleanBody ? `${cleanBody}\n${bullet}` : bullet;
             return `${h}${newBody}\n${nextH}`;
           });
         } else {
-          content += `\n## Anti-Patrones y Trampas Prohibidas del Proyecto\n${bullet}\n`;
+          content += `\n\n## Anti-Patrones y Trampas Prohibidas\n${bullet}\n`;
         }
         fs.writeFileSync(noteFile, content, 'utf8');
+
+        // Mirror directly to workspace rules
+        try {
+          const syncEngine = require('./sync-engine.js');
+          let wsPath = process.cwd();
+          const mP = content.match(/>\s*-\s*\*\*Ruta local\*\*:\s*`([^`]+)`/i) || content.match(/-\s*\*\*Ruta local\*\*:\s*`([^`]+)`/i);
+          if (mP && fs.existsSync(mP[1].trim())) wsPath = mP[1].trim();
+          syncEngine.syncProjectRulesToWorkspace(vault.path, wsPath, pName);
+        } catch (e) {}
+
         console.log(JSON.stringify({ status: 'ok', action: 'antipattern_added', project: pName, rule: ruleText }));
       } else {
-        const match = content.match(/## Anti-Patrones y Trampas Prohibidas del Proyecto[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
+        const match = content.match(/## Anti-Patrones y Trampas Prohibidas[^\r\n]*\r?\n([\s\S]*?)(?:---|\n##|$)/i);
         const rules = match ? match[1].replace(/<!--[\s\S]*?-->/g, '').trim().split(/\r?\n/).filter(Boolean) : [];
         console.log(JSON.stringify({ project: pName, antipatterns: rules }, null, 2));
       }
@@ -2740,8 +2791,8 @@ ${skillsSection}
   case 'sessions': {
     const { flags, positional } = parseFlags(args);
     const sesSub = (positional[0] || 'list').toLowerCase();
-    const sesFolder = path.join(vault.path, 'Antigravity', 'Sesiones');
-    const projFolder = path.join(vault.path, 'Antigravity', 'Proyectos');
+    const sesFolder = path.join(vault.path, '03_Sesiones');
+    const projFolder = path.join(vault.path, '02_Proyectos');
     if (!fs.existsSync(sesFolder)) fs.mkdirSync(sesFolder, { recursive: true });
 
     function updateSessionsIndex() {

@@ -261,11 +261,17 @@ function ensureOrCreateDefaultVault(configuredPath) {
       fs.mkdirSync(obsConfDir, { recursive: true });
     }
 
-    // Ensure Antigravity folder architecture
-    const subDirs = ['Alma', 'Memoria', 'Skills', 'Proyectos', 'Sesiones'];
-    for (const sub of subDirs) {
-      const p = path.join(defaultVaultPath, 'Antigravity', sub);
+    // Ensure Hermes folder architecture
+    const hermesDirs = ['00_Agente', path.join('00_Agente', 'Memorias'), '01_Skills', '02_Proyectos', '03_Sesiones', path.join('03_Sesiones', 'Trajectories')];
+    for (const sub of hermesDirs) {
+      const p = path.join(defaultVaultPath, sub);
       if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
+    }
+
+    // Clean legacy Antigravity folder if present
+    const legacyDir = path.join(defaultVaultPath, 'Antigravity');
+    if (fs.existsSync(legacyDir)) {
+      try { fs.rmSync(legacyDir, { recursive: true, force: true }); } catch (e) {}
     }
 
     // Attempt to register in Obsidian's config if it exists or create it

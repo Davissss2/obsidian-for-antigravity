@@ -81,7 +81,7 @@ async function main() {
 
     case 'search': {
       const query = (args[0] || '').toLowerCase();
-      const baseDir = path.join(vaultPath, 'Antigravity');
+      const baseDir = vaultPath;
       const results = [];
 
       function scan(dir) {
@@ -128,7 +128,7 @@ async function main() {
         }
       }
 
-      searchNote(path.join(vaultPath, 'Antigravity'));
+      searchNote(vaultPath);
 
       if (!foundPath || !fs.existsSync(foundPath)) {
         console.error(JSON.stringify({ error: `Nota no encontrada: ${target}` }));
@@ -185,7 +185,7 @@ async function main() {
     }
 
     case 'open': {
-      const note = args[0] || 'Antigravity/00 Antigravity Hub';
+      const note = args[0] || '00_Agente/SOUL';
       const cleanNote = note.endsWith('.md') ? note.slice(0, -3) : note;
       const vaultName = encodeURIComponent(vault.name);
       const notePath = encodeURIComponent(cleanNote.replace(/\\/g, '/'));

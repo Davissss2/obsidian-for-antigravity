@@ -891,21 +891,29 @@
     }
   });
 
-  // Force-Directed Graph View
+  // -------------------------------------------------------------
+  // Force-Directed Graph View (Smooth Physics, Bounded Viewport & Pointer Capture)
+  // -------------------------------------------------------------
   let graphData = window.INITIAL_GRAPH_DATA || { nodes: [], links: [] };
   let graphCanvas = null;
   let graphCtx = null;
   let graphAnimationId = null;
   let isGraphSimulating = false;
+  let simAlpha = 1.0;
+  const simAlphaDecay = 0.016;
+  const simAlphaMin = 0.001;
+
   let graphNodes = [];
   let graphLinks = [];
   let graphTransform = { x: 0, y: 0, k: 1 };
   let isDraggingGraph = false;
   let dragNode = null;
+  let dragMoved = false;
   let mouseStartPos = { x: 0, y: 0 };
   let hoveredNode = null;
   let graphFilterQuery = '';
   let graphEventsAttached = false;
+  let graphResizeObserver = null;
 
   const GROUP_COLORS = {
     hub: '#8b5cf6',
@@ -924,13 +932,27 @@
     const container = document.getElementById('graph-container');
     if (!container) return;
 
-    const width = container.clientWidth || 300;
-    const height = container.clientHeight || 300;
+    const rect = container.getBoundingClientRect();
+    const width = Math.max(240, Math.floor(rect.width || container.clientWidth || 300));
+    const height = Math.max(260, Math.floor(rect.height || container.clientHeight || 360));
     const dpr = window.devicePixelRatio || 1;
-    graphCanvas.width = width * dpr;
-    graphCanvas.height = height * dpr;
-    graphCtx = graphCanvas.getContext('2d');
-    graphCtx.scale(dpr, dpr);
+
+    const targetW = width * dpr;
+    const targetH = height * dpr;
+
+    if (graphCanvas.width !== targetW || graphCanvas.height !== targetH) {
+      graphCanvas.width = targetW;
+      graphCanvas.height = targetH;
+      graphCanvas.style.width = width + 'px';
+      graphCanvas.style.height = height + 'px';
+      graphCtx = graphCanvas.getContext('2d');
+      graphCtx.setTransform(1, 0, 0, 1, 0, 0);
+      graphCtx.scale(dpr, dpr);
+    } else if (!graphCtx) {
+      graphCtx = graphCanvas.getContext('2d');
+      graphCtx.setTransform(1, 0, 0, 1, 0, 0);
+      graphCtx.scale(dpr, dpr);
+    }
 
     if (!graphEventsAttached) {
       setupGraphEvents();
@@ -945,29 +967,28 @@
   }
 
   function buildGraphSimulation(width, height) {
-    const cx = width / 2;
-    const cy = height / 2;
-    graphTransform = { x: cx, y: cy, k: 0.95 };
-
     const nodeCount = graphData.nodes.length;
     graphNodes = graphData.nodes.map((n, i) => {
       const angle = (i / Math.max(1, nodeCount)) * 2 * Math.PI;
-      const radius = 50 + Math.random() * 70;
+      const radius = 60 + Math.random() * 90;
       return {
         id: n.id,
         label: n.label || n.id,
         group: n.group || 'default',
-        relPath: n.relPath || `Antigravity/${n.id}.md`,
+        relPath: n.relPath || ('00_Agente/' + n.id + '.md'),
         x: Math.cos(angle) * radius,
         y: Math.sin(angle) * radius,
-        vx: (Math.random() - 0.5) * 2,
-        vy: (Math.random() - 0.5) * 2,
-        r: n.group === 'hub' ? 12 : (n.group === 'project' ? 9 : 7)
+        vx: (Math.random() - 0.5) * 1.5,
+        vy: (Math.random() - 0.5) * 1.5,
+        r: n.group === 'hub' ? 14 : (n.group === 'project' ? 10 : 8)
       };
     });
 
     const nodeMap = new Map();
-    graphNodes.forEach(n => nodeMap.set(n.id.toLowerCase(), n));
+    graphNodes.forEach(n => {
+      nodeMap.set(n.id.toLowerCase(), n);
+      nodeMap.set(n.label.toLowerCase(), n);
+    });
 
     graphLinks = [];
     if (graphData.links) {
@@ -980,28 +1001,58 @@
       }
     }
 
+    // Auto fit graph cleanly into the viewport
+    fitGraphToView(width, height);
+    simAlpha = 1.0;
     startGraphSimulation();
+  }
+
+  function fitGraphToView(overrideW, overrideH) {
+    if (graphNodes.length === 0) return;
+    const container = document.getElementById('graph-container');
+    const width = overrideW || (container ? container.clientWidth : 300) || 300;
+    const height = overrideH || (container ? container.clientHeight : 360) || 360;
+
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const n of graphNodes) {
+      if (n.x < minX) minX = n.x;
+      if (n.x > maxX) maxX = n.x;
+      if (n.y < minY) minY = n.y;
+      if (n.y > maxY) maxY = n.y;
+    }
+
+    const spanX = Math.max(100, maxX - minX + 60);
+    const spanY = Math.max(100, maxY - minY + 60);
+    const midX = (minX + maxX) / 2;
+    const midY = (minY + maxY) / 2;
+
+    const scaleX = (width - 40) / spanX;
+    const scaleY = (height - 40) / spanY;
+    const k = Math.max(0.35, Math.min(1.8, Math.min(scaleX, scaleY)));
+
+    graphTransform.k = k;
+    graphTransform.x = (width / 2) - (midX * k);
+    graphTransform.y = (height / 2) - (midY * k);
+    drawGraph();
   }
 
   function startGraphSimulation() {
     if (isGraphSimulating) return;
     isGraphSimulating = true;
-    let ticks = 0;
-    const maxTicks = 180;
 
     function step() {
       // Repulsion between nodes
-      const repulsion = 480;
+      const repulsion = 520;
       for (let i = 0; i < graphNodes.length; i++) {
         const na = graphNodes[i];
         for (let j = i + 1; j < graphNodes.length; j++) {
           const nb = graphNodes[j];
           const dx = nb.x - na.x;
           const dy = nb.y - na.y;
-          const distSq = dx * dx + dy * dy + 1;
+          const distSq = dx * dx + dy * dy + 16;
           const dist = Math.sqrt(distSq);
-          if (dist < 200) {
-            const f = repulsion / distSq;
+          if (dist < 260) {
+            const f = (repulsion / distSq) * simAlpha;
             const fx = (dx / dist) * f;
             const fy = (dy / dist) * f;
             if (na !== dragNode) { na.vx -= fx; na.vy -= fy; }
@@ -1010,9 +1061,9 @@
         }
       }
 
-      // Spring force along links
-      const restLen = 65;
-      const springK = 0.045;
+      // Spring forces along links
+      const restLen = 70;
+      const springK = 0.05 * simAlpha;
       for (const link of graphLinks) {
         const dx = link.target.x - link.source.x;
         const dy = link.target.y - link.source.y;
@@ -1026,8 +1077,8 @@
       }
 
       // Center gravity & damping
-      const gravity = 0.025;
-      const damping = 0.82;
+      const gravity = 0.018 * simAlpha;
+      const damping = 0.88;
       for (const n of graphNodes) {
         if (n === dragNode) continue;
         n.vx -= n.x * gravity;
@@ -1039,8 +1090,9 @@
       }
 
       drawGraph();
-      ticks++;
-      if (ticks < maxTicks || dragNode) {
+
+      simAlpha *= (1 - simAlphaDecay);
+      if (simAlpha > simAlphaMin || dragNode) {
         graphAnimationId = requestAnimationFrame(step);
       } else {
         isGraphSimulating = false;
@@ -1053,14 +1105,14 @@
   function drawGraph() {
     if (!graphCtx || !graphCanvas) return;
     const container = document.getElementById('graph-container');
-    const width = container.clientWidth || 300;
-    const height = container.clientHeight || 300;
+    const width = container ? container.clientWidth : 300;
+    const height = container ? container.clientHeight : 360;
 
     graphCtx.save();
     graphCtx.clearRect(0, 0, width, height);
 
-    // Subtle grid dots background
-    graphCtx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+    // Subtle background grid dots
+    graphCtx.fillStyle = 'rgba(255, 255, 255, 0.035)';
     const gridSize = 24 * graphTransform.k;
     const ox = ((graphTransform.x % gridSize) + gridSize) % gridSize;
     const oy = ((graphTransform.y % gridSize) + gridSize) % gridSize;
@@ -1075,48 +1127,54 @@
 
     const q = graphFilterQuery.toLowerCase().trim();
 
-    // Draw links
+    // Draw Links
     for (const link of graphLinks) {
-      const isHighlighted = q && (link.source.label.toLowerCase().includes(q) || link.target.label.toLowerCase().includes(q));
+      const isSrcMatch = q && link.source.label.toLowerCase().includes(q);
+      const isTgtMatch = q && link.target.label.toLowerCase().includes(q);
+      const isConnectedToHover = (hoveredNode && (link.source === hoveredNode || link.target === hoveredNode));
+      const isHighlighted = isSrcMatch || isTgtMatch || isConnectedToHover;
+
       graphCtx.beginPath();
       graphCtx.moveTo(link.source.x, link.source.y);
       graphCtx.lineTo(link.target.x, link.target.y);
-      graphCtx.strokeStyle = isHighlighted ? 'rgba(139, 92, 246, 0.7)' : 'rgba(255, 255, 255, 0.12)';
-      graphCtx.lineWidth = isHighlighted ? 1.8 : 1;
+      graphCtx.strokeStyle = isHighlighted
+        ? 'rgba(139, 92, 246, 0.85)'
+        : (q ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 255, 255, 0.14)');
+      graphCtx.lineWidth = isHighlighted ? 2 : 1;
       graphCtx.stroke();
     }
 
-    // Draw nodes
+    // Draw Nodes
     for (const node of graphNodes) {
       const isMatch = !q || node.label.toLowerCase().includes(q);
       const isHovered = (hoveredNode === node);
       const color = GROUP_COLORS[node.group] || GROUP_COLORS.default;
 
-      // Glow for hovered or query match
+      // Glow halo on hover or search match
       if (isHovered || (q && isMatch)) {
         graphCtx.beginPath();
-        graphCtx.arc(node.x, node.y, node.r + 5, 0, Math.PI * 2);
-        graphCtx.fillStyle = 'rgba(139, 92, 246, 0.25)';
+        graphCtx.arc(node.x, node.y, node.r + 6, 0, Math.PI * 2);
+        graphCtx.fillStyle = isHovered ? 'rgba(139, 92, 246, 0.35)' : 'rgba(59, 130, 246, 0.25)';
         graphCtx.fill();
       }
 
-      // Node body
+      // Main Node Circle
       graphCtx.beginPath();
       graphCtx.arc(node.x, node.y, node.r, 0, Math.PI * 2);
-      graphCtx.fillStyle = isMatch ? color : 'rgba(100, 116, 139, 0.35)';
+      graphCtx.fillStyle = isMatch ? color : 'rgba(100, 116, 139, 0.25)';
       graphCtx.fill();
-      graphCtx.strokeStyle = isHovered ? '#ffffff' : 'rgba(0, 0, 0, 0.35)';
-      graphCtx.lineWidth = isHovered ? 2 : 1;
+      graphCtx.strokeStyle = isHovered ? '#ffffff' : (isMatch ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.3)');
+      graphCtx.lineWidth = isHovered ? 2.5 : 1.2;
       graphCtx.stroke();
 
-      // Node label
-      if (graphTransform.k > 0.65 || isHovered || isMatch) {
-        graphCtx.font = (isHovered ? 'bold ' : '') + '9.5px -apple-system, BlinkMacSystemFont, sans-serif';
+      // Node Label
+      if (graphTransform.k > 0.6 || isHovered || isMatch) {
+        graphCtx.font = (isHovered ? 'bold ' : '') + '10px -apple-system, BlinkMacSystemFont, sans-serif';
         graphCtx.fillStyle = isMatch ? (isHovered ? '#ffffff' : '#e2e8f0') : 'rgba(148, 163, 184, 0.3)';
         graphCtx.textAlign = 'center';
         graphCtx.textBaseline = 'top';
-        const displayLabel = node.label.length > 20 ? node.label.slice(0, 18) + '...' : node.label;
-        graphCtx.fillText(displayLabel, node.x, node.y + node.r + 3);
+        const displayLabel = node.label.length > 22 ? node.label.slice(0, 20) + '...' : node.label;
+        graphCtx.fillText(displayLabel, node.x, node.y + node.r + 3.5);
       }
     }
 
@@ -1127,8 +1185,6 @@
     const canvas = document.getElementById('graph-canvas');
     const tooltip = document.getElementById('graph-tooltip');
     if (!canvas) return;
-
-    let dragMoved = false;
 
     function getCanvasCoords(e) {
       const rect = canvas.getBoundingClientRect();
@@ -1144,17 +1200,19 @@
         const n = graphNodes[i];
         const dx = n.x - x;
         const dy = n.y - y;
-        if (dx * dx + dy * dy <= (n.r + 4) * (n.r + 4)) {
+        const hitRadius = n.r + 6;
+        if (dx * dx + dy * dy <= hitRadius * hitRadius) {
           return n;
         }
       }
       return null;
     }
 
+    // Wheel Zoom centered on pointer
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
       const { mx, my } = getCanvasCoords(e);
-      const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
+      const zoomFactor = e.deltaY < 0 ? 1.14 : 0.88;
       const newK = Math.max(0.2, Math.min(3.5, graphTransform.k * zoomFactor));
       graphTransform.x = mx - (mx - graphTransform.x) * (newK / graphTransform.k);
       graphTransform.y = my - (my - graphTransform.y) * (newK / graphTransform.k);
@@ -1162,20 +1220,25 @@
       drawGraph();
     }, { passive: false });
 
-    canvas.addEventListener('mousedown', (e) => {
+    // Pointer Events with Pointer Capture to PREVENT FREEZING WHEN DRAGGING OUTSIDE
+    canvas.addEventListener('pointerdown', (e) => {
+      try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
       const { mx, my, x, y } = getCanvasCoords(e);
       dragMoved = false;
       mouseStartPos = { x: mx, y: my };
       const hit = findNodeAt(x, y);
       if (hit) {
         dragNode = hit;
+        hit.vx = 0;
+        hit.vy = 0;
       } else {
         isDraggingGraph = true;
       }
+      simAlpha = Math.max(simAlpha, 0.35);
+      startGraphSimulation();
     });
 
-    window.addEventListener('mousemove', (e) => {
-      if (!canvas) return;
+    canvas.addEventListener('pointermove', (e) => {
       const { mx, my, x, y } = getCanvasCoords(e);
 
       if (dragNode) {
@@ -1184,6 +1247,7 @@
         dragNode.y = y;
         dragNode.vx = 0;
         dragNode.vy = 0;
+        simAlpha = Math.max(simAlpha, 0.3);
         startGraphSimulation();
         return;
       }
@@ -1197,6 +1261,7 @@
         return;
       }
 
+      // Hover detection
       const hovered = findNodeAt(x, y);
       if (hovered !== hoveredNode) {
         hoveredNode = hovered;
@@ -1205,23 +1270,41 @@
 
       if (hovered && tooltip) {
         tooltip.style.display = 'block';
-        tooltip.style.left = `${mx + 12}px`;
-        tooltip.style.top = `${my + 12}px`;
+        const canvasW = canvas.clientWidth || 300;
+        const leftPos = Math.min(mx + 14, canvasW - 200);
+        tooltip.style.left = leftPos + 'px';
+        tooltip.style.top = Math.max(8, my - 25) + 'px';
         const connCount = graphLinks.filter(l => l.source === hovered || l.target === hovered).length;
-        tooltip.innerHTML = `<strong>${hovered.label}</strong><br><span style="color:#a855f7;">${hovered.group}</span> · ${connCount} enlaces<br><span style="font-size:9.5px;color:#94a3b8;">Clic para abrir nota</span>`;
+        const catColor = GROUP_COLORS[hovered.group] || '#a855f7';
+        tooltip.innerHTML = '<strong>' + hovered.label + '</strong><br><span style="color:' + catColor + ';font-weight:600;">' + hovered.group.toUpperCase() + '</span> · ' + connCount + ' enlaces<br><span style="font-size:9.5px;color:#94a3b8;">Clic para abrir nota</span>';
       } else if (tooltip) {
         tooltip.style.display = 'none';
       }
     });
 
-    window.addEventListener('mouseup', () => {
+    function handlePointerUp(e) {
+      if (e && e.pointerId && canvas.hasPointerCapture(e.pointerId)) {
+        try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+      }
       if (dragNode && !dragMoved) {
         vscode.postMessage({ type: 'openNote', note: dragNode.relPath || dragNode.id, path: dragNode.relPath });
       }
       dragNode = null;
       isDraggingGraph = false;
+      simAlpha = Math.max(simAlpha, 0.15);
+      startGraphSimulation();
+    }
+
+    canvas.addEventListener('pointerup', handlePointerUp);
+    canvas.addEventListener('pointercancel', handlePointerUp);
+    canvas.addEventListener('lostpointercapture', handlePointerUp);
+
+    // Double click to auto fit
+    canvas.addEventListener('dblclick', () => {
+      fitGraphToView();
     });
 
+    // Search filter
     const searchGraph = document.getElementById('search-graph-nodes');
     if (searchGraph) {
       searchGraph.addEventListener('input', (e) => {
@@ -1230,15 +1313,90 @@
       });
     }
 
+    // Controls: Fit, Zoom In, Zoom Out, Reset
+    const btnFitGraph = document.getElementById('btn-fit-graph');
+    if (btnFitGraph) {
+      btnFitGraph.addEventListener('click', () => fitGraphToView());
+    }
+
+    const btnZoomIn = document.getElementById('btn-zoom-in');
+    if (btnZoomIn) {
+      btnZoomIn.addEventListener('click', () => {
+        const container = document.getElementById('graph-container');
+        const cx = (container ? container.clientWidth : 300) / 2;
+        const cy = (container ? container.clientHeight : 360) / 2;
+        const newK = Math.min(3.5, graphTransform.k * 1.25);
+        graphTransform.x = cx - (cx - graphTransform.x) * (newK / graphTransform.k);
+        graphTransform.y = cy - (cy - graphTransform.y) * (newK / graphTransform.k);
+        graphTransform.k = newK;
+        drawGraph();
+      });
+    }
+
+    const btnZoomOut = document.getElementById('btn-zoom-out');
+    if (btnZoomOut) {
+      btnZoomOut.addEventListener('click', () => {
+        const container = document.getElementById('graph-container');
+        const cx = (container ? container.clientWidth : 300) / 2;
+        const cy = (container ? container.clientHeight : 360) / 2;
+        const newK = Math.max(0.2, graphTransform.k * 0.8);
+        graphTransform.x = cx - (cx - graphTransform.x) * (newK / graphTransform.k);
+        graphTransform.y = cy - (cy - graphTransform.y) * (newK / graphTransform.k);
+        graphTransform.k = newK;
+        drawGraph();
+      });
+    }
+
     const btnResetGraph = document.getElementById('btn-reset-graph');
     if (btnResetGraph) {
       btnResetGraph.addEventListener('click', () => {
         const container = document.getElementById('graph-container');
-        const width = container.clientWidth || 300;
-        const height = container.clientHeight || 300;
+        const width = container ? container.clientWidth : 300;
+        const height = container ? container.clientHeight : 360;
         buildGraphSimulation(width, height);
       });
     }
+
+    // Responsive ResizeObserver on graph container
+    const container = document.getElementById('graph-container');
+    if (container && window.ResizeObserver && !graphResizeObserver) {
+      graphResizeObserver = new ResizeObserver(() => {
+        initOrResizeGraph();
+      });
+      graphResizeObserver.observe(container);
+    }
+  }
+
+  // Window resize fallback
+  window.addEventListener('resize', () => {
+    initOrResizeGraph();
+  });
+
+  // Personality and User Callsign Save Handlers
+  const btnSavePersonality = document.getElementById('btn-save-personality');
+  if (btnSavePersonality) {
+    btnSavePersonality.addEventListener('click', () => {
+      const userCallsign = (document.getElementById('setting-user-callsign') ? document.getElementById('setting-user-callsign').value : '').trim();
+      const aiName = (document.getElementById('setting-ai-name') ? document.getElementById('setting-ai-name').value : '').trim();
+      const personality = (document.getElementById('setting-personality') ? document.getElementById('setting-personality').value : '').trim();
+      vscode.postMessage({
+        type: 'savePersonality',
+        userCallsign,
+        aiName,
+        personality
+      });
+    });
+  }
+
+  const btnEditPersonality = document.getElementById('btn-edit-personality');
+  if (btnEditPersonality) {
+    btnEditPersonality.addEventListener('click', () => {
+      switchTab('ajustes');
+      setTimeout(() => {
+        const input = document.getElementById('setting-user-callsign');
+        if (input) input.focus();
+      }, 80);
+    });
   }
 
   // Apply initial language
