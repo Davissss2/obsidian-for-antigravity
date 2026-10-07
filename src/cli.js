@@ -8,12 +8,12 @@
 const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
-const { detectVaults, getActiveOrConfiguredVault } = require('./vault-detector');
+const { detectVaults, getActiveOrConfiguredVault, ensureOrCreateDefaultVault } = require('./vault-detector');
 const syncEngine = require('./sync-engine');
 
 function getVault() {
   const custom = process.env.OBSIDIAN_VAULT_PATH;
-  const vault = getActiveOrConfiguredVault(custom);
+  const vault = ensureOrCreateDefaultVault(custom);
   if (!vault || !vault.path || !fs.existsSync(vault.path)) {
     console.error(JSON.stringify({ error: 'No se encontró ningún Vault de Obsidian activo en el sistema.' }));
     process.exit(1);

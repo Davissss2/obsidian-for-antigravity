@@ -1117,16 +1117,21 @@ function activate(context) {
   // 2. Automatically install skill, global rules, and run full sync
   try {
     const pConfig = vscode.workspace.getConfiguration('antigravityObsidian');
+    const pConfigured = pConfig.get('personalityConfigured');
+    const pLang = pConfig.get('language') || 'auto';
+    const pUser = pConfig.get('userName') || '';
     if (vault && vault.exists) {
       try {
         syncEngine.migrateToHermes(vault.path);
       } catch (e) {}
     }
     installSkillAndRules(vault ? vault.path : null, {
-      personalityConfigured: pConfigured ? true : undefined,
+      personalityConfigured: pConfigured !== undefined ? !!pConfigured : undefined,
+      language: pLang,
+      userName: pUser,
     });
     if (vault && vault.exists) {
-      syncEngine.syncAll(vault.path, workspaceRoot);
+      syncEngine.syncAll(vault.path, workspaceRoot, { language: pLang, userName: pUser });
     }
   } catch (err) {
     console.error('Error auto-installing Obsidian skill:', err);

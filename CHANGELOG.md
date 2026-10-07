@@ -5,6 +5,26 @@ All notable changes to the **Obsidian for Antigravity** extension will be docume
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.1] - 2026-10-07
+
+### Fixed
+- **Extension Activation ReferenceError**: Fixed `ReferenceError: pConfigured is not defined` inside `extension.js` `activate()` that silently crashed the auto-installer on fresh or updated installations, preventing rules and skills from being deployed to `~/.gemini/config/`.
+- **Zero-Config Resilient Multi-PC Vault Discovery**:
+  - `getActiveOrConfiguredVault` and `ensureOrCreateDefaultVault` in `src/vault-detector.js` now cascade across all sources: explicit paths, `OBSIDIAN_VAULT_PATH`, `~/.gemini/config/antigravity-obsidian.json`, Obsidian Desktop registered vaults, and standard OS document paths (`Documents/Obsidian Vault`, `Documentos/Obsidian Vault`, `~/Obsidian Vault`).
+  - Automatically provisions a default vault with complete Hermes architecture if no vault exists on the machine, preventing missing vault crashes on secondary or freshly configured PCs.
+  - Replaced vault calls in `src/mcp-server.js` and `src/cli.js` with `ensureOrCreateDefaultVault`, completely eliminating the error `No se encontró ningún Vault de Obsidian activo en el sistema`.
+- **Windows Spanish Locale Auto-Detection**:
+  - Fixed locale resolution in `src/sync-engine.js` where `VSCODE_NLS_CONFIG` reported `userLocale: "en-us"` on Windows despite the system language being Spanish (`osLocale: "es-es"`). Now checks `Intl.DateTimeFormat().resolvedOptions().locale`, `process.env.LANG`, and `nls.osLocale`, correctly defaulting to Spanish.
+- **Personality Update Rule Regeneration**:
+- **Cross-Language Skills & Indexes Deduplication**:
+  - Normalized skill names in `01_Skills/` to strip language-dependent prefixes (such as `[Proyecto]` or `[Project]`), preventing duplicate skill notes from accumulating.
+  - Automatically unlinks old language index notes (such as `00 Projects Index.md` <-> `00 Indice de Proyectos.md`) when language is toggled in the extension or bridge config.
+  - Fixed literal `\n` line break escaping in `00 Indice de Skills.md` markdown table generation.
+  - Enforced strict zero-emoji policy across all MCP server responses.
+- **Proactive Memory & Session Recall Directives**:
+  - Rewrote Section 1 in `rules/obsidian-brain.md` from negative filters (`DO NOT query on...`) to positive, proactive directives: the AI is instructed to consult `session_recall` / `obsidian_session_last` when starting or resuming work to maintain workflow continuity, and use `obsidian_triage` for architecture decisions and unknown errors.
+  - Updated `SKILL.md` frontmatter descriptions in both English and Spanish to declare an always-active technical second brain and persistent memory for all development tasks, ensuring Antigravity triggers memory capabilities across normal coding prompts rather than restricting it to slash commands.
+
 ## [1.8.0] - 2026-10-06
 
 ### Added

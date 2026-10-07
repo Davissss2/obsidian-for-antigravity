@@ -8,13 +8,13 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { exec } = require('child_process');
-const { detectVaults, getActiveOrConfiguredVault } = require('./vault-detector');
+const { detectVaults, getActiveOrConfiguredVault, ensureOrCreateDefaultVault } = require('./vault-detector');
 const syncEngine = require('./sync-engine');
 
-// Resolve active vault
+// Resolve active vault (auto-detects or auto-provisions seamlessly on any PC)
 function getVaultPath() {
   const customPath = process.env.OBSIDIAN_VAULT_PATH;
-  const vault = getActiveOrConfiguredVault(customPath);
+  const vault = ensureOrCreateDefaultVault(customPath);
   return vault ? vault.path : null;
 }
 
@@ -449,7 +449,7 @@ async function executeTool(name, args) {
         return {
           content: [{
             type: 'text',
-            text: `✅ Sincronización completa con Obsidian finalizada:\n- Skills sincronizadas: ${result.skillsCount}\n- Memorias sincronizadas: ${result.memoriesCount}\n- Hub actualizado: ${result.hub}`,
+            text: `Sincronizacion completa con Obsidian finalizada:\n- Skills sincronizadas: ${result.skillsCount}\n- Memorias sincronizadas: ${result.memoriesCount}\n- Hub actualizado: ${result.hub}`,
           }],
         };
       }

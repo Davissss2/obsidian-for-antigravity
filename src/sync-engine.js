@@ -737,10 +737,16 @@ function migrateToHermes(vaultPath) {
     try {
       const files = fs.readdirSync(legacySkillsDir).filter(f => f.endsWith('.md') && !f.startsWith('00'));
       for (const f of files) {
-        const skillName = f.replace(/\.md$/, '');
-        const dest = path.join(hermesSkillsDir, f);
+        const cleanSkillName = f.replace(/^\[(?:Proyecto|Project)\]\s*/i, '').replace(/\.md$/, '');
+        const dest = path.join(hermesSkillsDir, `${cleanSkillName}.md`);
         const legacyPath = path.join(legacySkillsDir, f);
         const legacyContent = fs.readFileSync(legacyPath, 'utf8');
+
+        // Clean up legacy prefixed duplicate in 01_Skills if present
+        const oldPrefixedDest = path.join(hermesSkillsDir, f);
+        if (oldPrefixedDest !== dest && fs.existsSync(oldPrefixedDest)) {
+          try { fs.unlinkSync(oldPrefixedDest); } catch (e) {}
+        }
 
         // Check if destination exists and already has Hermes metadata
         const needsHermesWrap = !fs.existsSync(dest) || !legacyContent.includes('version:');
@@ -748,7 +754,7 @@ function migrateToHermes(vaultPath) {
         if (needsHermesWrap) {
           // Extract description / tags / content
           const tagMatches = legacyContent.match(/tags:\s*\[(.*?)\]/) || legacyContent.match(/tags:\s*\n((?:\s*-\s*[^\n]+\n?)+)/);
-          let triggers = [skillName];
+          let triggers = [cleanSkillName];
           if (tagMatches) {
             const rawTags = tagMatches[1].replace(/-\s*/g, '').replace(/antigravity\/skill/g, '').split(/[\n,]/).map(t => t.trim()).filter(Boolean);
             triggers = [...new Set([...triggers, ...rawTags])];
@@ -765,7 +771,7 @@ function migrateToHermes(vaultPath) {
 
           const hermesSkill = [
             '---',
-            `skill: ${skillName}`,
+            `skill: ${cleanSkillName}`,
             'version: 1.0',
             `last_verified: ${new Date().toISOString().split('T')[0]}`,
             `triggers: ${JSON.stringify(triggers)}`,
@@ -878,19 +884,34 @@ function resolveLanguage(options = {}) {
       }
     } catch (e) {}
   }
-  // Check VS Code NLS configuration
+
+  // Check system environment & OS locale (natural language of the user's machine)
+  const intlLocale = (typeof Intl !== 'undefined' && Intl.DateTimeFormat) 
+    ? Intl.DateTimeFormat().resolvedOptions().locale 
+    : '';
+  const envLang = process.env.LANG || process.env.LC_ALL || '';
+  let nlsOsLocale = '';
   if (process.env.VSCODE_NLS_CONFIG) {
     try {
       const nls = JSON.parse(process.env.VSCODE_NLS_CONFIG);
-      if (nls.locale) {
-        return nls.locale.toLowerCase().slice(0, 2);
+      if (nls.osLocale) nlsOsLocale = nls.osLocale;
+    } catch (e) {}
+  }
+
+  const combinedLocale = (intlLocale + ' ' + envLang + ' ' + nlsOsLocale).toLowerCase();
+  if (combinedLocale.includes('es')) return 'es';
+
+  // Check VS Code user locale
+  if (process.env.VSCODE_NLS_CONFIG) {
+    try {
+      const nls = JSON.parse(process.env.VSCODE_NLS_CONFIG);
+      if (nls.locale && nls.locale.toLowerCase().startsWith('es')) {
+        return 'es';
       }
     } catch (e) {}
   }
-  // Check system environment locale
-  const sysLocale = process.env.LANG || process.env.LC_ALL || (Intl && Intl.DateTimeFormat().resolvedOptions().locale) || '';
-  if (sysLocale.toLowerCase().startsWith('es')) return 'es';
-  if (sysLocale.toLowerCase().startsWith('en')) return 'en';
+
+  if (combinedLocale.includes('en')) return 'en';
   return 'es';
 }
 
@@ -1625,7 +1646,7 @@ ${bodyText}
     }
   }
 
-  // Clean orphan or stale skill notes that are no longer active
+  // Clean orphan or stale skill notes that are no longer active in legacy folder
   if (fs.existsSync(skillsFolder)) {
     const existingFiles = fs.readdirSync(skillsFolder);
     for (const f of existingFiles) {
@@ -1635,6 +1656,24 @@ ${bodyText}
         } catch (e) {}
       }
     }
+  }
+
+  // Also clean orphan or stale skills and prefixed duplicates in 01_Skills
+  const hermesSkillsDir = path.join(vaultPath, '01_Skills');
+  if (fs.existsSync(hermesSkillsDir)) {
+    try {
+      const existingHermes = fs.readdirSync(hermesSkillsDir);
+      for (const hf of existingHermes) {
+        if (hf.endsWith('.md')) {
+          const cleanHName = hf.replace(/\.md$/, '').replace(/^\[(?:Proyecto|Project)\]\s*/i, '').toLowerCase();
+          if (!seenSkillNames.has(cleanHName)) {
+            try { fs.unlinkSync(path.join(hermesSkillsDir, hf)); } catch (e) {}
+          } else if (hf.startsWith('[Proyecto]') || hf.startsWith('[Project]')) {
+            try { fs.unlinkSync(path.join(hermesSkillsDir, hf)); } catch (e) {}
+          }
+        }
+      }
+    } catch (e) {}
   }
 
   // 3. Generate Skills Index Note
@@ -1659,18 +1698,18 @@ Total de skills activas sincronizadas: **${syncedSkills.length}**
 
   const globalList = syncedSkills.filter(s => s.scope === 'global');
   for (const s of globalList) {
-    indexMd += `| **${s.name}** | ${(s.description || 'Sin descripción').replace(/\\r?\\n/g, ' ').slice(0, 150)} | [[${sanitizeFilename(s.name)}]] |\\n`;
+    indexMd += `| **${s.name}** | ${(s.description || 'Sin descripción').replace(/\r?\n/g, ' ').slice(0, 150)} | [[${sanitizeFilename(s.name)}]] |\n`;
   }
 
   const projList = syncedSkills.filter(s => s.scope === 'project');
   if (projList.length > 0) {
-    indexMd += `\\n## Skills de Proyecto\\n| Skill | Descripcion | Nota |\\n|---|---|---|\\n`;
+    indexMd += `\n## Skills de Proyecto\n| Skill | Descripcion | Nota |\n|---|---|---|\n`;
     for (const s of projList) {
-      indexMd += `| **${s.name}** | ${(s.description || 'Sin descripción').replace(/\\r?\\n/g, ' ').slice(0, 150)} | [[${sanitizeFilename(`[Proyecto] ${s.name}`)}]] |\\n`;
+      indexMd += `| **${s.name}** | ${(s.description || 'Sin descripción').replace(/\r?\n/g, ' ').slice(0, 150)} | [[${sanitizeFilename(`[Proyecto] ${s.name}`)}]] |\n`;
     }
   }
 
-  indexMd += `\\n---\\n*Volver al:* [[00 Antigravity Hub]]\\n`;
+  indexMd += `\n---\n*Volver al:* [[00 Antigravity Hub]]\n`;
   fs.writeFileSync(indexFile, indexMd, 'utf8');
 
   return syncedSkills;
@@ -2698,6 +2737,10 @@ function syncProjectsIndex(vaultPath, options = {}) {
   const isEn = (lang === 'en');
   const projFolder = path.join(vaultPath, 'Antigravity', 'Proyectos');
   const indexFile = path.join(projFolder, isEn ? '00 Projects Index.md' : '00 Indice de Proyectos.md');
+  const otherIndexFile = path.join(projFolder, isEn ? '00 Indice de Proyectos.md' : '00 Projects Index.md');
+  if (fs.existsSync(otherIndexFile)) {
+    try { fs.unlinkSync(otherIndexFile); } catch (e) {}
+  }
   const now = new Date().toISOString().split('T')[0];
 
   const projects = [];

@@ -151,6 +151,7 @@ function detectVaults() {
 }
 
 function getActiveOrConfiguredVault(configuredPath) {
+  // 1. Explicit configured path argument
   if (configuredPath && typeof configuredPath === 'string' && configuredPath.trim() !== '') {
     const cleanPath = path.normalize(configuredPath.trim());
     if (fs.existsSync(cleanPath)) {
@@ -165,12 +166,62 @@ function getActiveOrConfiguredVault(configuredPath) {
     }
   }
 
+  // 2. Environment variable OBSIDIAN_VAULT_PATH
+  if (process.env.OBSIDIAN_VAULT_PATH && fs.existsSync(process.env.OBSIDIAN_VAULT_PATH)) {
+    const envPath = path.normalize(process.env.OBSIDIAN_VAULT_PATH.trim());
+    return {
+      id: 'env',
+      name: path.basename(envPath),
+      path: envPath,
+      open: true,
+      exists: true,
+      source: 'env',
+    };
+  }
+
+  // 3. Global config ~/.gemini/config/antigravity-obsidian.json
+  const home = os.homedir();
+  const bridgeConfigPath = path.join(home, '.gemini', 'config', 'antigravity-obsidian.json');
+  if (fs.existsSync(bridgeConfigPath)) {
+    try {
+      const cfg = JSON.parse(fs.readFileSync(bridgeConfigPath, 'utf8'));
+      if (cfg && cfg.vaultPath && fs.existsSync(cfg.vaultPath)) {
+        const cfgPath = path.normalize(cfg.vaultPath.trim());
+        return {
+          id: 'bridge_config',
+          name: cfg.vaultName || path.basename(cfgPath),
+          path: cfgPath,
+          open: true,
+          exists: true,
+          source: 'bridge-config',
+        };
+      }
+    } catch (e) {}
+  }
+
+  // 4. Auto-detect from Obsidian Desktop installation (obsidian.json)
   const detection = detectVaults();
-  if (detection.activeVault) {
+  if (detection.activeVault && detection.activeVault.exists) {
     return {
       ...detection.activeVault,
       source: 'auto-detected',
     };
+  }
+
+  // 5. Check OS common fallback folders
+  const fallbacks = getFallbackVaultPaths();
+  for (const fbPath of fallbacks) {
+    if (fs.existsSync(fbPath)) {
+      const norm = path.normalize(fbPath);
+      return {
+        id: 'fallback_' + path.basename(norm).toLowerCase().replace(/\s+/g, '_'),
+        name: path.basename(norm),
+        path: norm,
+        open: true,
+        exists: true,
+        source: 'os-fallback',
+      };
+    }
   }
 
   return null;

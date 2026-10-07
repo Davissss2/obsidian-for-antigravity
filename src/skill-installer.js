@@ -198,11 +198,11 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '---',
         'name: antigravity-obsidian',
         'description: >',
-        '  Obsidian for Antigravity — Technical Second Brain & Low-Context Memory.',
-        '  Trigger with /obsidian, /obsidian save, /obsidian status, /obsidian soul, /obsidian learn,',
-        '  /obsidian triage, /obsidian peek, /obsidian catalog, /obsidian open, or when accessing Obsidian notes.',
-        '  Separates Skills (procedures) vs Memory (past records), ultra-compact triage (<80 tokens),',
-        '  selective peek extraction, and atomic auto-saving with zero emojis and zero fluff.',
+        '  Obsidian for Antigravity — Always-active Technical Second Brain, Persistent Memory & Hermes Closed Loop.',
+        '  Active across all development tasks, debugging sessions, project continuity, recalling past sessions (session_recall / session last),',
+        '  retrieving past technical solutions and architecture (obsidian_triage / triage, obsidian_peek / peek),',
+        '  auto-saving session checkpoints and learnings, or using /obsidian commands.',
+        '  Zero emojis, zero fluff, ultra-compact memory retrieval (<80 tokens).',
         '---',
         '',
         '# Obsidian for Antigravity — Technical Second Brain',
@@ -342,11 +342,11 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '---',
         'name: antigravity-obsidian',
         'description: >',
-        '  Obsidian for Antigravity — Segundo Cerebro Tecnico y Memoria de Bajo Contexto.',
-        '  Activar con /obsidian, /obsidian save, /obsidian status, /obsidian soul, /obsidian learn,',
-        '  /obsidian triage, /obsidian peek, /obsidian catalog, /obsidian open, o al consultar notas de Obsidian.',
-        '  Distingue Skills (procedimientos) vs Memoria (antecedentes), triage ultra-compacto (<80 tokens),',
-        '  extraccion selectiva con peek y auto-guardado atomico sin emojis ni texto de relleno.',
+        '  Obsidian for Antigravity — Segundo Cerebro Tecnico siempre activo, Memoria Persistente y Bucle Cerrado Hermes.',
+        '  Activo en cualquier tarea de desarrollo, resolucion de bugs, continuidad de proyectos, recuperacion de sesiones previas (session_recall / session last),',
+        '  consulta de arquitectura y soluciones anteriores (obsidian_triage / triage, obsidian_peek / peek),',
+        '  guardado autonomo de hitos y aprendizajes, o con comandos /obsidian.',
+        '  Cero emojis, cero relleno y recuperacion ultra-compacta (<80 tokens).',
         '---',
         '',
         '# Obsidian for Antigravity — Segundo Cerebro Tecnico',
@@ -598,30 +598,26 @@ function installSkillAndRules(targetVaultPath, options = {}) {
   const proactiveSection = proactiveLookup
     ? (isEn
         ? [
-            '### 1. LOW-CONTEXT SMART TRIAGE & CONTEXT RECALL (<80 Tokens):',
-            '**Apply this filter before any query:**',
-            '- **DO NOT query** on greetings, general theoretical questions, or tasks where the current code explains everything.',
+            '### 1. PROACTIVE MEMORY LOOKUP & CONTEXT RECALL (<80 Tokens):',
             '- **CRITICAL MCP PRIORITY:** If the MCP server is active, ALWAYS call the native MCP tool via `call_mcp_tool`. Use Node CLI (`run_command`) ONLY if MCP is disabled or offline.',
-            '- **To recall what was done in the previous session / chat:** Call MCP tool `obsidian_session_last` (or CLI fallback: `node "' + normalizedScriptPath + '" session last [--project "<ProjectName>"]`).',
+            '- **Continuity & Previous Session Recall:** At the start of a task or when resuming project work, consult previous context via `obsidian_session_last` (or `session_recall` / CLI: `node "' + normalizedScriptPath + '" session last [--project "<ProjectName>"]`). This ensures continuous workflow and recalls earlier architectural decisions.',
+            '- **Proactive Memory Check:** On non-trivial tasks, architecture questions, environment setup, or technical bugs, check technical memory via `obsidian_triage` (or CLI fallback: `node "' + normalizedScriptPath + '" triage "<terms or error>"`).',
+            '  - If triage returns a summary: Use it directly! Do not waste tokens reading full files.',
+            '  - If exact step-by-step code is needed: Call `obsidian_peek` with `noteName` (or CLI fallback: `node "' + normalizedScriptPath + '" peek "<NoteName>"`).',
             '- **To inspect project tasks / backlog from Obsidian:** Run `node "' + normalizedScriptPath + '" project backlog list [--project "<ProjectName>"]`.',
-            '- **Query a SKILL** if the task is operational/procedural and matches capabilities in `<skills>`.',
-            '- **Query MEMORY** only for unknown errors/bugs, server configuration, or past architecture questions:',
-            '  Call MCP tool `obsidian_triage` with `query` (or CLI fallback: `node "' + normalizedScriptPath + '" triage "<terms or error>"`).',
-            '- **If triage returns a summary:** Use it directly! Do not burn tokens reading entire files.',
-            '- **If you need exact step-by-step code:** Call MCP tool `obsidian_peek` with `noteName` (or CLI fallback: `node "' + normalizedScriptPath + '" peek "<NoteName>"`).'
+            '- **Proactive Skills Check:** When working with specific stacks or tools, load the playbook via `skill_get` or inspect `<skills>`.',
+            '- **Efficiency Filter:** Skip queries only on greetings or trivial single-line syntax checks where memory has zero relevance.'
           ].join('\n')
         : [
-            '### 1. CONSULTA INTELIGENTE Y RECUPERACION DE CONTEXTO (<80 Tokens):',
-            '**Aplica este filtro antes de cualquier consulta:**',
-            '- **NO consultes** en saludos, preguntas teoricas generales o tareas donde el codigo actual ya lo explica todo.',
+            '### 1. CONSULTA PROACTIVA DE MEMORIA Y RECUPERACION DE CONTEXTO (<80 Tokens):',
             '- **PRIORIDAD CRITICA MCP:** Si el servidor MCP esta activo, llama SIEMPRE a la herramienta MCP nativa con `call_mcp_tool`. Usa el CLI de Node (`run_command`) UNICAMENTE si MCP esta desactivado u offline.',
-            '- **Para recordar que se hizo en la sesion anterior / chat previo:** Llama a la herramienta MCP `obsidian_session_last` (o fallback CLI: `node "' + normalizedScriptPath + '" session last [--project "<NombreProyecto>"]`).',
+            '- **Continuidad y Recuperacion de Sesion Previa:** Al iniciar una tarea o retomar trabajo en un proyecto, consulta el contexto previo con `obsidian_session_last` (o `session_recall` / fallback CLI: `node "' + normalizedScriptPath + '" session last [--project "<NombreProyecto>"]`). Esto garantiza continuidad inmediata y recupera decisiones previas.',
+            '- **Chequeo Proactivo de Memoria:** Ante tareas tecnicas no triviales, dudas de arquitectura, configuracion de entorno o errores/bugs, consulta la memoria tecnica con `obsidian_triage` (o fallback CLI: `node "' + normalizedScriptPath + '" triage "<terminos o error>"`).',
+            '  - Si triage devuelve un resumen: ¡Usalo directamente! No quemes tokens leyendo archivos enteros.',
+            '  - Si requieres el codigo o solucion exacta: Llama a `obsidian_peek` con `noteName` (o fallback CLI: `node "' + normalizedScriptPath + '" peek "<NombreDeLaNota>"`).',
             '- **Para consultar tareas pendientes o backlog desde Obsidian:** Ejecuta `node "' + normalizedScriptPath + '" project backlog list [--project "<NombreProyecto>"]`.',
-            '- **Consulta una SKILL** si la tarea es operativa/procedural y coincide con las capacidades en `<skills>`.',
-            '- **Consulta la MEMORIA** unicamente ante errores/bugs desconocidos, configuracion de servidores o dudas de arquitectura previa:',
-            '  Llama a la herramienta MCP `obsidian_triage` con `query` (o fallback CLI: `node "' + normalizedScriptPath + '" triage "<terminos o error>"`).',
-            '- **Si triage devuelve un resumen:** ¡Usalo directamente! No quemes tokens leyendo archivos enteros.',
-            '- **Si requieres el codigo paso a paso exacto:** Llama a la herramienta MCP `obsidian_peek` con `noteName` (o fallback CLI: `node "' + normalizedScriptPath + '" peek "<NombreDeLaNota>"`).'
+            '- **Chequeo Proactivo de Skills:** Al operar herramientas o stacks especificos, carga el procedimiento con `skill_get` o revisa `<skills>`.',
+            '- **Filtro de Eficiencia:** Omite consultas unicamente en saludos triviales o dudas de sintaxis elemental de una sola linea donde la memoria sea totalmente irrelevante.'
           ].join('\n'))
     : (isEn
         ? '### 1. Vault Query:\nQuery the Obsidian vault when requested by the user or when specific technical background is required.'

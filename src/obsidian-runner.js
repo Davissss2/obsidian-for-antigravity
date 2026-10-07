@@ -89,6 +89,19 @@ function getPersonalityFile(almaDir, langPreference) {
 }
 
 function updateGlobalRulesWithPersonality({ aiName, userCallsign, personality, configured, vaultPath, vaultName }) {
+  try {
+    const installer = getSkillInstaller();
+    if (installer && typeof installer.installSkillAndRules === 'function') {
+      installer.installSkillAndRules(vaultPath, {
+        aiName,
+        userCallsign,
+        personality,
+        personalityConfigured: configured,
+      });
+      return;
+    }
+  } catch (e) {}
+
   const home = os.homedir();
   const configDir = path.join(home, '.gemini', 'config');
   const rulesDir = path.join(configDir, 'rules');
@@ -285,7 +298,20 @@ function getVaultPath() {
 }
 
 function ensureDirs(vaultPath) {
+  const syncEngine = getSyncEngine();
+  if (syncEngine && typeof syncEngine.ensureVaultStructure === 'function') {
+    try {
+      syncEngine.ensureVaultStructure(vaultPath);
+      syncEngine.migrateToHermes(vaultPath);
+      return;
+    } catch (e) {}
+  }
   const dirs = [
+    path.join(vaultPath, '00_Agente'),
+    path.join(vaultPath, '01_Skills'),
+    path.join(vaultPath, '02_Proyectos'),
+    path.join(vaultPath, '03_Sesiones'),
+    path.join(vaultPath, '03_Sesiones', 'Trajectories'),
     path.join(vaultPath, 'Antigravity'),
     path.join(vaultPath, 'Antigravity', 'Alma'),
     path.join(vaultPath, 'Antigravity', 'Memoria'),
