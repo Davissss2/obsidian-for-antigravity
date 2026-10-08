@@ -70,6 +70,64 @@ function installMcpSchemas() {
         },
         required: ['query']
       }
+    },
+    'tool_create': {
+      name: 'tool_create',
+      description: 'Crea una herramienta personalizada para la IA a partir de un comando o configuración dada por el usuario o interfaz.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Nombre de la herramienta' },
+          description: { type: 'string', description: 'Descripción de la herramienta' },
+          command: { type: 'string', description: 'Comando a ejecutar' },
+          type: { type: 'string', description: 'Tipo de herramienta (cli o script)' }
+        },
+        required: ['name', 'description']
+      }
+    },
+    'tool_install': {
+      name: 'tool_install',
+      description: 'Instala de forma autónoma una herramienta para la IA a partir de un repositorio de GitHub (ej: https://github.com/user/repo o user/repo). Clona el repositorio, detecta si es servidor MCP, Skill de Antigravity o CLI, instala dependencias con npm/pip, lo registra en mcp_config.json y genera su nota en Obsidian.',
+      parameters: {
+        type: 'object',
+        properties: {
+          repoUrl: { type: 'string', description: 'URL del repositorio de GitHub' },
+          name: { type: 'string', description: 'Nombre opcional' },
+          description: { type: 'string', description: 'Descripción opcional' }
+        },
+        required: ['repoUrl']
+      }
+    },
+    'tool_list': {
+      name: 'tool_list',
+      description: 'Lista todas las herramientas de IA disponibles e instaladas (búsqueda web, scraper, servidores MCP y herramientas CLI de GitHub).',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    },
+    'tool_run': {
+      name: 'tool_run',
+      description: 'Ejecuta una herramienta de IA instalada previamente con sus argumentos correspondientes.',
+      parameters: {
+        type: 'object',
+        properties: {
+          toolName: { type: 'string', description: 'Nombre o id de la herramienta' },
+          args: { type: 'array', items: { type: 'string' }, description: 'Argumentos' }
+        },
+        required: ['toolName']
+      }
+    },
+    'tool_uninstall': {
+      name: 'tool_uninstall',
+      description: 'Desinstala una herramienta de IA previamente instalada desde GitHub y limpia sus registros.',
+      parameters: {
+        type: 'object',
+        properties: {
+          toolName: { type: 'string', description: 'Nombre de la herramienta a desinstalar' }
+        },
+        required: ['toolName']
+      }
     }
   };
 
@@ -177,7 +235,7 @@ function installSkillAndRules(targetVaultPath, options = {}) {
   }
 
   // Also deploy helper modules so scriptsDir is fully functional and self-contained
-  const helperFiles = ['skill-installer.js', 'sync-engine.js', 'vault-detector.js', 'mcp-server.js'];
+  const helperFiles = ['skill-installer.js', 'sync-engine.js', 'vault-detector.js', 'mcp-server.js', 'tools-engine.js'];
   for (const hf of helperFiles) {
     const srcPath = path.join(__dirname, hf);
     const destPath = path.join(scriptsDir, hf);
@@ -468,6 +526,11 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '| `node "' + normalizedScriptPath + '" skill script <skill> add <file> --code "..."` | Vincula un script ejecutable a una skill |',
         '| `node "' + normalizedScriptPath + '" rule list` | Lista reglas activas globales, de workspace y dinamicas |',
         '| `node "' + normalizedScriptPath + '" rule view <nombre>` | Consulta el contenido de una regla |',
+        '| `node "' + normalizedScriptPath + '" tool install <repoUrl>` | Instalación autónoma de tools desde GitHub |',
+        '| `node "' + normalizedScriptPath + '" tool create <nombre> --cmd "<c>"` | Creación de herramientas personalizadas |',
+        '| `node "' + normalizedScriptPath + '" tool list` | Listado de herramientas instaladas para la IA |',
+        '| `node "' + normalizedScriptPath + '" tool run <tool> [args]` | Ejecución de una herramienta instalada |',
+        '| `node "' + normalizedScriptPath + '" tool uninstall <tool>` | Desinstalación de herramientas |',
         '| `node "' + normalizedScriptPath + '" triage "query"` | Triage inteligente ultra-compacto (<80 tokens) |',
         '| `node "' + normalizedScriptPath + '" peek "Nota"` | Solucion tecnica directa sin metadatos |',
         '| `node "' + normalizedScriptPath + '" save --title "..." ...` | Guardado atomico en vault y Knowledge Items |',
@@ -786,6 +849,11 @@ function installSkillAndRules(targetVaultPath, options = {}) {
         '- `/obsidian catalog`: Run `node "' + normalizedScriptPath + '" catalog` and present the compact overview.',
         '- `/obsidian skills`: Run `node "' + normalizedScriptPath + '" skills` to list available skills.',
         '- `/obsidian memories`: Run `node "' + normalizedScriptPath + '" memories` to list recorded memories.',
+        '- `/obsidian tool install <repo>`: Run `node "' + normalizedScriptPath + '" tool install <repo>` to install an AI tool/MCP from GitHub.',
+        '- `/obsidian tool create <name>`: Run `node "' + normalizedScriptPath + '" tool create <name>` to create a custom tool.',
+        '- `/obsidian tool list`: Run `node "' + normalizedScriptPath + '" tool list` to show all installed tools.',
+        '- `/obsidian tool run <tool> [args]`: Run `node "' + normalizedScriptPath + '" tool run <tool> [args]` to execute a tool.',
+        '- `/obsidian tool uninstall <tool>`: Run `node "' + normalizedScriptPath + '" tool uninstall <tool>` to uninstall a tool.',
         '- `/obsidian export [file]`: Run `node "' + normalizedScriptPath + '" export --password "<pwd>" --output "<file>"` to export password-encrypted vault backup.',
         '- `/obsidian import <file>`: Run `node "' + normalizedScriptPath + '" import --password "<pwd>" --file "<file>"` to decrypt and restore vault backup.',
         '- `/obsidian open [note]`: Run `node "' + normalizedScriptPath + '" open [note]` to open in Obsidian Desktop.',
@@ -794,6 +862,11 @@ function installSkillAndRules(targetVaultPath, options = {}) {
     : [
         '### 5. PROTOCOLO DE COMANDOS SLASH (/obsidian):',
         'Cuando el usuario escriba un comando que empiece por `/obsidian`, ejecuta INMEDIATAMENTE el comando CLI correspondiente con `run_command` sin pedir confirmaciones adicionales:',
+        '- `/obsidian tool install <repo>`: Ejecuta `node "' + normalizedScriptPath + '" tool install <repo>` para instalar una tool/MCP desde un repo de GitHub.',
+        '- `/obsidian tool create <name>`: Ejecuta `node "' + normalizedScriptPath + '" tool create <name>` para registrar una tool personalizada.',
+        '- `/obsidian tool list`: Ejecuta `node "' + normalizedScriptPath + '" tool list` para listar las tools instaladas para la IA.',
+        '- `/obsidian tool run <tool> [args]`: Ejecuta `node "' + normalizedScriptPath + '" tool run <tool> [args]` para ejecutar una tool instalada.',
+        '- `/obsidian tool uninstall <tool>`: Ejecuta `node "' + normalizedScriptPath + '" tool uninstall <tool>` para desinstalar una tool.',
         '- `/obsidian mcp [status|install|disable|enable]`: Ejecuta `node "' + normalizedScriptPath + '" mcp [args]` para gestionar la integracion MCP de forma segura sin romper otros servidores.',
         '- `/obsidian name <nombre>`: Ejecuta `node "' + normalizedScriptPath + '" name "<nombre>"` para cambiar el nombre de la IA inmediatamente.',
         '- `/obsidian user <trato>`: Ejecuta `node "' + normalizedScriptPath + '" user "<trato>"` para cambiar el trato hacia el usuario inmediatamente.',
@@ -828,6 +901,7 @@ function installSkillAndRules(targetVaultPath, options = {}) {
   const ruleContent = isEn
     ? [
         '---',
+        'trigger: always_on',
         'description: Autonomous Second Brain, Hermes Closed Loop & Bounded Memory — Obsidian for Antigravity',
         '---',
         '',
@@ -866,6 +940,7 @@ function installSkillAndRules(targetVaultPath, options = {}) {
       ].join('\n')
     : [
         '---',
+        'trigger: always_on',
         'description: Segundo Cerebro Autonomo, Bucle Cerrado Hermes y Memoria Acotada — Obsidian for Antigravity',
         '---',
         '',
@@ -905,17 +980,63 @@ function installSkillAndRules(targetVaultPath, options = {}) {
 
   fs.writeFileSync(rulePath, ruleContent, 'utf8');
 
-  // Clean up legacy GEMINI.md & AGENTS.md in ~/.gemini/config/ if present to prevent duplicate rules in prompt context
-  const geminiMdPath = path.join(configDir, 'GEMINI.md');
-  const agentsMdPath = path.join(configDir, 'AGENTS.md');
-  for (const legacyPath of [geminiMdPath, agentsMdPath]) {
+  // Maintain native GEMINI.md in ~/.gemini/ and ~/.gemini/config/ for instant Antigravity session bootstrap
+  const geminiMdContent = isEn
+    ? [
+        '# Antigravity AI Directives & Identity (Hermes Core)',
+        '',
+        `- **Agent Name:** ${aiName}. Always identify and act as ${aiName}.`,
+        `- **Addressing the User:** Always address the user as **${userCallsign}**.`,
+        `- **Demeanor & Traits:** ${personality}`,
+        `- **Active Second Brain:** Connected to Obsidian Vault (${vaultName} at \`${vaultPath}\`).`,
+        '- **Zero Emojis Policy:** Strictly ZERO EMOJIS in all responses, notes, and code.',
+        '- **Mandatory Autonomous Session Saving:**',
+        '  At the end of any technical task, bugfix, or significant work, ALWAYS autonomously save a session checkpoint into Obsidian by calling MCP tool `obsidian_session_save` (or CLI `node obsidian.js session save --project "<project>" --summary "..." --content "..."`).',
+        '- **Dynamic AI Tools Policy (Zero Default Tools):**',
+        '  - No default, invented, or fake tools exist. Do NOT invent web search or scraper tools.',
+        '  - Tools are installed dynamically from GitHub repositories provided by the user via `obsidian_tool_install` / `tool_install` (or CLI `node obsidian.js tool install <repoUrl>`).',
+        '  - Custom tools can be created dynamically via `obsidian_tool_create` / `tool_create` or via the sidebar UI.',
+        '  - Call `obsidian_tool_list` / `tool_list` to list installed tools.',
+        '  - Call `obsidian_tool_run` / `tool_run` to execute installed tools.',
+        '  - Call `obsidian_tool_uninstall` / `tool_uninstall` to remove installed tools.',
+        '- **Memory & Context Continuity:** Before answering complex technical questions or errors, query memory via `obsidian_triage`, `obsidian_peek`, or `obsidian_session_last`.',
+        '',
+        '---',
+        '*Obsidian for Antigravity System Directives — Fully Active.*'
+      ].join('\n')
+    : [
+        '# Directivas e Identidad de Antigravity AI (Hermes Core)',
+        '',
+        `- **Nombre del Agente:** ${aiName}. Identifícate y actúa siempre como ${aiName}.`,
+        `- **Trato hacia el Usuario:** Dirígete siempre al usuario como **${userCallsign}**.`,
+        `- **Personalidad y Demeanor:** ${personality}`,
+        `- **Segundo Cerebro Activo:** Bóveda de Obsidian conectada (${vaultName} en \`${vaultPath}\`).`,
+        '- **Política de Cero Emojis:** Estrictamente CERO EMOJIS en absolutamente todas las respuestas, notas y código.',
+        '- **Guardado Autónomo Obligatorio de Sesiones:**',
+        '  Al finalizar cualquier tarea técnica, corrección de bug o avance significativo, guarda SIEMPRE un checkpoint de sesión en Obsidian llamando a la herramienta MCP `obsidian_session_save` (o CLI `node obsidian.js session save --project "<proyecto>" --summary "..." --content "..."`).',
+        '- **Gestión Dinámica de Herramientas (Cero Tools por Defecto):**',
+        '  - No existen herramientas inventadas, falsas o por defecto. NO inventes herramientas de búsqueda o scraping.',
+        '  - Las herramientas se instalan de forma dinámica desde repositorios de GitHub proporcionados por el usuario llamando a `obsidian_tool_install` / `tool_install` (o CLI `node obsidian.js tool install <repoUrl>`).',
+        '  - También se pueden crear herramientas personalizadas vía `obsidian_tool_create` / `tool_create` o desde la interfaz del panel lateral.',
+        '  - Llama a `obsidian_tool_list` / `tool_list` para listar las herramientas instaladas.',
+        '  - Llama a `obsidian_tool_run` / `tool_run` para ejecutar una herramienta instalada.',
+        '  - Llama a `obsidian_tool_uninstall` / `tool_uninstall` para desinstalar una herramienta.',
+        '- **Memoria y Continuidad:** Antes de abordar errores o tareas complejas, consulta la memoria técnica con `obsidian_triage`, `obsidian_peek` o `obsidian_session_last`.',
+        '',
+        '---',
+        '*Directivas del Sistema Obsidian for Antigravity — Completamente Activas.*'
+      ].join('\n');
+
+  try {
+    fs.writeFileSync(path.join(configDir, 'GEMINI.md'), geminiMdContent, 'utf8');
+    fs.writeFileSync(path.join(os.homedir(), '.gemini', 'GEMINI.md'), geminiMdContent, 'utf8');
+  } catch (e) {}
+
+  // Sync tools structure into vault if present
+  if (vaultPath && fs.existsSync(vaultPath)) {
     try {
-      if (fs.existsSync(legacyPath)) {
-        const legacyContent = fs.readFileSync(legacyPath, 'utf8');
-        if (legacyContent.includes('Hermes') || legacyContent.includes('Obsidian') || legacyContent.includes('Protocol') || legacyContent.includes('Autonomous Second Brain') || legacyContent.includes('Segundo Cerebro') || legacyContent.includes('Pedro') || legacyContent.includes('David')) {
-          fs.unlinkSync(legacyPath);
-        }
-      }
+      const toolsEngine = require('./tools-engine');
+      toolsEngine.ensureToolsVaultStructure(vaultPath);
     } catch (e) {}
   }
 

@@ -1399,6 +1399,28 @@
     });
   }
 
+  // Tool installation and uninstall handlers
+  const btnInstallTool = document.getElementById('btn-install-tool-github');
+  if (btnInstallTool) {
+    btnInstallTool.addEventListener('click', () => {
+      const input = document.getElementById('input-tool-github');
+      const url = input ? input.value.trim() : '';
+      if (!url) return;
+      btnInstallTool.disabled = true;
+      btnInstallTool.innerText = 'Instalando...';
+      vscode.postMessage({ type: 'installToolGithub', url });
+    });
+  }
+
+  document.querySelectorAll('.btn-uninstall-tool').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const name = btn.getAttribute('data-name');
+      if (name) {
+        vscode.postMessage({ type: 'uninstallTool', name });
+      }
+    });
+  });
+
   // Apply initial language
   applyLanguage(currentLang);
 })();

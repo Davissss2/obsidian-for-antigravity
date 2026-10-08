@@ -387,6 +387,38 @@ class ObsidianPanelProvider {
           break;
         }
 
+        case 'installToolGithub': {
+          if (!message.url) break;
+          const toolsEngine = require('./src/tools-engine');
+          await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: `Instalando herramienta desde GitHub...`,
+            cancellable: false
+          }, async () => {
+            try {
+              const res = await toolsEngine.installFromGithub(message.url, {}, currentVault ? currentVault.path : null);
+              vscode.window.showInformationMessage(`Herramienta "${res.name}" instalada correctamente.`);
+              updateView();
+            } catch (err) {
+              vscode.window.showErrorMessage(`Error al instalar herramienta: ${err.message}`);
+            }
+          });
+          break;
+        }
+
+        case 'uninstallTool': {
+          if (!message.name) break;
+          const toolsEngine = require('./src/tools-engine');
+          try {
+            const res = toolsEngine.uninstallTool(message.name, currentVault ? currentVault.path : null);
+            vscode.window.showInformationMessage(`Herramienta "${message.name}" desinstalada.`);
+            updateView();
+          } catch (err) {
+            vscode.window.showErrorMessage(`Error al desinstalar: ${err.message}`);
+          }
+          break;
+        }
+
         case 'openNote': {
           if (message.note && currentVault && currentVault.path) {
             let noteRel = message.note;
@@ -432,8 +464,15 @@ class ObsidianPanelProvider {
     let skillList = [];
     let sessionList = [];
     let projectList = [];
+    let toolsList = [];
     let graphData = { nodes: [], links: [] };
     let isVaultGit = false;
+
+    try {
+      const toolsEngine = require('./src/tools-engine');
+      const toolsData = toolsEngine.listTools(vault ? vault.path : null);
+      toolsList = toolsData.tools || [];
+    } catch (e) {}
 
     let hermesQuotas = { userChars: 0, userLimit: 1500, userPercent: 0, memChars: 0, memLimit: 2500, memPercent: 0, skillsCount: 0 };
 
@@ -655,6 +694,11 @@ class ObsidianPanelProvider {
     <button class="tab-pill" data-tab="crear">
       ${SVGS.plus}
       <span class="tab-text" data-i18n="tab_create">Crear</span>
+    </button>
+    <button class="tab-pill" data-tab="herramientas">
+      ${SVGS.zap}
+      <span class="tab-text">Herramientas</span>
+      <span class="tab-badge">${toolsList.length}</span>
     </button>
     <button class="tab-pill" data-tab="ajustes">
       ${SVGS.settings}
@@ -1172,6 +1216,53 @@ class ObsidianPanelProvider {
     </div>
   </div>
 
+  <!-- TAB: HERRAMIENTAS -->
+  <div class="tab-pane" id="pane-herramientas">
+    <div class="card-section" style="margin-bottom:12px;">
+      <div class="card-title" style="display:flex;align-items:center;gap:8px;">
+        ${SVGS.zap} <span>Instalar Herramienta desde GitHub</span>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;line-height:1.4;">
+        Pasa la URL de un repositorio de GitHub (ej: https://github.com/owner/repo). El sistema clonará el repo, detectará si es MCP o CLI, instalará dependencias con npm/pip y lo registrará para la IA.
+      </div>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="input-tool-github" class="input-text" placeholder="https://github.com/owner/repo" style="flex:1;" />
+        <button class="btn-action btn-gradient" id="btn-install-tool-github">
+          ${SVGS.download} <span>Instalar</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="card-section">
+      <div class="card-title" style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+        ${SVGS.crystal} <span>Herramientas Instaladas (${toolsList.length})</span>
+      </div>
+      ${toolsList.length === 0 ? `
+        <div class="empty-state" style="padding:20px 10px;text-align:center;color:var(--text-muted);font-size:12px;background:rgba(255,255,255,0.02);border:1px dashed var(--card-border);border-radius:8px;">
+          <div style="margin-bottom:6px;font-weight:600;color:var(--text-normal);">Cero herramientas por defecto</div>
+          <div>No hay herramientas instaladas aún. Las herramientas las creará o instalará la IA a medida que se las des, o puedes instalarlas aquí arriba con un repo de GitHub.</div>
+        </div>
+      ` : `
+        <div class="tools-grid" style="display:flex;flex-direction:column;gap:8px;">
+          ${toolsList.map(t => `
+            <div class="tool-card" style="padding:10px;background:rgba(255,255,255,0.03);border:1px solid var(--card-border);border-radius:8px;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div>
+                  <div style="font-weight:600;font-size:13px;color:var(--text-bright);">${t.name}</div>
+                  <div style="font-size:10px;color:var(--accent-color);text-transform:uppercase;margin-top:2px;">${t.type || 'tool'} ${t.mcpRegistered ? '• MCP' : ''}</div>
+                </div>
+                <button class="btn-icon btn-uninstall-tool" data-name="${t.name}" title="Desinstalar herramienta" style="background:none;border:none;cursor:pointer;color:#f87171;">
+                  ${SVGS.trash}
+                </button>
+              </div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.4;">${t.description || 'Sin descripción'}</div>
+            </div>
+          `).join('')}
+        </div>
+      `}
+    </div>
+  </div>
+
   <!-- Toast Bar -->
   <div class="toast-bar" id="toast"></div>
 
@@ -1263,23 +1354,13 @@ function activate(context) {
     context.subscriptions.push({ dispose: () => clearInterval(periodicTimer) });
   }
 
-  // 3b. Continuous workspace session tracking & passive auto-checkpointing
+  // 3b. Continuous workspace session tracking & proactive auto-checkpointing
   const sessionModifiedFiles = new Set();
   let lastAutoCheckpointTime = Date.now();
+  let sessionSaveDebounceTimer = null;
 
-  context.subscriptions.push(
-    vscode.workspace.onDidSaveTextDocument((doc) => {
-      const root = getWorkspaceRoot();
-      if (!root || !doc || !doc.uri) return;
-      const fp = doc.uri.fsPath;
-      if (fp.startsWith(root) && !fp.includes('node_modules') && !fp.includes('.git') && !fp.includes('.agents')) {
-        sessionModifiedFiles.add(path.relative(root, fp));
-      }
-    })
-  );
-
-  const performAutoCheckpoint = () => {
-    if (sessionModifiedFiles.size >= 2 && (Date.now() - lastAutoCheckpointTime > 600000)) {
+  const performAutoCheckpoint = (reason = 'auto') => {
+    if (sessionModifiedFiles.size >= 1) {
       const activeVault = getActiveOrConfiguredVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
       const root = getWorkspaceRoot();
       if (activeVault && activeVault.exists && root) {
@@ -1288,10 +1369,10 @@ function activate(context) {
         try {
           syncEngine.saveSessionCheckpoint(activeVault.path, {
             project: pName,
-            summary: `Auto-checkpoint: ${filesList.length} archivos modificados en ${pName}`,
-            content: `Archivos editados en la sesión:\n- ${filesList.join('\n- ')}\n\nRegistro automático continuo del estado de trabajo.`,
+            summary: `Hito de trabajo: ${filesList.length} archivo${filesList.length > 1 ? 's' : ''} editado${filesList.length > 1 ? 's' : ''} en ${pName}`,
+            content: `Archivos editados en la sesión:\n- ${filesList.join('\n- ')}\n\nRegistro automático continuo del estado de trabajo (${reason}).`,
           });
-          syncEngine.gitCommitVault(activeVault.path, `Auto-checkpoint: ${pName} (${filesList.length} archivos)`);
+          syncEngine.gitCommitVault(activeVault.path, `Sesión: ${pName} (${filesList.length} archivos)`);
           sessionModifiedFiles.clear();
           lastAutoCheckpointTime = Date.now();
           if (currentWebviewView) {
@@ -1303,12 +1384,38 @@ function activate(context) {
   };
 
   context.subscriptions.push(
-    vscode.window.onDidChangeWindowState((state) => {
-      if (!state.focused) {
-        performAutoCheckpoint();
+    vscode.workspace.onDidSaveTextDocument((doc) => {
+      const root = getWorkspaceRoot();
+      if (!root || !doc || !doc.uri) return;
+      const fp = doc.uri.fsPath;
+      if (fp.startsWith(root) && !fp.includes('node_modules') && !fp.includes('.git') && !fp.includes('.agents')) {
+        sessionModifiedFiles.add(path.relative(root, fp));
+        if (sessionSaveDebounceTimer) clearTimeout(sessionSaveDebounceTimer);
+        // Save automatically after 20 seconds of inactivity following edits
+        sessionSaveDebounceTimer = setTimeout(() => {
+          performAutoCheckpoint('inactividad tras guardado');
+        }, 20000);
       }
     })
   );
+
+  // Auto-checkpoint on window blur (when user switches window or runs other tasks)
+  context.subscriptions.push(
+    vscode.window.onDidChangeWindowState((state) => {
+      if (!state.focused) {
+        if (sessionSaveDebounceTimer) clearTimeout(sessionSaveDebounceTimer);
+        performAutoCheckpoint('cambio de foco');
+      }
+    })
+  );
+
+  // Periodic session checkpoint every 3 minutes if files were modified
+  const sessionPeriodicTimer = setInterval(() => {
+    if (sessionModifiedFiles.size >= 1 && (Date.now() - lastAutoCheckpointTime > 120000)) {
+      performAutoCheckpoint('temporizador periódico');
+    }
+  }, 180000);
+  context.subscriptions.push({ dispose: () => clearInterval(sessionPeriodicTimer) });
 
   // 4. Status Bar and notification (Zero config, immediate out-of-the-box readiness)
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -1929,6 +2036,53 @@ function activate(context) {
         }
       } catch (err) {
         vscode.window.showErrorMessage('Error al consultar estado MCP: ' + err.message);
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('antigravityObsidian.installTool', async () => {
+      const activeVault = getActiveOrConfiguredVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
+      const repoUrl = await vscode.window.showInputBox({
+        title: 'Instalar Herramienta para la IA desde GitHub',
+        prompt: 'Introduce la URL del repositorio de GitHub (ej: https://github.com/usuario/repo)',
+        placeHolder: 'https://github.com/...'
+      });
+      if (!repoUrl) return;
+
+      const toolsEngine = require('./src/tools-engine');
+      await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: 'Instalando herramienta desde GitHub...',
+        cancellable: false
+      }, async () => {
+        try {
+          const res = await toolsEngine.installFromGithub(repoUrl, {}, activeVault ? activeVault.path : null);
+          vscode.window.showInformationMessage(`Herramienta "${res.name}" instalada correctamente.`);
+          if (currentWebviewView) {
+            currentWebviewView.webview.html = provider._getHtmlForWebview(currentWebviewView.webview);
+          }
+        } catch (e) {
+          vscode.window.showErrorMessage(`Error al instalar herramienta: ${e.message}`);
+        }
+      });
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('antigravityObsidian.listTools', async () => {
+      const activeVault = getActiveOrConfiguredVault(vscode.workspace.getConfiguration('antigravityObsidian').get('vaultPath'));
+      const toolsEngine = require('./src/tools-engine');
+      const data = toolsEngine.listTools(activeVault ? activeVault.path : null);
+      if (data.total === 0) {
+        vscode.window.showInformationMessage('No hay herramientas instaladas para la IA. Puedes instalar herramientas desde GitHub usando el panel lateral.');
+      } else {
+        const items = data.tools.map(t => ({
+          label: `$(wrench) ${t.name}`,
+          description: `${t.type.toUpperCase()}${t.mcpRegistered ? ' (MCP)' : ''}`,
+          detail: t.description || 'Sin descripción'
+        }));
+        await vscode.window.showQuickPick(items, { title: `Herramientas Instaladas (${data.total})` });
       }
     })
   );

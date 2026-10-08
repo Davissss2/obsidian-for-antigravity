@@ -2,7 +2,7 @@
   "name": "obsidian-for-antigravity",
   "displayName": "Obsidian for Antigravity",
   "description": "Hermes Closed Learning Loop, Bounded Memory & Autonomous Second Brain for Antigravity AI connected to Obsidian.",
-  "version": "1.8.3",
+  "version": "1.8.4",
   "publisher": "Davissss2",
   "author": {
     "name": "Davissss2",
@@ -164,6 +164,16 @@
         "command": "antigravityObsidian.setPersonality",
         "title": "Obsidian: Configure AI Identity & User Callsign",
         "icon": "$(person)"
+      },
+      {
+        "command": "antigravityObsidian.installTool",
+        "title": "Obsidian: Install AI Tool from GitHub",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "antigravityObsidian.listTools",
+        "title": "Obsidian: View Installed AI Tools",
+        "icon": "$(tools)"
       },
       {
         "command": "antigravityObsidian.resetData",

@@ -5,6 +5,27 @@ All notable changes to the **Obsidian for Antigravity** extension will be docume
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.4] - 2026-10-08
+
+### Added
+- **Dynamic AI Tools Engine & Hub (Zero Default Tools Policy)**:
+  - Clean tools architecture (`src/tools-engine.js`) starting with zero default tools (`tools: []`). No hardcoded or fake tools (no fake web search or scrapers).
+  - Autonomous GitHub Tool Installer (`obsidian_tool_install` / CLI `node obsidian.js tool install <repoUrl>`): Automatically clones GitHub repos, detects MCP servers, Antigravity Skills, or CLI scripts, executes `npm install` or `pip install`, registers in `mcp_config.json`, and records an interconnected note in `04_Herramientas/<tool>.md`.
+  - Custom Tool Creator (`obsidian_tool_create` / CLI `node obsidian.js tool create <name>`): Allows creating custom tools from user commands or code.
+  - Lifecycle Tool Management: `obsidian_tool_list`, `obsidian_tool_run`, and `obsidian_tool_uninstall` with bi-directional syncing into Obsidian (`04_Herramientas/00 Indice de Herramientas.md`).
+  - Interactive "Herramientas" Tab in Webview: Provides a visual interface to install tools by URL, view active tools, and uninstall them.
+  - New VS Code Commands: `antigravityObsidian.installTool` and `antigravityObsidian.listTools`.
+
+### Fixed
+- **Proactive Continuous Session Checkpointing**:
+  - Overhauled session auto-checkpointing in `extension.js`. Edits to even a single file (`size >= 1`) now trigger a debounced checkpoint (20s of inactivity), an immediate checkpoint on window blur, and a 3-minute periodic check, ensuring work sessions are never lost.
+  - Synchronized AI directives in `GEMINI.md` and `obsidian-brain.md` making session checkpointing (`obsidian_session_save`) autonomous and mandatory at task boundaries.
+- **Antigravity Rule Loader Compatibility**:
+  - Added mandatory `trigger: always_on` YAML frontmatter to `.agents/rules/project-rules.md` and `~/.gemini/config/rules/obsidian-brain.md` so Antigravity AI unconditionally loads second-brain rules.
+  - Fixed path resolution bug in `src/skill-installer.js` where `home` was used instead of `os.homedir()`, guaranteeing native `~/.gemini/GEMINI.md` and `~/.gemini/config/GEMINI.md` are always created and maintained.
+- **AI Persona & Identity Immediate Bootstrap**:
+  - AI immediately adopts agent identity ("Pedro"), addresses user by name ("David"), and embodies the configured pragmatic, decisive personality from the very first message.
+
 ## [1.8.3] - 2026-10-07
 
 ### Fixed
@@ -32,7 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Purged Legacy Directory and Unification**:
   - Removed all code creating or referencing the legacy `Antigravity/` folder (`Alma`, `Skills`, `Memoria`, `Proyectos`, `Sesiones`).
   - Standardized all operations onto the Hermes hierarchy (`00_Agente/`, `01_Skills/`, `02_Proyectos/`, `03_Sesiones/`).
-  - Consolidated fragmented account project variants into a single unified `antigravity-account` project.
+  - Consolidated fragmented project variants into a single unified project structure.
 - **Fixed Anti-pattern CLI Argument Parser**:
   - Fixed parser in `src/obsidian-runner.js` where `project antipattern add` was treating the action keyword `add` as a directory path.
   - Added native MCP server tools `obsidian_add_antipattern` and `obsidian_list_antipatterns`.

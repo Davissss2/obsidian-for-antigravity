@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Davissss2/obsidian-for-antigravity"><img src="https://img.shields.io/badge/version-1.8.3-8b5cf6.svg?style=flat-square" alt="Version 1.8.3"></a>
+  <a href="https://github.com/Davissss2/obsidian-for-antigravity"><img src="https://img.shields.io/badge/version-1.8.4-8b5cf6.svg?style=flat-square" alt="Version 1.8.4"></a>
   <a href="https://open-vsx.org"><img src="https://img.shields.io/badge/Open%20VSX-available-blue.svg?style=flat-square" alt="Open VSX"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-purple.svg?style=flat-square" alt="License"></a>
   <a href="https://github.com/Davissss2"><img src="https://img.shields.io/badge/author-Davissss2-emerald.svg?style=flat-square" alt="Author Davissss2"></a>
@@ -197,14 +197,14 @@ La extension incluye un visualizador de grafo de fuerza integrado directamente e
 │ (Hub) (Alma) (Skills) (Memoria) (Proyectos) (Sesiones)      │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│             ● [Pedro / Hermes Core]                        │
+│             ● [00 Antigravity Hub]                         │
 │            / \                                              │
 │           /   \                                             │
 │          ●     ● [00 Personalidad]                          │
 │     [USER.md]   \                                           │
-│                  ● [antigravity-account]                    │
+│                  ● [Proyecto A]                             │
 │                 / \                                         │
-│                ●   ● [qr-precios]                           │
+│                ●   ● [Proyecto B]                           │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -256,10 +256,13 @@ La estructura interna de la boveda esta unificada bajo el estandar Hermes:
 │   └── 📁 [Nombre-Proyecto]/
 │       ├── 📄 ARCHITECTURE.md              <-- Stack, dependencias, reglas y anti-patrones
 │       └── 📄 WORKFLOW.md                  <-- Comandos verificados de build, test y release
-└── 📁 03_Sesiones/                         <-- Bitacora diaria y checkpoints de continuidad
-    ├── 📄 00 Indice de Sesiones.md
-    ├── 📁 Trajectories/
-    └── 📄 YYYY-MM-DD - [Proyecto].md
+├── 📁 03_Sesiones/                         <-- Bitacora diaria y checkpoints de continuidad
+│   ├── 📄 00 Indice de Sesiones.md
+│   ├── 📁 Trajectories/
+│   └── 📄 YYYY-MM-DD - [Proyecto].md
+└── 📁 04_Herramientas/                     <-- Catalogo de herramientas dinamicas (Tools & MCPs)
+    ├── 📄 00 Indice de Herramientas.md
+    └── 📄 [Nombre-Tool].md
 ```
 
 ---
@@ -280,6 +283,11 @@ El sistema ofrece soporte nativo dual: Servidor MCP directo (sin colisionar con 
 | Recuperar ultima sesion | `obsidian_session_last` | `node obsidian.js session last` |
 | Listar sesiones | `obsidian_session_list` | `node obsidian.js session list` |
 | Aprender preferencia | `obsidian_learn` | `node obsidian.js learn "<regla>"` |
+| Instalar tool desde GitHub | `obsidian_tool_install` | `node obsidian.js tool install <repoUrl>` |
+| Crear tool personalizada | `obsidian_tool_create` | `node obsidian.js tool create <nombre> --cmd "<c>"` |
+| Listar tools instaladas | `obsidian_tool_list` | `node obsidian.js tool list` |
+| Ejecutar tool instalada | `obsidian_tool_run` | `node obsidian.js tool run <tool> [args]` |
+| Desinstalar tool | `obsidian_tool_uninstall` | `node obsidian.js tool uninstall <tool>` |
 | Estado del sistema | `obsidian_status` | `node obsidian.js status` |
 | Sincronizar todo | `obsidian_sync_all` | `node obsidian.js sync` |
 | Consultar personalidad | `obsidian_status` | `node obsidian.js personality` |

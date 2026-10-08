@@ -73,6 +73,7 @@ function ensureVaultStructure(vaultPath) {
     path.join(vaultPath, '02_Proyectos'),
     path.join(vaultPath, '03_Sesiones'),
     path.join(vaultPath, '03_Sesiones', 'Trajectories'),
+    path.join(vaultPath, '04_Herramientas'),
   ];
 
   for (const d of hermesDirs) {
@@ -3020,6 +3021,7 @@ function syncProjectRulesToWorkspace(vaultPath, workspaceRoot, projectName) {
   const ruleFilePath = path.join(agentsRulesDir, 'project-rules.md');
   const ruleContent = [
     '---',
+    'trigger: always_on',
     `description: Reglas Obligatorias y Anti-Patrones — ${resolvedName}`,
     '---',
     '',
@@ -3281,6 +3283,7 @@ function getVaultStats(vaultPath) {
   const skillsCount = countMd(path.join(vaultPath, '01_Skills'));
   const projectsCount = countProjects(path.join(vaultPath, '02_Proyectos'));
   const sessionsCount = countMd(path.join(vaultPath, '03_Sesiones'));
+  const toolsCount = countMd(path.join(vaultPath, '04_Herramientas'));
 
   const hubExists = fs.existsSync(path.join(vaultPath, '00 Antigravity Hub.md')) ||
                     fs.existsSync(path.join(vaultPath, '00_Agente', '00 Antigravity Hub.md'));
@@ -3292,6 +3295,7 @@ function getVaultStats(vaultPath) {
     skills: skillsCount,
     projects: projectsCount,
     sessions: sessionsCount,
+    tools: toolsCount,
     hubExists,
     soulActive,
     personalityActive,

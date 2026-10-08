@@ -10,6 +10,7 @@ const readline = require('readline');
 const { exec } = require('child_process');
 const { detectVaults, getActiveOrConfiguredVault, ensureOrCreateDefaultVault } = require('./vault-detector');
 const syncEngine = require('./sync-engine');
+const toolsEngine = require('./tools-engine');
 
 // Resolve active vault (auto-detects or auto-provisions seamlessly on any PC)
 function getVaultPath() {
@@ -300,6 +301,112 @@ const TOOLS = [
       },
       required: ['query'],
     },
+  },
+  // AI Dynamic Tools (GitHub Installer, Custom Tool Creator, Runner & Manager)
+  {
+    name: 'obsidian_tool_create',
+    description: 'Crea una herramienta personalizada para la IA (nombre, comando, descripción) proporcionada por el usuario o interfaz.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Nombre o identificador de la herramienta' },
+        description: { type: 'string', description: 'Descripción clara de la herramienta' },
+        command: { type: 'string', description: 'Comando o script ejecutable para la herramienta' },
+        type: { type: 'string', enum: ['cli', 'script'], description: 'Tipo de herramienta (por defecto cli)' }
+      },
+      required: ['name', 'description']
+    }
+  },
+  {
+    name: 'tool_create',
+    description: 'Alias para obsidian_tool_create.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Nombre de la herramienta' },
+        description: { type: 'string', description: 'Descripción de la herramienta' },
+        command: { type: 'string', description: 'Comando ejecutable' },
+        type: { type: 'string', description: 'Tipo de herramienta' }
+      },
+      required: ['name', 'description']
+    }
+  },
+  {
+    name: 'obsidian_tool_install',
+    description: 'Instala de forma autónoma una herramienta para la IA a partir de un repositorio de GitHub (ej: https://github.com/user/repo o user/repo). Clona el repositorio, detecta si es servidor MCP, Skill de Antigravity o CLI, instala dependencias con npm/pip, lo registra en mcp_config.json y genera su nota en Obsidian.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        repoUrl: { type: 'string', description: 'URL del repositorio de GitHub (ej: https://github.com/owner/repo o owner/repo)' },
+        name: { type: 'string', description: 'Nombre identificador opcional para la herramienta' },
+        description: { type: 'string', description: 'Descripción opcional de las funciones de la herramienta' }
+      },
+      required: ['repoUrl']
+    }
+  },
+  {
+    name: 'tool_install',
+    description: 'Alias para obsidian_tool_install.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        repoUrl: { type: 'string', description: 'URL del repositorio de GitHub' },
+        name: { type: 'string', description: 'Nombre opcional' },
+        description: { type: 'string', description: 'Descripción opcional' }
+      },
+      required: ['repoUrl']
+    }
+  },
+  {
+    name: 'obsidian_tool_list',
+    description: 'Lista todas las herramientas de IA disponibles e instaladas (búsqueda web, scraper, servidores MCP y herramientas CLI de GitHub).',
+    inputSchema: {
+      type: 'object',
+      properties: {}
+    }
+  },
+  {
+    name: 'tool_list',
+    description: 'Alias para obsidian_tool_list.',
+    inputSchema: {
+      type: 'object',
+      properties: {}
+    }
+  },
+  {
+    name: 'obsidian_tool_run',
+    description: 'Ejecuta una herramienta de IA instalada previamente con sus argumentos correspondientes.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        toolName: { type: 'string', description: 'Nombre o id de la herramienta a ejecutar' },
+        args: { type: 'array', items: { type: 'string' }, description: 'Argumentos o parámetros para la herramienta' }
+      },
+      required: ['toolName']
+    }
+  },
+  {
+    name: 'tool_run',
+    description: 'Alias para obsidian_tool_run.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        toolName: { type: 'string', description: 'Nombre de la herramienta' },
+        args: { type: 'array', items: { type: 'string' }, description: 'Argumentos' }
+      },
+      required: ['toolName']
+    }
+  },
+  {
+    name: 'obsidian_tool_uninstall',
+    description: 'Desinstala una herramienta de IA previamente instalada desde GitHub y limpia sus registros.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        toolName: { type: 'string', description: 'Nombre de la herramienta a desinstalar' }
+      },
+      required: ['toolName']
+    }
   },
 ];
 
@@ -724,6 +831,74 @@ async function executeTool(name, args) {
           content: [{
             type: 'text',
             text: `[SESSION RECALL: "${result.query}" - ${result.count} coincidencias]\n\n${matchesText}`,
+          }],
+        };
+      }
+
+      case 'obsidian_tool_create':
+      case 'tool_create': {
+        const res = toolsEngine.createTool({
+          name: args.name,
+          description: args.description,
+          command: args.command,
+          type: args.type || 'cli',
+        }, vaultPath);
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify(res, null, 2),
+          }],
+        };
+      }
+
+
+      case 'obsidian_tool_install':
+      case 'tool_install': {
+        const repoUrl = args.repoUrl || args.url;
+        const res = await toolsEngine.installFromGithub(repoUrl, {
+          name: args.name,
+          description: args.description,
+        }, vaultPath);
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify(res, null, 2),
+          }],
+        };
+      }
+
+      case 'obsidian_tool_list':
+      case 'tool_list': {
+        const res = toolsEngine.listTools(vaultPath);
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify(res, null, 2),
+          }],
+        };
+      }
+
+      case 'obsidian_tool_run':
+      case 'tool_run': {
+        const tName = args.toolName || args.name;
+        const tArgs = args.args || [];
+        const res = await toolsEngine.runTool(tName, tArgs);
+        return {
+          content: [{
+            type: 'text',
+            text: typeof res === 'string' ? res : JSON.stringify(res, null, 2),
+          }],
+        };
+      }
+
+      case 'obsidian_tool_uninstall':
+      case 'tool_uninstall': {
+        const tName = args.toolName || args.name;
+        const res = toolsEngine.uninstallTool(tName, vaultPath);
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify(res, null, 2),
           }],
         };
       }

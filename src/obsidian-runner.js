@@ -31,6 +31,24 @@ function getSkillInstaller() {
   return null;
 }
 
+function getToolsEngine() {
+  const candidates = [
+    path.join(__dirname, 'tools-engine.js'),
+    path.join(__dirname, 'tools-engine'),
+    path.join(__dirname, '..', 'tools-engine.js'),
+    path.join(__dirname, '..', '..', '..', 'src', 'tools-engine.js'),
+    path.join(__dirname, '..', 'src', 'tools-engine.js'),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) {
+      try {
+        return require(c);
+      } catch (e) {}
+    }
+  }
+  return null;
+}
+
 function getSyncEngine() {
   const candidates = [
     path.join(__dirname, 'sync-engine.js'),
@@ -110,17 +128,30 @@ function updateGlobalRulesWithPersonality({ aiName, userCallsign, personality, c
   const agentsMdPath = path.join(configDir, 'AGENTS.md');
   const scriptPath = path.join(configDir, 'skills', 'antigravity-obsidian', 'scripts', 'obsidian.js').replace(/\\/g, '/');
 
-  // Clean up legacy GEMINI.md and AGENTS.md if present to avoid duplicate rules in prompt context
-  for (const legacyFile of [geminiMdPath, agentsMdPath]) {
-    if (fs.existsSync(legacyFile)) {
-      try {
-        const c = fs.readFileSync(legacyFile, 'utf8');
-        if (c.includes('Hermes Protocol') || c.includes('Protocolo Hermes') || c.includes('Autonomous Second Brain') || c.includes('Segundo Cerebro')) {
-          fs.unlinkSync(legacyFile);
-        }
-      } catch (e) {}
-    }
-  }
+  // Maintain native GEMINI.md in ~/.gemini/ and ~/.gemini/config/ for instant Antigravity session bootstrap
+  const geminiMdContent = [
+    '# Antigravity AI Directives & Identity (Hermes Core)',
+    '',
+    `- **Nombre del Agente:** ${aiName}. Identifícate y actúa siempre como ${aiName}.`,
+    `- **Trato hacia el Usuario:** Dirígete siempre al usuario como **${userCallsign}**.`,
+    `- **Personalidad y Demeanor:** ${personality}`,
+    `- **Segundo Cerebro Activo:** Bóveda de Obsidian conectada (${vaultName} en \`${vaultPath}\`).`,
+    '- **Directiva Innegociable:** CERO EMOJIS en absolutamente todas las respuestas y notas.',
+    '- **Herramientas de IA Disponibles:**',
+    '  - Búsqueda en Internet en tiempo real: herramienta `obsidian_tool_search` (o CLI `node obsidian.js tool search "<query>"`)',
+    '  - Scraping Web Limpio: herramienta `obsidian_tool_scrape` (o CLI `node obsidian.js tool scrape "<url>"`)',
+    '  - Instalador Autónomo de Tools desde GitHub: herramienta `obsidian_tool_install` (o CLI `node obsidian.js tool install <repoUrl>`)',
+    '  - Ejecutor de Tools: herramienta `obsidian_tool_run` (o CLI `node obsidian.js tool run <toolName> [args]`)',
+    '- **Memoria y Continuidad:** Consulta antecedentes con `obsidian_triage`, `obsidian_peek` o `obsidian_session_last`.',
+    '',
+    '---',
+    '*Obsidian for Antigravity System Directives — Fully Active.*'
+  ].join('\n');
+
+  try {
+    fs.writeFileSync(geminiMdPath, geminiMdContent, 'utf8');
+    fs.writeFileSync(path.join(home, '.gemini', 'GEMINI.md'), geminiMdContent, 'utf8');
+  } catch (e) {}
 
   // Only maintain rules/obsidian-brain.md
   const ruleFiles = [rulePath];
@@ -129,6 +160,9 @@ function updateGlobalRulesWithPersonality({ aiName, userCallsign, personality, c
     if (!fs.existsSync(filePath)) continue;
     try {
       let content = fs.readFileSync(filePath, 'utf8');
+      if (content.startsWith('---') && !content.includes('trigger: always_on')) {
+        content = content.replace(/^---\n/, '---\ntrigger: always_on\n');
+      }
       const isEn = /###\s*0\.\s*AGENT IDENTITY/i.test(content) || /###\s*0b\.\s*AGENT SOUL/i.test(content);
 
       const newPersonalitySection = isEn
@@ -1548,6 +1582,110 @@ switch (cmd) {
     process.exit(1);
     break;
   }
+
+  case 'tool':
+  case 'tools': {
+    const toolsEngine = getToolsEngine();
+    if (!toolsEngine) {
+      console.error(JSON.stringify({ error: 'tools-engine no disponible.' }));
+      process.exit(1);
+    }
+    const { flags, positional } = parseFlags(args);
+    const sub = (positional[0] || 'list').toLowerCase();
+
+    if (sub === 'list' || sub === 'ls') {
+      const res = toolsEngine.listTools(vault.path);
+      console.log(JSON.stringify(res, null, 2));
+      break;
+    }
+
+    if (sub === 'search' || sub === 'find') {
+      const query = positional.slice(1).join(' ') || flags.query || flags.q;
+      if (!query) {
+        console.error(JSON.stringify({ error: 'Uso: node obsidian.js tool search "<consulta>" [--limit N]' }));
+        process.exit(1);
+      }
+      const limit = parseInt(flags.limit || 6, 10);
+      toolsEngine.webSearch(query, limit).then(res => {
+        console.log(JSON.stringify(res, null, 2));
+      }).catch(err => {
+        console.error(JSON.stringify({ error: err.message }));
+        process.exit(1);
+      });
+      break;
+    }
+
+    if (sub === 'scrape' || sub === 'fetch') {
+      const targetUrl = positional[1] || flags.url;
+      if (!targetUrl) {
+        console.error(JSON.stringify({ error: 'Uso: node obsidian.js tool scrape <url> [--selector <sel>] [--max-chars N]' }));
+        process.exit(1);
+      }
+      const maxChars = parseInt(flags['max-chars'] || flags.maxChars || 8000, 10);
+      const selector = flags.selector || null;
+      toolsEngine.scrapeUrl(targetUrl, { maxChars, selector }).then(res => {
+        console.log(JSON.stringify(res, null, 2));
+      }).catch(err => {
+        console.error(JSON.stringify({ error: err.message }));
+        process.exit(1);
+      });
+      break;
+    }
+
+    if (sub === 'install' || sub === 'add') {
+      const repoUrl = positional[1] || flags.url || flags.repo;
+      if (!repoUrl) {
+        console.error(JSON.stringify({ error: 'Uso: node obsidian.js tool install <repoUrl> [--name <nombre>]' }));
+        process.exit(1);
+      }
+      const name = flags.name || null;
+      const description = flags.desc || flags.description || null;
+      toolsEngine.installFromGithub(repoUrl, { name, description }, vault.path).then(res => {
+        console.log(JSON.stringify(res, null, 2));
+      }).catch(err => {
+        console.error(JSON.stringify({ error: err.message }));
+        process.exit(1);
+      });
+      break;
+    }
+
+    if (sub === 'run' || sub === 'exec') {
+      const toolName = positional[1];
+      if (!toolName) {
+        console.error(JSON.stringify({ error: 'Uso: node obsidian.js tool run <toolName> [args...]' }));
+        process.exit(1);
+      }
+      const toolArgs = positional.slice(2);
+      toolsEngine.runTool(toolName, toolArgs).then(res => {
+        console.log(typeof res === 'string' ? res : JSON.stringify(res, null, 2));
+      }).catch(err => {
+        console.error(JSON.stringify({ error: err.message }));
+        process.exit(1);
+      });
+      break;
+    }
+
+    if (sub === 'uninstall' || sub === 'remove' || sub === 'rm') {
+      const toolName = positional[1];
+      if (!toolName) {
+        console.error(JSON.stringify({ error: 'Uso: node obsidian.js tool uninstall <toolName>' }));
+        process.exit(1);
+      }
+      try {
+        const res = toolsEngine.uninstallTool(toolName, vault.path);
+        console.log(JSON.stringify(res, null, 2));
+      } catch (err) {
+        console.error(JSON.stringify({ error: err.message }));
+        process.exit(1);
+      }
+      break;
+    }
+
+    console.error(JSON.stringify({ error: `Subcomando de tool no reconocido: '${sub}'. Usa list, search, scrape, install, run o uninstall.` }));
+    process.exit(1);
+    break;
+  }
+
 
   case 'memories': {
     const manifest = getManifest(vault.path);
@@ -3334,6 +3472,92 @@ ${milestoneBlocks}
           ? 'El servidor MCP está deshabilitado (disabled: true). Antigravity opera vía Node CLI como fallback.'
           : 'El servidor MCP no está instalado en mcp_config.json. Para instalarlo sin romper otros servidores: node obsidian.js mcp install')
     }, null, 2));
+    break;
+  }
+
+  case 'tool': {
+    const toolsEngine = getToolsEngine();
+    if (!toolsEngine) {
+      console.error(JSON.stringify({ error: 'No se pudo cargar tools-engine.js' }));
+      process.exit(1);
+    }
+    const { flags, positional } = parseFlags(args);
+    const sub = (positional[0] || 'list').toLowerCase();
+
+    if (sub === 'install' || sub === 'add') {
+      const repoUrl = positional[1] || flags.repo || flags.url;
+      if (!repoUrl) {
+        console.error(JSON.stringify({ error: 'Uso: node obsidian.js tool install <repoUrl> [--name <nombre>] [--desc "<desc>"]' }));
+        process.exit(1);
+      }
+      toolsEngine.installFromGithub(repoUrl, {
+        name: flags.name,
+        description: flags.desc || flags.description
+      }, vault.path)
+        .then(res => console.log(JSON.stringify(res, null, 2)))
+        .catch(err => {
+          console.error(JSON.stringify({ error: err.message || String(err) }));
+          process.exit(1);
+        });
+      break;
+    }
+
+    if (sub === 'create') {
+      const toolName = positional[1] || flags.name;
+      if (!toolName) {
+        console.error(JSON.stringify({ error: 'Uso: node obsidian.js tool create <nombre> [--cmd "<comando>"] [--desc "<desc>"]' }));
+        process.exit(1);
+      }
+      try {
+        const res = toolsEngine.createTool({
+          name: toolName,
+          command: flags.cmd || flags.command || '',
+          description: flags.desc || flags.description || 'Herramienta personalizada',
+          type: flags.type || 'cli'
+        }, vault.path);
+        console.log(JSON.stringify(res, null, 2));
+      } catch (err) {
+        console.error(JSON.stringify({ error: err.message || String(err) }));
+        process.exit(1);
+      }
+      break;
+    }
+
+    if (sub === 'run' || sub === 'exec') {
+      const toolName = positional[1] || flags.name;
+      if (!toolName) {
+        console.error(JSON.stringify({ error: 'Uso: node obsidian.js tool run <nombre> [argumentos...]' }));
+        process.exit(1);
+      }
+      const toolArgs = positional.slice(2);
+      toolsEngine.runTool(toolName, toolArgs)
+        .then(res => console.log(JSON.stringify(res, null, 2)))
+        .catch(err => {
+          console.error(JSON.stringify({ error: err.message || String(err) }));
+          process.exit(1);
+        });
+      break;
+    }
+
+    if (sub === 'uninstall' || sub === 'remove' || sub === 'rm') {
+      const toolName = positional[1] || flags.name;
+      if (!toolName) {
+        console.error(JSON.stringify({ error: 'Uso: node obsidian.js tool uninstall <nombre>' }));
+        process.exit(1);
+      }
+      try {
+        const res = toolsEngine.uninstallTool(toolName, vault.path);
+        console.log(JSON.stringify(res, null, 2));
+      } catch (err) {
+        console.error(JSON.stringify({ error: err.message || String(err) }));
+        process.exit(1);
+      }
+      break;
+    }
+
+    // Default: list
+    const res = toolsEngine.listTools(vault.path);
+    console.log(JSON.stringify(res, null, 2));
     break;
   }
 
