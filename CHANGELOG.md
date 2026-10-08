@@ -5,6 +5,15 @@ All notable changes to the **Obsidian for Antigravity** extension will be docume
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.5] - 2026-10-08
+
+### Fixed
+- **Infinite Scroll Expansion in Graph View**:
+  - Eliminated the infinite feedback loop between `ResizeObserver` and inline canvas dimensions.
+  - Positioned `#graph-canvas` with `position: absolute; width: 100%; height: 100%` so the canvas cannot recursively force `.graph-canvas-container` to expand.
+  - Bounded `.graph-canvas-container` height with `height: 480px; max-height: 70vh; min-height: 320px;` and removed `min-height: calc(100vh - 120px)` from `#pane-grafo.active`.
+  - Added threshold and `requestAnimationFrame` debouncing in the `ResizeObserver` handler to prevent repeated layout triggering.
+
 ## [1.8.4] - 2026-10-08
 
 ### Added

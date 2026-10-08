@@ -931,10 +931,13 @@
     if (!graphCanvas) return;
     const container = document.getElementById('graph-container');
     if (!container) return;
+    const pane = document.getElementById('pane-grafo');
+    if (pane && !pane.classList.contains('active')) return;
 
     const rect = container.getBoundingClientRect();
-    const width = Math.max(240, Math.floor(rect.width || container.clientWidth || 300));
-    const height = Math.max(260, Math.floor(rect.height || container.clientHeight || 360));
+    const width = Math.max(200, Math.floor(rect.width || container.clientWidth || 300));
+    const height = Math.max(200, Math.floor(rect.height || container.clientHeight || 360));
+    if (width <= 0 || height <= 0) return;
     const dpr = window.devicePixelRatio || 1;
 
     const targetW = width * dpr;
@@ -943,8 +946,6 @@
     if (graphCanvas.width !== targetW || graphCanvas.height !== targetH) {
       graphCanvas.width = targetW;
       graphCanvas.height = targetH;
-      graphCanvas.style.width = width + 'px';
-      graphCanvas.style.height = height + 'px';
       graphCtx = graphCanvas.getContext('2d');
       graphCtx.setTransform(1, 0, 0, 1, 0, 0);
       graphCtx.scale(dpr, dpr);
@@ -1360,16 +1361,37 @@
     // Responsive ResizeObserver on graph container
     const container = document.getElementById('graph-container');
     if (container && window.ResizeObserver && !graphResizeObserver) {
-      graphResizeObserver = new ResizeObserver(() => {
-        initOrResizeGraph();
+      let lastObservedW = 0;
+      let lastObservedH = 0;
+      let resizeRaf = null;
+
+      graphResizeObserver = new ResizeObserver((entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        const cr = entry.contentRect;
+        const w = Math.floor(cr.width);
+        const h = Math.floor(cr.height);
+        if (w <= 0 || h <= 0) return;
+        if (Math.abs(w - lastObservedW) < 3 && Math.abs(h - lastObservedH) < 3) return;
+        lastObservedW = w;
+        lastObservedH = h;
+
+        if (resizeRaf) cancelAnimationFrame(resizeRaf);
+        resizeRaf = requestAnimationFrame(() => {
+          initOrResizeGraph();
+        });
       });
       graphResizeObserver.observe(container);
     }
   }
 
   // Window resize fallback
+  let windowResizeRaf = null;
   window.addEventListener('resize', () => {
-    initOrResizeGraph();
+    if (windowResizeRaf) cancelAnimationFrame(windowResizeRaf);
+    windowResizeRaf = requestAnimationFrame(() => {
+      initOrResizeGraph();
+    });
   });
 
   // Personality and User Callsign Save Handlers
